@@ -1,0 +1,326 @@
+// InvestIQ AI — full Phase 1 data model.
+// Later phases add UI on top of this schema; schema changes go through
+// `npx prisma migrate dev` (numbered migrations in prisma/migrations/).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Better Auth models (shape required by the Better Auth Prisma adapter)
+// ---------------------------------------------------------------------------
+
+model User {
+  id            String   @id
+  name          String
+  email         String
+  emailVerified Boolean  @default(false)
+  image         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  sessions       Session[]
+  accounts       Account[]
+  portfolios     Portfolio[]
+  watchlistItems WatchlistItem[]
+
+  @@unique([email])
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([token])
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+// ---------------------------------------------------------------------------
+// Domain enums
+// ---------------------------------------------------------------------------
+
+enum Currency {
+  OMR
+  USD
+  SAR
+  AED
+}
+
+enum Market {
+  US
+  MSX
+  TADAWUL
+  DFM
+  OTHER
+}
+
+enum InstrumentType {
+  STOCK
+  ETF
+  REIT
+}
+
+enum TransactionType {
+  BUY
+  SELL
+  DIVIDEND
+  DEPOSIT
+  WITHDRAWAL
+  FEE
+}
+
+enum PriceSource {
+  FMP
+  MANUAL
+  SEED
+}
+
+enum ThesisStatus {
+  ACTIVE
+  CLOSED
+}
+
+// Recommendation attached to each ThesisCheck run.
+enum ThesisRecommendation {
+  INTACT
+  WEAKENING
+  BROKEN
+}
+
+enum AiAnalysisType {
+  HEALTH_SCORE
+  STOCK_SCORE
+  COMMITTEE
+  THESIS_CHECK
+  BUY_ANALYSIS
+  SELL_ANALYSIS
+  WEEKLY_REVIEW
+  NEWS_SUMMARY
+}
+
+// ---------------------------------------------------------------------------
+// Portfolio domain
+// ---------------------------------------------------------------------------
+
+model Portfolio {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name         String
+  // Cash balance is DERIVED from transactions — never stored.
+  baseCurrency Currency @default(OMR)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  transactions Transaction[]
+
+  @@index([userId])
+}
+
+model Instrument {
+  id       String         @id @default(cuid())
+  ticker   String
+  name     String
+  market   Market
+  currency Currency
+  type     InstrumentType
+  sector   String?
+  country  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  transactions       Transaction[]
+  priceCache         PriceCache[]
+  fundamentalsCache  FundamentalsCache[]
+  theses             Thesis[]
+  watchlistItems     WatchlistItem[]
+
+  @@unique([ticker, market])
+}
+
+model Transaction {
+  id           String          @id @default(cuid())
+  portfolioId  String
+  portfolio    Portfolio       @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  // Nullable: cash-only rows (DEPOSIT / WITHDRAWAL / standalone FEE) have no instrument.
+  instrumentId String?
+  instrument   Instrument?     @relation(fields: [instrumentId], references: [id])
+  type         TransactionType
+  quantity     Decimal?        @db.Decimal(20, 8)
+  pricePerUnit Decimal?        @db.Decimal(20, 8)
+  amount       Decimal         @db.Decimal(20, 8)
+  currency     Currency
+  fee          Decimal         @default(0) @db.Decimal(20, 8)
+  tradeDate    DateTime
+  note         String?
+  createdAt    DateTime        @default(now())
+
+  @@index([portfolioId, tradeDate])
+  @@index([instrumentId])
+}
+
+// ---------------------------------------------------------------------------
+// Market data caches (the ONLY place fetched prices/fundamentals live)
+// ---------------------------------------------------------------------------
+
+model PriceCache {
+  id           String      @id @default(cuid())
+  instrumentId String
+  instrument   Instrument  @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+  price        Decimal     @db.Decimal(20, 8)
+  currency     Currency
+  // The date the price is FOR (market timestamp), not when we fetched it.
+  asOf         DateTime
+  source       PriceSource
+  fetchedAt    DateTime    @default(now())
+
+  @@index([instrumentId, asOf(sort: Desc)])
+  @@index([instrumentId, fetchedAt(sort: Desc)])
+}
+
+model FundamentalsCache {
+  id           String      @id @default(cuid())
+  instrumentId String
+  instrument   Instrument  @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+  payload      Json
+  // Cache key segment, e.g. "profile", "income-annual", "dividends".
+  period       String
+  source       PriceSource
+  fetchedAt    DateTime    @default(now())
+
+  @@unique([instrumentId, period])
+}
+
+model FxRate {
+  id     String      @id @default(cuid())
+  base   Currency
+  quote  Currency
+  rate   Decimal     @db.Decimal(20, 10)
+  asOf   DateTime
+  source PriceSource @default(MANUAL)
+
+  @@unique([base, quote, asOf])
+  @@index([base, quote, asOf(sort: Desc)])
+}
+
+// ---------------------------------------------------------------------------
+// Thesis tracking (Phase 4 UI, schema now)
+// ---------------------------------------------------------------------------
+
+model Thesis {
+  id           String       @id @default(cuid())
+  instrumentId String
+  instrument   Instrument   @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+  statement    String
+  status       ThesisStatus @default(ACTIVE)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  checks ThesisCheck[]
+
+  @@index([instrumentId, status])
+}
+
+model ThesisCheck {
+  id             String               @id @default(cuid())
+  thesisId       String
+  thesis         Thesis               @relation(fields: [thesisId], references: [id], onDelete: Cascade)
+  integrityScore Int
+  recommendation ThesisRecommendation
+  evidence       Json
+  model          String
+  createdAt      DateTime             @default(now())
+
+  @@index([thesisId, createdAt(sort: Desc)])
+}
+
+// ---------------------------------------------------------------------------
+// AI output persistence (AI outputs are stored here, never regenerated on view)
+// ---------------------------------------------------------------------------
+
+model AiAnalysis {
+  id          String         @id @default(cuid())
+  type        AiAnalysisType
+  // What the analysis is about, e.g. subjectType "instrument" + subjectId.
+  subjectType String
+  subjectId   String
+  model       String
+  // Hash of the inputs that produced this output, for change detection.
+  inputHash   String
+  output      Json
+  // The freshness of the underlying data the AI saw (source-badge rule).
+  dataAsOf    DateTime
+  createdAt   DateTime       @default(now())
+
+  @@index([type, subjectType, subjectId, createdAt(sort: Desc)])
+  @@index([inputHash])
+}
+
+model WatchlistItem {
+  id           String     @id @default(cuid())
+  userId       String
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  instrumentId String
+  instrument   Instrument @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+  note         String?
+  createdAt    DateTime   @default(now())
+
+  @@unique([userId, instrumentId])
+}
+
+model WeeklyReview {
+  id        String   @id @default(cuid())
+  // ISO week label, e.g. "2026-W28".
+  period    String
+  output    Json
+  createdAt DateTime @default(now())
+
+  @@unique([period])
+}
