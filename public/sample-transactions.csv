@@ -1,0 +1,5 @@
+ticker,market,type,trade_date,quantity,price_per_unit,amount,currency,fee,note
+AAPL,US,BUY,2026-06-15,10,205.50,2055.00,USD,5,Bought after earnings dip
+KO,US,DIVIDEND,2026-07-01,,,30.60,USD,0,Quarterly dividend
+,,DEPOSIT,2026-06-01,,,1000,OMR,,Monthly savings deposit
+BKMB,MSX,BUY,2026-06-20,500,0.310,155.00,OMR,1,Bank Muscat top-up

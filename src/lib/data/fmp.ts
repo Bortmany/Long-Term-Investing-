@@ -7,6 +7,7 @@
 // src/lib/data/market-data.ts, which enforces the PriceCache /
 // FundamentalsCache TTLs.
 
+import type { Currency } from "@prisma/client";
 import {
   type CompanyProfile,
   type DataResult,
@@ -79,6 +80,44 @@ function asDate(value: unknown): Date | null {
   if (typeof value !== "string" || value.length === 0) return null;
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
+}
+
+// ---------------------------------------------------------------------------
+// Forex — one FX rate (1 base = rate quote) from FMP's forex quote endpoint.
+// Same golden-rule behavior as everything else in this file: no key or a
+// failed request returns the typed unavailable result, and error messages
+// never contain the URL (it carries the API key).
+// ---------------------------------------------------------------------------
+
+export type FmpFxRate = {
+  /** 1 unit of `base` = `rate` units of `quote`. */
+  rate: number;
+  asOf: Date;
+};
+
+export async function fetchFmpFxRate(
+  base: Currency,
+  quote: Currency,
+  options: FmpProviderOptions,
+): Promise<DataResult<FmpFxRate>> {
+  if (!options.apiKey) {
+    return unavailable("no_api_key", "FMP_API_KEY is not configured.");
+  }
+  const fetchJson = makeFetchJson(options);
+  const pair = `${base}${quote}`;
+  const result = await fetchJson(`/quote/${encodeURIComponent(pair)}`);
+  if (!result.ok) return result;
+
+  const rows = Array.isArray(result.data) ? result.data : [];
+  const row = rows[0] as Record<string, unknown> | undefined;
+  const rate = asNumber(row?.price);
+  if (!row || rate === null || rate <= 0) {
+    return unavailable("no_data", `No exchange rate available for ${base}/${quote}.`);
+  }
+
+  const timestamp = asNumber(row.timestamp);
+  const asOf = timestamp !== null ? new Date(timestamp * 1000) : new Date();
+  return { ok: true, data: { rate, asOf } };
 }
 
 export function createFmpProvider(options: FmpProviderOptions): MarketDataProvider {

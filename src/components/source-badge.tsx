@@ -1,11 +1,12 @@
 // SourceBadge — the golden-rule component. Every number on screen carries
 // one of these so the owner can always see where a figure came from:
-//   live   — fetched from a real market-data provider
-//   manual — entered by hand, shown with its as-of date
-//   sample — seeded demo data
+//   live    — fetched from a real market-data provider
+//   manual  — entered by hand, shown with its as-of date
+//   sample  — seeded demo data
+//   derived — computed purely from the user's own recorded transactions
 // Two sizes: "default" is the full pill; "sm" is a compact icon-only glyph
 // with a tooltip revealing the same label, for dense table cells.
-import { Clock, FlaskConical } from "lucide-react";
+import { Calculator, Clock, FlaskConical } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -13,7 +14,7 @@ import { formatShortDate } from "@/lib/format";
 import type { ValueSource } from "@/lib/portfolio";
 import { cn } from "@/lib/utils";
 
-export type SourceBadgeVariant = "live" | "manual" | "sample";
+export type SourceBadgeVariant = "live" | "manual" | "sample" | "derived";
 
 export type SourceBadgeProps = {
   variant: SourceBadgeVariant;
@@ -31,6 +32,8 @@ function labelFor(variant: SourceBadgeVariant, date?: string): string {
       return date ? `Manual, as of ${date}` : "Manual";
     case "sample":
       return "Sample data";
+    case "derived":
+      return "Computed from your transactions";
   }
 }
 
@@ -52,6 +55,8 @@ function IconFor({ variant, className }: { variant: SourceBadgeVariant; classNam
       return <Clock className={cn("size-3 shrink-0", className)} aria-hidden="true" />;
     case "sample":
       return <FlaskConical className={cn("size-3 shrink-0", className)} aria-hidden="true" />;
+    case "derived":
+      return <Calculator className={cn("size-3 shrink-0", className)} aria-hidden="true" />;
   }
 }
 
@@ -60,26 +65,30 @@ const pillColors: Record<SourceBadgeVariant, string> = {
   manual: "text-slate-600 dark:text-slate-400",
   sample:
     "border-amber-600/30 bg-amber-50 text-amber-600 dark:border-amber-400/30 dark:bg-amber-950 dark:text-amber-400",
+  // Derived is not a warning — same neutral slate treatment as live/manual.
+  derived: "text-slate-600 dark:text-slate-400",
 };
 
 const glyphColors: Record<SourceBadgeVariant, string> = {
   live: "text-slate-600 dark:text-slate-400",
   manual: "text-slate-600 dark:text-slate-400",
   sample: "text-amber-600 dark:text-amber-400",
+  derived: "text-slate-600 dark:text-slate-400",
 };
 
 /**
  * Map one ValueSource from the portfolio math library to badge props.
  * "derived" means the figure comes purely from the user's own recorded
- * transactions — in Phase 1 those transactions are seeded demo data, so
- * derived figures honestly wear the "sample data" badge. Revisit when real
- * (non-seeded) transaction entry exists.
+ * transactions — no external data source involved — so it wears the
+ * "Computed from your transactions" badge. (Phase 1 mapped derived to
+ * "sample" because every transaction was seed data back then; Phase 2 adds
+ * real transaction entry, so derived is now its own honest badge.)
  */
 export function badgePropsForValueSource(
   source: ValueSource,
 ): Pick<SourceBadgeProps, "variant" | "date"> {
   if (source.kind === "derived") {
-    return { variant: "sample" };
+    return { variant: "derived" };
   }
   if (source.kind === "manual") {
     return { variant: "manual", date: formatShortDate(source.asOf) };
@@ -91,8 +100,8 @@ export function badgePropsForValueSource(
  * Summarise many ValueSources into one badge for an aggregate figure
  * (e.g. the Total Portfolio Value card). Precedence: if ANY input is sample
  * data the total is sample; else if any is manual the total is manual (with
- * the oldest as-of date, the honest one); else live. Derived-only figures
- * fall back to "sample" for the Phase 1 reason above.
+ * the oldest as-of date, the honest one); else if any is live the total is
+ * live; else (every input is derived) the total is derived.
  */
 export function badgePropsForValueSources(
   sources: ValueSource[],
@@ -111,7 +120,7 @@ export function badgePropsForValueSources(
   if (sources.some((s) => s.kind === "live")) {
     return { variant: "live" };
   }
-  return { variant: "sample" };
+  return { variant: "derived" };
 }
 
 export function SourceBadge({ variant, date, size = "default", className }: SourceBadgeProps) {

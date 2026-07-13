@@ -10,14 +10,15 @@
 // "unavailable" result is returned — never a fabricated number. If a stale
 // cached value exists it is returned with its honest as-of date and badge.
 
-import type { PriceSource } from "@prisma/client";
+import { Currency, type PriceSource } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
   areFundamentalsFresh,
+  isFxRateFresh,
   isQuoteFresh,
 } from "./cache";
 import { createManualProvider, createPrismaPriceStore, type ManualPriceStore } from "./manual";
-import { createFmpProvider } from "./fmp";
+import { createFmpProvider, fetchFmpFxRate } from "./fmp";
 import {
   badgeForPriceSource,
   resolveProviderName,
@@ -29,8 +30,10 @@ import {
   type MarketDataProvider,
   type PricePoint,
   type Quote,
+  type SourceBadge,
   type StatementKind,
   type StatementPeriod,
+  type UnavailableReason,
   type UpcomingDividend,
   unavailable,
 } from "./provider";
@@ -317,6 +320,202 @@ export async function getUpcomingDividends(
         paymentDate: reviveNullableDate(d.paymentDate),
       })),
   );
+}
+
+// ---------------------------------------------------------------------------
+// FX rates — FxRate table, DAILY TTL.
+//
+// Same pattern as quotes: serve a fresh FMP-sourced row from the FxRate
+// table; on a miss, fetch from FMP and store it (source FMP); when FMP is
+// unreachable, serve the newest stored rate with its honest badge — or the
+// typed unavailable result when nothing is stored. Never a silent 1.0.
+// ---------------------------------------------------------------------------
+
+/** One usable FX rate: 1 unit of `base` = `rate` units of `quote`. */
+export type FxRateQuote = {
+  base: Currency;
+  quote: Currency;
+  rate: number;
+  asOf: Date;
+  source: SourceBadge;
+};
+
+/** Narrow storage port so unit tests can run without a database. */
+export interface FxRateStore {
+  getLatestRate(
+    base: Currency,
+    quote: Currency,
+  ): Promise<{ rate: number; asOf: Date; source: PriceSource } | null>;
+  saveRate(entry: {
+    base: Currency;
+    quote: Currency;
+    rate: number;
+    asOf: Date;
+    source: PriceSource;
+  }): Promise<void>;
+}
+
+export function createPrismaFxRateStore(): FxRateStore {
+  return {
+    async getLatestRate(base, quote) {
+      const row = await prisma.fxRate.findFirst({
+        where: { base, quote },
+        orderBy: { asOf: "desc" },
+      });
+      if (!row) return null;
+      return { rate: row.rate.toNumber(), asOf: row.asOf, source: row.source };
+    },
+    async saveRate(entry) {
+      // Upsert on the [base, quote, asOf] unique key so re-fetching the same
+      // day's rate never crashes on the constraint.
+      await prisma.fxRate.upsert({
+        where: {
+          base_quote_asOf: {
+            base: entry.base,
+            quote: entry.quote,
+            asOf: entry.asOf,
+          },
+        },
+        create: entry,
+        update: { rate: entry.rate, source: entry.source },
+      });
+    },
+  };
+}
+
+export type FxDeps = {
+  store?: FxRateStore;
+  fmpApiKey?: string | null;
+  fetchFn?: typeof fetch;
+  now?: Date;
+};
+
+function resolveFxDeps(deps: FxDeps) {
+  return {
+    store: deps.store ?? createPrismaFxRateStore(),
+    now: deps.now ?? new Date(),
+    apiKey:
+      deps.fmpApiKey !== undefined
+        ? deps.fmpApiKey
+        : (process.env.FMP_API_KEY ?? null),
+    fetchFn: deps.fetchFn,
+  };
+}
+
+/**
+ * The FX rate for one currency pair (1 base = rate quote), through the
+ * FxRate table with a daily TTL. Manually entered rates never expire — they
+ * are served with their honest "manual" badge and as-of date when FMP has
+ * nothing fresher to offer.
+ */
+export async function getFxRate(
+  base: Currency,
+  quote: Currency,
+  deps: FxDeps = {},
+): Promise<DataResult<FxRateQuote>> {
+  if (base === quote) {
+    return unavailable(
+      "not_supported",
+      "Same-currency pairs need no exchange rate.",
+    );
+  }
+  const { store, now, apiKey, fetchFn } = resolveFxDeps(deps);
+
+  // Serve a stored FMP rate while it is still fresh (daily TTL).
+  const cached = await store.getLatestRate(base, quote);
+  if (cached && cached.source === "FMP" && isFxRateFresh(cached.asOf, now)) {
+    return {
+      ok: true,
+      data: {
+        base,
+        quote,
+        rate: cached.rate,
+        asOf: cached.asOf,
+        source: badgeForPriceSource(cached.source),
+      },
+    };
+  }
+
+  const fresh = await fetchFmpFxRate(base, quote, { apiKey, fetchFn });
+  if (fresh.ok) {
+    await store.saveRate({
+      base,
+      quote,
+      rate: fresh.data.rate,
+      asOf: fresh.data.asOf,
+      source: "FMP",
+    });
+    return {
+      ok: true,
+      data: {
+        base,
+        quote,
+        rate: fresh.data.rate,
+        asOf: fresh.data.asOf,
+        source: "live",
+      },
+    };
+  }
+
+  // FMP unreachable (or no key): the newest stored rate with its honest
+  // badge beats nothing — but never invent one.
+  if (cached) {
+    return {
+      ok: true,
+      data: {
+        base,
+        quote,
+        rate: cached.rate,
+        asOf: cached.asOf,
+        source: badgeForPriceSource(cached.source),
+      },
+    };
+  }
+  return fresh;
+}
+
+export type FxRefreshReport = {
+  baseCurrency: Currency;
+  /** Pairs that now have a usable rate (fresh from FMP or served from store). */
+  updated: FxRateQuote[];
+  /** Pairs that could not be refreshed, with the typed reason. */
+  unavailable: {
+    base: Currency;
+    quote: Currency;
+    reason: UnavailableReason;
+    message?: string;
+  }[];
+};
+
+/**
+ * Refresh the FX rates for every non-base currency against `baseCurrency`
+ * (e.g. base OMR → USD/OMR, SAR/OMR, AED/OMR). Reports what was updated and
+ * what stayed unavailable; nothing is ever fabricated for the failed pairs.
+ */
+export async function refreshFxRates(
+  baseCurrency: Currency,
+  deps: FxDeps = {},
+): Promise<FxRefreshReport> {
+  const others = Object.values(Currency).filter((c) => c !== baseCurrency);
+
+  const updated: FxRateQuote[] = [];
+  const failed: FxRefreshReport["unavailable"] = [];
+
+  for (const currency of others) {
+    const result = await getFxRate(currency, baseCurrency, deps);
+    if (result.ok) {
+      updated.push(result.data);
+    } else {
+      failed.push({
+        base: currency,
+        quote: baseCurrency,
+        reason: result.unavailable,
+        message: result.message,
+      });
+    }
+  }
+
+  return { baseCurrency, updated, unavailable: failed };
 }
 
 export { unavailable };

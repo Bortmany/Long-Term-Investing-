@@ -1,0 +1,100 @@
+"use server";
+
+// CSV import, two steps:
+//   1. validateImportRows — a DRY RUN: checks every mapped row and reports
+//      plain-English issues per row. Writes nothing.
+//   2. importTransactions — re-validates on the server (client results are
+//      never trusted) and writes every row in ONE database transaction into
+//      the signed-in user's portfolio: if anything fails, nothing imports.
+
+import { revalidatePath } from "next/cache";
+import { prisma } from "@/lib/prisma";
+import {
+  actionError,
+  actionOk,
+  NOT_SIGNED_IN_ERROR,
+  type ActionResult,
+} from "@/lib/action-result";
+import {
+  toTransactionRecord,
+  validateMappedRows,
+  type ImportRowResult,
+  type ImportValidationReport,
+  type KnownInstrument,
+  type MappedImportRow,
+} from "@/lib/import-rows";
+import { getOrCreatePortfolio, getSessionUserId } from "@/lib/user-portfolio";
+
+export type { ImportRowResult, ImportValidationReport, MappedImportRow };
+
+async function loadKnownInstruments(): Promise<KnownInstrument[]> {
+  const rows = await prisma.instrument.findMany({
+    select: { id: true, ticker: true, market: true, currency: true },
+  });
+  return rows;
+}
+
+/**
+ * Dry-run validation of mapped CSV rows — NOTHING is written. Each row comes
+ * back with ok/issues so the import screen can show exactly what to fix.
+ * Tickers are resolved against the instruments already tracked in the app.
+ */
+export async function validateImportRows(
+  mappedRows: MappedImportRow[],
+): Promise<ActionResult<ImportValidationReport>> {
+  const userId = await getSessionUserId();
+  if (!userId) return actionError(NOT_SIGNED_IN_ERROR);
+
+  if (!Array.isArray(mappedRows) || mappedRows.length === 0) {
+    return actionError("There are no rows to check — upload or paste a CSV first.");
+  }
+
+  const instruments = await loadKnownInstruments();
+  return actionOk(validateMappedRows(mappedRows, instruments));
+}
+
+/**
+ * Import mapped CSV rows into the signed-in user's portfolio (created on
+ * first use). All-or-nothing: every row is re-validated server-side and all
+ * writes happen in one database transaction — one failure imports nothing.
+ */
+export async function importTransactions(
+  mappedRows: MappedImportRow[],
+): Promise<ActionResult<{ imported: number }>> {
+  const userId = await getSessionUserId();
+  if (!userId) return actionError(NOT_SIGNED_IN_ERROR);
+
+  if (!Array.isArray(mappedRows) || mappedRows.length === 0) {
+    return actionError("There are no rows to import.");
+  }
+
+  const instruments = await loadKnownInstruments();
+  const report = validateMappedRows(mappedRows, instruments);
+
+  const failed = report.results.filter((r) => !r.ok);
+  if (failed.length > 0) {
+    const first = failed[0];
+    const firstIssue = first.ok ? "" : first.issues[0];
+    return actionError(
+      `Nothing was imported: ${failed.length} of ${report.total} row${
+        report.total === 1 ? "" : "s"
+      } ${failed.length === 1 ? "has" : "have"} problems (first: row ${first.row} — ${firstIssue}). Fix them or leave them out, then try again.`,
+    );
+  }
+
+  const portfolio = await getOrCreatePortfolio(userId);
+  const records = report.results.flatMap((result) =>
+    result.ok ? [toTransactionRecord(result.parsed)] : [],
+  );
+
+  // One transaction: either every row lands or none do.
+  await prisma.$transaction(async (tx) => {
+    await tx.transaction.createMany({
+      data: records.map((record) => ({ ...record, portfolioId: portfolio.id })),
+    });
+  });
+
+  revalidatePath("/portfolio");
+  revalidatePath("/dashboard");
+  return actionOk({ imported: records.length });
+}

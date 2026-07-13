@@ -47,9 +47,14 @@ so instead of guessing. See `docs/CONVENTIONS.md`.
    **owner@example.com** / **investiq-demo**. The seed gives it a year of
    realistic sample transactions across six stocks in three currencies.
 
-> **Security note:** the `/sign-up` page currently lets anyone create an
-> account. That is fine for local use only — it must be disabled or gated
-> before any non-local deployment (tracked as a Phase 2 item).
+> **Security note:** by default the `/sign-up` page lets anyone create an
+> account — fine for local use only. Before deploying anywhere public, set
+> `ALLOW_SIGNUPS="false"` in the environment: the sign-up page then shows a
+> "registration is closed" message and the server rejects sign-up attempts
+> too. Any value other than the literal string `false` (including leaving it
+> unset) keeps sign-ups open. Note the demo seed creates its user through
+> the normal sign-up path, so run `npx prisma db seed` on a fresh database
+> **before** turning sign-ups off.
 
 ## API keys (optional — get these later)
 

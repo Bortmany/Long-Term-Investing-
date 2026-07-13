@@ -25,9 +25,27 @@ export {
   type ValuedHolding,
 } from "./value";
 export {
+  computeDividendsByHolding,
+  computeMonthlyDividends,
   computeTrailingDividendIncome,
   type DividendIncome,
+  type DividendsByHolding,
+  type MonthlyDividendBucket,
+  type MonthlyDividends,
 } from "./dividends";
+export {
+  computeReturns,
+  type PortfolioReturns,
+  type ReturnFigure,
+} from "./returns";
+export {
+  computeAllocation,
+  UNKNOWN_BUCKET,
+  type AllocatableHolding,
+  type Allocation,
+  type AllocationKey,
+  type AllocationSlice,
+} from "./allocation";
 export {
   fromPrismaFxRate,
   fromPrismaPriceCache,

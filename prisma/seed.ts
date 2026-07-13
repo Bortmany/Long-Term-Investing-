@@ -29,15 +29,25 @@ async function ensureDemoUser(): Promise<string> {
 
   // Create via Better Auth's server API so password hashing is correct.
   const { auth } = await import("../src/lib/auth");
-  const result = await auth.api.signUpEmail({
-    body: {
-      email: DEMO_EMAIL,
-      password: DEMO_PASSWORD,
-      name: "Demo Owner",
-    },
-  });
-  console.log(`Created demo user ${DEMO_EMAIL}.`);
-  return result.user.id;
+  try {
+    const result = await auth.api.signUpEmail({
+      body: {
+        email: DEMO_EMAIL,
+        password: DEMO_PASSWORD,
+        name: "Demo Owner",
+      },
+    });
+    console.log(`Created demo user ${DEMO_EMAIL}.`);
+    return result.user.id;
+  } catch (error) {
+    if (process.env.ALLOW_SIGNUPS === "false") {
+      throw new Error(
+        "Could not create the demo user because sign-ups are disabled (ALLOW_SIGNUPS=false). " +
+          "Seed a fresh database with ALLOW_SIGNUPS unset (or \"true\") first, then disable sign-ups.",
+      );
+    }
+    throw error;
+  }
 }
 
 async function main() {
@@ -61,6 +71,8 @@ async function main() {
     { ticker: "O", name: "Realty Income Corporation", market: "US", currency: "USD", type: "REIT", sector: "Real Estate", country: "United States" },
     { ticker: "BKMB", name: "Bank Muscat", market: "MSX", currency: "OMR", type: "STOCK", sector: "Banks", country: "Oman" },
     { ticker: "2222.SR", name: "Saudi Aramco", market: "TADAWUL", currency: "SAR", type: "STOCK", sector: "Energy", country: "Saudi Arabia" },
+    // Watchlist-only: JNJ is watched by the demo user but NOT held (no transactions).
+    { ticker: "JNJ", name: "Johnson & Johnson", market: "US", currency: "USD", type: "STOCK", sector: "Healthcare", country: "United States" },
   ] as const;
 
   const instruments: Record<string, string> = {};
@@ -158,6 +170,7 @@ async function main() {
     { ticker: "BKMB", price: 0.312, currency: "OMR", asOf: "2026-07-10" },
     { ticker: "2222.SR", price: 25.1, currency: "SAR", asOf: "2026-01-05" },
     { ticker: "2222.SR", price: 25.6, currency: "SAR", asOf: "2026-07-10" },
+    { ticker: "JNJ", price: 168.3, currency: "USD", asOf: "2026-07-10" },
   ];
 
   await prisma.priceCache.createMany({
@@ -188,12 +201,28 @@ async function main() {
     });
   }
 
+  // --- Watchlist: the demo user watches JNJ, which the portfolio does NOT hold ---
+  await prisma.watchlistItem.upsert({
+    where: {
+      userId_instrumentId: { userId, instrumentId: instruments["JNJ"] },
+    },
+    create: {
+      userId,
+      instrumentId: instruments["JNJ"],
+      note: "Dividend aristocrat — waiting for a better entry price.",
+    },
+    update: {
+      note: "Dividend aristocrat — waiting for a better entry price.",
+    },
+  });
+
   console.log("Seed complete:");
   console.log(`  user:         ${DEMO_EMAIL} (password: ${DEMO_PASSWORD})`);
   console.log(`  portfolio:    ${portfolio.name} (base OMR)`);
   console.log(`  instruments:  ${instrumentDefs.length}`);
   console.log(`  transactions: ${transactions.length}`);
   console.log(`  seed prices:  ${prices.length}, fx rates: ${fxRates.length}`);
+  console.log(`  watchlist:    1 item (JNJ — watched, not held)`);
 }
 
 main()

@@ -12,6 +12,10 @@ const alertVariants = cva(
         default: "bg-card text-card-foreground",
         destructive:
           "border-destructive/50 bg-card text-destructive [&>svg]:text-current *:data-[slot=alert-description]:text-destructive/90",
+        // Reuses the established green "positive" token — e.g. the CSV
+        // import's "Import complete" message.
+        success:
+          "border-green-600/50 bg-card text-green-600 dark:text-green-400 [&>svg]:text-current",
       },
     },
     defaultVariants: {

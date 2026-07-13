@@ -6,6 +6,7 @@
 
 export const QUOTE_TTL_MS = 15 * 60 * 1000; // 15 minutes
 export const FUNDAMENTALS_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+export const FX_RATE_TTL_MS = 24 * 60 * 60 * 1000; // 1 day (FX refreshes daily)
 
 /** True when a cache entry fetched at `fetchedAt` is still fresh at `now`. */
 export function isCacheFresh(
@@ -26,4 +27,8 @@ export function areFundamentalsFresh(
   now: Date = new Date(),
 ): boolean {
   return isCacheFresh(fetchedAt, FUNDAMENTALS_TTL_MS, now);
+}
+
+export function isFxRateFresh(fetchedAt: Date, now: Date = new Date()): boolean {
+  return isCacheFresh(fetchedAt, FX_RATE_TTL_MS, now);
 }

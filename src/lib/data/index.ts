@@ -7,11 +7,18 @@
 export {
   getDividendHistory,
   getFinancialStatements,
+  getFxRate,
   getPriceHistory,
   getProfile,
   getQuote,
   getUpcomingDividends,
+  refreshFxRates,
+  createPrismaFxRateStore,
   createPrismaMarketDataStore,
+  type FxDeps,
+  type FxRateQuote,
+  type FxRateStore,
+  type FxRefreshReport,
   type MarketDataCacheStore,
   type MarketDataDeps,
 } from "./market-data";
@@ -41,7 +48,9 @@ export {
 export {
   areFundamentalsFresh,
   FUNDAMENTALS_TTL_MS,
+  FX_RATE_TTL_MS,
   isCacheFresh,
+  isFxRateFresh,
   isQuoteFresh,
   QUOTE_TTL_MS,
 } from "./cache";

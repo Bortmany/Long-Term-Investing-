@@ -1,5 +1,6 @@
 // Shared empty-state template (UI spec §5) — used by the seven placeholder
 // pages and by the Holdings card when a portfolio has no positions.
+import type * as React from "react";
 import type { LucideIcon } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -10,12 +11,18 @@ export function EmptyState({
   heading,
   sentence,
   comingSoon = false,
+  action,
   className,
 }: {
   icon: LucideIcon;
   heading: string;
   sentence: string;
   comingSoon?: boolean;
+  /**
+   * Optional call-to-action (e.g. an "Add Transaction" button), rendered
+   * last. A screen uses either `comingSoon` or `action`, never both.
+   */
+  action?: React.ReactNode;
   className?: string;
 }) {
   return (
@@ -35,6 +42,7 @@ export function EmptyState({
           Coming soon
         </Badge>
       ) : null}
+      {action ? <div className="mt-4">{action}</div> : null}
     </div>
   );
 }
