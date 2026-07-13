@@ -23,7 +23,7 @@ Later phases add screens and AI — the schema already supports all of them.
 - Multi-perspective AI "committee" reviews (type `COMMITTEE`).
 - On-demand buy and sell analyses (`BUY_ANALYSIS`, `SELL_ANALYSIS`).
 
-## Phase 6 — Weekly review + news (done) (done)
+## Phase 6 — Weekly review + news (done)
 - Automated weekly portfolio review (`WeeklyReview`), generated on demand from a manual "Run
   weekly review" button (the regular API, single-portfolio flow), user-scoped and persisted.
 - Per-holding news summaries (`NEWS_SUMMARY`), Haiku, generated on demand from a "Refresh news" button.
