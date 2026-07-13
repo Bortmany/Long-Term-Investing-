@@ -4,7 +4,7 @@ Phase 1 (done) laid the foundation: database schema, sign-in, the market-data
 layer with honest source badges, portfolio math, and seeded sample data.
 Later phases add screens and AI — the schema already supports all of them.
 
-## Phase 2 — Portfolio & dividends, full UI
+## Phase 2 — Portfolio & dividends, full UI (done)
 - Dashboard: total value, holdings table, cash balances — every figure with its source badge.
 - Transaction entry screens (buy, sell, dividend, deposit, withdrawal, fee).
 - CSV import of transactions.
