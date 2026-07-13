@@ -7,7 +7,6 @@ import { prisma } from "@/lib/prisma";
 import { hasAnthropicKey } from "@/lib/ai/client";
 import { thesisCheckSchema } from "@/lib/ai/schemas";
 import { getQuote, type InstrumentRef } from "@/lib/data";
-import { getOrCreatePortfolio } from "@/lib/user-portfolio";
 import {
   computePortfolioValue,
   fromPrismaFxRate,
@@ -18,15 +17,6 @@ import { formatMoney, formatQuantity, formatShortDate } from "@/lib/format";
 import { badgePropsForValueSource, SourceBadge } from "@/components/source-badge";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   IntegrityTrendSparkline,
   type IntegrityTrendPoint,
@@ -78,26 +68,44 @@ export default async function ThesisDetailPage({
 
   // This IS a one-instrument detail page, so the fetching accessor (getQuote)
   // is correct here, per CONVENTIONS' fetch-vs-read-only-cache split.
-  const [quoteR, portfolio] = await Promise.all([
-    getQuote(ref),
-    getOrCreatePortfolio(userId),
-  ]);
+  const quoteR = await getQuote(ref);
 
-  const [transactionRows, priceRows, fxRows] = await Promise.all([
-    prisma.transaction.findMany({ where: { portfolioId: portfolio.id } }),
-    prisma.priceCache.findMany({ where: { instrumentId: thesis.instrument.id } }),
-    prisma.fxRate.findMany(),
-  ]);
-
-  const portfolioValue = computePortfolioValue({
-    transactions: transactionRows.map(fromPrismaTransaction),
-    prices: priceRows.map(fromPrismaPriceCache),
-    fxRates: fxRows.map(fromPrismaFxRate),
-    baseCurrency: portfolio.baseCurrency,
+  // The oldest portfolio is THE portfolio. A GET render must never CREATE one
+  // as a side effect (write-on-render), so unlike the server actions this reads
+  // with findFirst and simply shows no position when there's no portfolio yet.
+  const portfolio = await prisma.portfolio.findFirst({
+    where: { userId },
+    orderBy: { createdAt: "asc" },
   });
-  const holding = portfolioValue.holdings.find(
-    (h) => h.instrumentId === thesis.instrument.id,
-  );
+
+  // Currency the position's market value is displayed in. When there's a
+  // holding to show there is always a portfolio (holding is only set inside the
+  // block below), so this equals the portfolio's base currency in that path;
+  // the instrument-currency fallback only matters when there's no position.
+  const displayCurrency = portfolio?.baseCurrency ?? thesis.instrument.currency;
+
+  let holding:
+    | ReturnType<typeof computePortfolioValue>["holdings"][number]
+    | undefined;
+  if (portfolio) {
+    const [transactionRows, priceRows, fxRows] = await Promise.all([
+      prisma.transaction.findMany({ where: { portfolioId: portfolio.id } }),
+      prisma.priceCache.findMany({
+        where: { instrumentId: thesis.instrument.id },
+      }),
+      prisma.fxRate.findMany(),
+    ]);
+
+    const portfolioValue = computePortfolioValue({
+      transactions: transactionRows.map(fromPrismaTransaction),
+      prices: priceRows.map(fromPrismaPriceCache),
+      fxRates: fxRows.map(fromPrismaFxRate),
+      baseCurrency: portfolio.baseCurrency,
+    });
+    holding = portfolioValue.holdings.find(
+      (h) => h.instrumentId === thesis.instrument.id,
+    );
+  }
 
   // --- Parse each ThesisCheck's persisted evidence Json (defense in depth,
   // matching how /stocks/[id] re-validates scoreRow.output before render). ---
@@ -176,7 +184,7 @@ export default async function ThesisDetailPage({
               <span className="inline-flex items-center gap-1.5">
                 <span className="tabular-nums">
                   {formatQuantity(holding.quantity)} sh ·{" "}
-                  {formatMoney(holding.valuation.marketValue, portfolio.baseCurrency)}
+                  {formatMoney(holding.valuation.marketValue, displayCurrency)}
                 </span>
                 <SourceBadge size="sm" {...badgePropsForValueSource(holding.valuation.source)} />
               </span>
@@ -210,44 +218,38 @@ export default async function ThesisDetailPage({
         output={latestCheck?.output ?? null}
       />
 
-      {/* Check History */}
+      {/* Check history timeline — newest first, a flat CSS timeline (§5.2) */}
       {parsedChecks.length > 0 ? (
         <Card className="gap-4">
           <CardHeader>
             <CardTitle>Check History</CardTitle>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Recommendation</TableHead>
-                  <TableHead className="text-right">Integrity Score</TableHead>
-                  <TableHead>Summary</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {parsedChecks.map((check) => (
-                  <TableRow key={check.id}>
-                    <TableCell>{formatShortDate(check.createdAt)}</TableCell>
-                    <TableCell>
-                      <RecommendationBadge recommendation={check.output.recommendation} />
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {check.output.integrityScore}
-                    </TableCell>
-                    <TableCell className="max-w-md truncate">
-                      <Tooltip>
-                        <TooltipTrigger className="block max-w-md truncate text-left">
-                          {check.output.summary}
-                        </TooltipTrigger>
-                        <TooltipContent>{check.output.summary}</TooltipContent>
-                      </Tooltip>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <ol className="border-l-2 border-slate-200 dark:border-slate-800">
+              {parsedChecks.map((check) => (
+                <li key={check.id} className="relative pl-4 pb-6 last:pb-0">
+                  {/* Dot marker sitting on the timeline rail. */}
+                  <span className="absolute -left-[5px] top-1.5 size-2 rounded-full bg-slate-300 dark:bg-slate-600" />
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <span className="text-sm text-slate-500 dark:text-slate-400">
+                      {formatShortDate(check.createdAt)}
+                    </span>
+                    <RecommendationBadge
+                      recommendation={check.output.recommendation}
+                    />
+                    <span className="text-sm tabular-nums text-slate-600 dark:text-slate-400">
+                      Integrity{" "}
+                      <span className="font-semibold text-foreground">
+                        {check.output.integrityScore}
+                      </span>
+                    </span>
+                  </div>
+                  <p className="mt-1 truncate text-sm text-slate-600 dark:text-slate-400">
+                    {check.output.summary}
+                  </p>
+                </li>
+              ))}
+            </ol>
           </CardContent>
         </Card>
       ) : null}

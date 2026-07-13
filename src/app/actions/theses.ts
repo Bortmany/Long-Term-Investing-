@@ -71,11 +71,24 @@ export async function createThesis(input: {
   }
   const { instrumentId, statement } = parsed.data;
 
-  const instrument = await prisma.instrument.findUnique({
-    where: { id: instrumentId },
-  });
-  if (!instrument) {
-    return actionError("That instrument could not be found.");
+  // Gate: the instrument must be one the user actually holds or watches — the
+  // same held-or-watched set the New Thesis dialog is built from. This blocks a
+  // direct server-action call from attaching a thesis to an arbitrary global
+  // instrument id, keeping the action honest to the UI's own rule.
+  const [heldTx, watched] = await Promise.all([
+    prisma.transaction.findFirst({
+      where: { instrumentId, portfolio: { userId } },
+      select: { id: true },
+    }),
+    prisma.watchlistItem.findFirst({
+      where: { instrumentId, userId },
+      select: { id: true },
+    }),
+  ]);
+  if (!heldTx && !watched) {
+    return actionError(
+      "Add this instrument as a holding or track it before writing a thesis about it.",
+    );
   }
 
   const thesis = await prisma.thesis.create({
@@ -251,7 +264,18 @@ export async function checkThesis(
     );
   }
 
-  if (!result.data.reused) {
+  // Ensure exactly one ThesisCheck exists for this analysis snapshot. runAnalysis
+  // has already persisted the AiAnalysis row; we dedupe on the analysis's own
+  // createdAt (which we also stamp onto the ThesisCheck) rather than trusting the
+  // `reused` flag. That way, if a previous attempt died AFTER the AiAnalysis was
+  // saved but BEFORE this ThesisCheck was written, `reused` would come back true
+  // yet no check row would exist — and this still self-heals by creating it now,
+  // instead of orphaning the analysis forever.
+  const existingCheck = await prisma.thesisCheck.findFirst({
+    where: { thesisId: thesis.id, createdAt: result.data.createdAt },
+    select: { id: true },
+  });
+  if (!existingCheck) {
     await prisma.thesisCheck.create({
       data: {
         thesisId: thesis.id,
@@ -268,8 +292,6 @@ export async function checkThesis(
       },
     });
   }
-  // When reused===true, nothing changed since the last check — the existing
-  // ThesisCheck row already represents this snapshot; do NOT insert a duplicate.
 
   revalidatePath(`/theses/${id}`);
   return actionOk({ reused: result.data.reused });
