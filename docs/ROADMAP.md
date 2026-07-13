@@ -23,16 +23,14 @@ Later phases add screens and AI — the schema already supports all of them.
 - Multi-perspective AI "committee" reviews (type `COMMITTEE`).
 - On-demand buy and sell analyses (`BUY_ANALYSIS`, `SELL_ANALYSIS`).
 
-## Phase 6 — Weekly review + news
-- Automated weekly portfolio review (`WeeklyReview`), generated via the Anthropic Batch API.
-- News summaries per holding (`NEWS_SUMMARY`), also via the Batch API to keep costs low.
-- **Scheduling + Batch API note:** both are deferred for now. Today's weekly review runs on the
-  regular Messages API from a manual "Run weekly review" button (single-portfolio, one call at a
-  time) — the Batch API's ~50% discount isn't worth building polling infrastructure for yet. A
-  disabled example workflow (`.github/workflows/weekly-review.yml.example`) and a token-protected
-  `/api/cron/weekly-review` route exist for when scheduling is actually turned on; adopt the Batch
-  API once reviews are scheduled and/or run across multiple portfolios (matches BUILD-PLAN's
-  cross-cutting decision #2).
+## Phase 6 — Weekly review + news (done) (done)
+- Automated weekly portfolio review (`WeeklyReview`), generated on demand from a manual "Run
+  weekly review" button (the regular API, single-portfolio flow), user-scoped and persisted.
+- Per-holding news summaries (`NEWS_SUMMARY`), Haiku, generated on demand from a "Refresh news" button.
+- Scheduling (a token-protected cron route plus a disabled `.github/workflows/weekly-review.yml.example`)
+  is shipped disabled; adopting the Anthropic Batch API (its ~50% discount) is a deferred future step,
+  worth it once reviews are scheduled and/or run across multiple portfolios rather than a single
+  manual-button flow.
 
 ## AI model choices
 - **claude-sonnet-5** for analysis work (health scores, committee, thesis checks, buy/sell).

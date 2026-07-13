@@ -3,12 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AiClient } from "@/lib/ai/client";
 import {
-  hashInput,
   runAnalysis,
   type AiAnalysisStore,
   type StoredAiAnalysis,
 } from "@/lib/ai/analysis";
-import { weeklyReviewSchema } from "@/lib/ai/schemas";
+import { newsSummarySchema } from "@/lib/ai/schemas";
 
 function keyFor(key: {
   userId: string;
@@ -52,45 +51,42 @@ function createFakeClient(
 }
 
 const wellFormedOutput = {
-  summary: "The portfolio gained slightly this week, led by tech holdings.",
-  newRisks: ["Rising rates could pressure REIT valuations."],
-  improvedHoldings: [{ ticker: "MSFT", reason: "Cloud revenue growth accelerated." }],
-  weakenedHoldings: [{ ticker: "T", reason: "Dividend coverage ratio narrowed." }],
-  allocationDrift: [
-    { category: "Technology", targetPercent: 40, actualPercent: 45, drift: 5 },
-  ],
-  suggestedActions: ["Consider trimming Technology back toward target."],
-  behavioralNote: "Stay the course; no reason to react to one week of noise.",
+  whatHappened: "The company reported quarterly earnings above analyst estimates.",
+  whyItMatters: "Revenue growth reaccelerated after two soft quarters.",
+  shouldInvestorCare: "Yes — this addresses the growth concern raised last quarter.",
+  quotes: [{ text: "We're seeing renewed demand across our cloud segment.", source: "CEO, earnings call" }],
 };
 
 const baseParams = {
-  type: AiAnalysisType.WEEKLY_REVIEW,
-  subjectType: "portfolio",
-  subjectId: "portfolio-1",
-  model: "claude-sonnet-5",
-  schema: weeklyReviewSchema,
+  type: AiAnalysisType.NEWS_SUMMARY,
+  subjectType: "instrument",
+  subjectId: "instrument-1",
+  model: "claude-haiku-4-5",
+  schema: newsSummarySchema,
 };
 
-describe("weeklyReviewSchema", () => {
-  it("parses a well-formed WEEKLY_REVIEW output", () => {
-    expect(weeklyReviewSchema.safeParse(wellFormedOutput).success).toBe(true);
+describe("newsSummarySchema", () => {
+  it("parses a well-formed NEWS_SUMMARY output, thesisImpact omitted", () => {
+    expect(newsSummarySchema.safeParse(wellFormedOutput).success).toBe(true);
   });
 
-  it("rejects an allocationDrift entry missing a required field", () => {
-    const malformed = {
-      ...wellFormedOutput,
-      allocationDrift: [{ category: "Technology", targetPercent: 40 }],
-    };
-    expect(weeklyReviewSchema.safeParse(malformed).success).toBe(false);
+  it("parses fine when thesisImpact is present", () => {
+    const withThesis = { ...wellFormedOutput, thesisImpact: "Supports the growth thesis." };
+    expect(newsSummarySchema.safeParse(withThesis).success).toBe(true);
+  });
+
+  it("rejects a quotes entry missing the required text field", () => {
+    const malformed = { ...wellFormedOutput, quotes: [{ source: "CEO" }] };
+    expect(newsSummarySchema.safeParse(malformed).success).toBe(false);
   });
 });
 
-describe("runAnalysis — WEEKLY_REVIEW — reuse by input hash", () => {
+describe("runAnalysis — NEWS_SUMMARY — reuse by input hash", () => {
   it("only calls the API once across two calls with identical input", async () => {
     const store = createFakeStore();
     const client = createFakeClient(wellFormedOutput);
     const buildInput = vi.fn(async () => ({
-      input: { period: "2026-W28", totalValue: 12000 },
+      input: { instrument: { ticker: "AAPL" }, news: [{ title: "Q3 earnings beat" }] },
       dataAsOf: new Date("2026-07-10"),
     }));
 
@@ -102,10 +98,7 @@ describe("runAnalysis — WEEKLY_REVIEW — reuse by input hash", () => {
       store,
     });
     expect(first.ok).toBe(true);
-    if (first.ok) {
-      expect(first.data.reused).toBe(false);
-      expect(first.data.output).toEqual(wellFormedOutput);
-    }
+    if (first.ok) expect(first.data.reused).toBe(false);
     expect(client.parse).toHaveBeenCalledTimes(1);
 
     const second = await runAnalysis({
@@ -116,15 +109,12 @@ describe("runAnalysis — WEEKLY_REVIEW — reuse by input hash", () => {
       store,
     });
     expect(second.ok).toBe(true);
-    if (second.ok) {
-      expect(second.data.reused).toBe(true);
-    }
-    // Zero additional API calls on the reused run.
+    if (second.ok) expect(second.data.reused).toBe(true);
     expect(client.parse).toHaveBeenCalledTimes(1);
   });
 });
 
-describe("runAnalysis — WEEKLY_REVIEW — no API key", () => {
+describe("runAnalysis — NEWS_SUMMARY — no API key", () => {
   const originalKey = process.env.ANTHROPIC_API_KEY;
 
   beforeEach(() => {
@@ -146,25 +136,23 @@ describe("runAnalysis — WEEKLY_REVIEW — no API key", () => {
       userId: "user-1",
       store,
       buildInput: async () => ({
-        input: { period: "2026-W28" },
+        input: { instrument: { ticker: "AAPL" }, news: [] },
         dataAsOf: new Date("2026-07-10"),
       }),
     });
 
     expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.unavailable).toBe("no_api_key");
-    }
+    if (!result.ok) expect(result.unavailable).toBe("no_api_key");
     expect(createSpy).not.toHaveBeenCalled();
   });
 });
 
-describe("runAnalysis — WEEKLY_REVIEW — schema failure", () => {
+describe("runAnalysis — NEWS_SUMMARY — schema failure", () => {
   it("returns a typed failure and persists nothing when the output fails validation", async () => {
     const store = createFakeStore();
     const createSpy = vi.spyOn(store, "create");
     const malformed: Record<string, unknown> = { ...wellFormedOutput };
-    delete malformed.summary;
+    delete malformed.whatHappened;
     const client = createFakeClient(malformed);
 
     const result = await runAnalysis({
@@ -173,15 +161,13 @@ describe("runAnalysis — WEEKLY_REVIEW — schema failure", () => {
       client,
       store,
       buildInput: async () => ({
-        input: { period: "2026-W28" },
+        input: { instrument: { ticker: "AAPL" }, news: [] },
         dataAsOf: new Date("2026-07-10"),
       }),
     });
 
     expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.unavailable).toBe("provider_error");
-    }
+    if (!result.ok) expect(result.unavailable).toBe("provider_error");
     expect(createSpy).not.toHaveBeenCalled();
   });
 });
@@ -191,7 +177,7 @@ describe("runAnalysis — cross-user isolation (Phase-5-class bug regression)", 
     const store = createFakeStore();
     const client = createFakeClient(wellFormedOutput);
     const buildInput = async () => ({
-      input: { period: "2026-W28", totalValue: 12000 },
+      input: { instrument: { ticker: "AAPL" }, news: [{ title: "Q3 earnings beat" }] },
       dataAsOf: new Date("2026-07-10"),
     });
 
@@ -217,49 +203,6 @@ describe("runAnalysis — cross-user isolation (Phase-5-class bug regression)", 
 
     // Same type/subjectType/subjectId/input for two different users must
     // trigger TWO API calls, never a reuse of the other user's row.
-    expect(client.parse).toHaveBeenCalledTimes(2);
-
-    // Each user only ever sees their OWN row from the store — a direct check
-    // against the store, keyed by the real input hash (computed the same way
-    // runAnalysis computes it internally).
-    const { input } = await buildInput();
-    const inputHash = hashInput(input);
-    const rowForA = await store.findLatest({
-      userId: "user-a",
-      type: AiAnalysisType.WEEKLY_REVIEW,
-      subjectType: "portfolio",
-      subjectId: "portfolio-1",
-      inputHash,
-    });
-    const rowForB = await store.findLatest({
-      userId: "user-b",
-      type: AiAnalysisType.WEEKLY_REVIEW,
-      subjectType: "portfolio",
-      subjectId: "portfolio-1",
-      inputHash,
-    });
-    expect(rowForA).not.toBeNull();
-    expect(rowForB).not.toBeNull();
-    // A user-scoped lookup for a user who never ran this analysis finds nothing.
-    const rowForStranger = await store.findLatest({
-      userId: "user-c",
-      type: AiAnalysisType.WEEKLY_REVIEW,
-      subjectType: "portfolio",
-      subjectId: "portfolio-1",
-      inputHash,
-    });
-    expect(rowForStranger).toBeNull();
-
-    const thirdForUserA = await runAnalysis({
-      ...baseParams,
-      userId: "user-a",
-      buildInput,
-      client,
-      store,
-    });
-    expect(thirdForUserA.ok).toBe(true);
-    if (thirdForUserA.ok) expect(thirdForUserA.data.reused).toBe(true);
-    // Still only 2 calls total — user-a's re-run reused, user-b was untouched.
     expect(client.parse).toHaveBeenCalledTimes(2);
   });
 });

@@ -181,10 +181,19 @@ export async function runWeeklyReviewForUser(
     );
   }
 
-  // dataAsOf: the newest real "as of" among the sources that actually fed
-  // this computation — honest, never invented, same idiom as every other
-  // action file.
-  const candidateDates: Date[] = [...prices.map((p) => p.asOf), ...fxRows.map((r) => r.asOf)];
+  // dataAsOf: the newest real "as of" among ALL the sources that actually fed
+  // this computation — prices and FX rates, plus the prior AI artifacts folded
+  // into the review (health score, each thesis's latest check, committee runs).
+  // Honest, never invented; same idiom as every other action file.
+  const candidateDates: Date[] = [
+    ...prices.map((p) => p.asOf),
+    ...fxRows.map((r) => r.asOf),
+    ...(latestHealthScore ? [latestHealthScore.dataAsOf] : []),
+    ...committeeRows.map((r) => r.dataAsOf),
+    ...thesesWithLatestCheck.flatMap((t) =>
+      t.checks[0] ? [t.checks[0].dataAsOf] : [],
+    ),
+  ];
   const dataAsOf =
     candidateDates.length > 0
       ? candidateDates.reduce((a, b) => (b > a ? b : a))

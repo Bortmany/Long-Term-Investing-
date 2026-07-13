@@ -1,7 +1,8 @@
-# EXAMPLE ONLY — rename to weekly-review.yml and configure CRON_SECRET +
-# CRON_USER_ID secrets to enable. Currently disabled; Phase 6 ships the
-# manual "Run weekly review" button instead (see docs/BUILD-PLAN.md's Batch
-# API deferral note).
+# EXAMPLE ONLY — disabled. Rename this file to weekly-review.yml and set the
+# CRON_SECRET, CRON_USER_ID (on the server) and APP_URL/CRON_SECRET (as repo
+# secrets) to enable. Phase 6 ships the manual "Run weekly review" button
+# instead; scheduling + the Anthropic Batch API are a deferred future step
+# (see docs/BUILD-PLAN.md cross-cutting decision #2).
 
 name: Weekly portfolio review
 
