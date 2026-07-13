@@ -76,12 +76,15 @@ export default async function StocksPage() {
       const prices = pricesByInstrument.get(instrument.id) ?? [];
       const latest = prices[0];
 
-      // Day change % from the two most recent DISTINCT-day closes; null when
-      // fewer than two are stored — never a fabricated 0%.
+      // Day change % between the latest close and the most recent close on an
+      // EARLIER calendar day — so several intraday cache refreshes on the same
+      // day don't get read as a "daily" move. Null when no prior-day close is
+      // stored — never a fabricated 0%.
       let changePct: number | null = null;
       if (latest) {
+        const latestDay = latest.asOf.toISOString().slice(0, 10);
         const previous = prices.find(
-          (p) => p.asOf.getTime() < latest.asOf.getTime(),
+          (p) => p.asOf.toISOString().slice(0, 10) !== latestDay,
         );
         if (previous) {
           const prevClose = previous.price.toNumber();

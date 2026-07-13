@@ -148,9 +148,12 @@ export async function generateStockScore(
 
   if (!result.ok) {
     // Typed unavailable (no key, provider error, schema mismatch) → a plain
-    // sentence; the AiPanel shows its fixed "Analysis failed" copy.
+    // sentence; the AiPanel shows its fixed "Analysis failed" copy. Never
+    // surface a key or a raw provider error. Mirrors health-score.ts.
     return actionError(
-      result.message ?? "Something went wrong generating this analysis.",
+      result.unavailable === "no_api_key"
+        ? "AI features are turned off."
+        : "Something went wrong generating this analysis.",
     );
   }
 

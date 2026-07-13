@@ -11,7 +11,7 @@ Later phases add screens and AI — the schema already supports all of them.
 - Multi-currency display: portfolio in OMR with USD/SAR/AED conversion, missing-rate warnings shown plainly.
 - Dividend income view (trailing 12 months, upcoming payments).
 
-## Phase 3 — Stock pages + AI health score
+## Phase 3 — Stock pages + AI health score (done)
 - A page per instrument: price, profile, financials, dividend history.
 - AI "health score" per holding, stored in `AiAnalysis` (type `HEALTH_SCORE`), shown with the date of the data it was based on.
 
