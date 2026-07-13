@@ -26,6 +26,13 @@ Later phases add screens and AI — the schema already supports all of them.
 ## Phase 6 — Weekly review + news
 - Automated weekly portfolio review (`WeeklyReview`), generated via the Anthropic Batch API.
 - News summaries per holding (`NEWS_SUMMARY`), also via the Batch API to keep costs low.
+- **Scheduling + Batch API note:** both are deferred for now. Today's weekly review runs on the
+  regular Messages API from a manual "Run weekly review" button (single-portfolio, one call at a
+  time) — the Batch API's ~50% discount isn't worth building polling infrastructure for yet. A
+  disabled example workflow (`.github/workflows/weekly-review.yml.example`) and a token-protected
+  `/api/cron/weekly-review` route exist for when scheduling is actually turned on; adopt the Batch
+  API once reviews are scheduled and/or run across multiple portfolios (matches BUILD-PLAN's
+  cross-cutting decision #2).
 
 ## AI model choices
 - **claude-sonnet-5** for analysis work (health scores, committee, thesis checks, buy/sell).

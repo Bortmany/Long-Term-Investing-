@@ -28,6 +28,7 @@ import {
   type FinancialStatements,
   type InstrumentRef,
   type MarketDataProvider,
+  type NewsItem,
   type PricePoint,
   type Quote,
   type SourceBadge,
@@ -205,6 +206,21 @@ export async function getPriceHistory(
 ): Promise<DataResult<PricePoint[]>> {
   const { provider } = resolveDeps(instrument, deps);
   return provider.getPriceHistory(instrument, range);
+}
+
+// ---------------------------------------------------------------------------
+// Stock news — thin pass-through, NO cache table. Unlike quotes/fundamentals,
+// this is only ever called from an explicit user-clicked server action
+// (generateNewsSummary), never on render, so there is no writes-on-render
+// risk to guard against with a TTL layer.
+// ---------------------------------------------------------------------------
+
+export async function getStockNews(
+  instrument: InstrumentRef,
+  deps: MarketDataDeps = {},
+): Promise<DataResult<NewsItem[]>> {
+  const { provider } = resolveDeps(instrument, deps);
+  return provider.getStockNews(instrument);
 }
 
 // ---------------------------------------------------------------------------

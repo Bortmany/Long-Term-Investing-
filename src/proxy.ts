@@ -2,7 +2,15 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getSessionCookie } from "better-auth/cookies";
 
 // Routes anyone may visit without being signed in.
-const PUBLIC_PATHS = ["/sign-in", "/sign-up", "/api/auth", "/api/health"];
+// "/api/cron/weekly-review" is exempted so its own bearer-token check (not a
+// session cookie) can be the gate — see that route's file for the real auth.
+const PUBLIC_PATHS = [
+  "/sign-in",
+  "/sign-up",
+  "/api/auth",
+  "/api/health",
+  "/api/cron/weekly-review",
+];
 
 function isPublic(pathname: string): boolean {
   return PUBLIC_PATHS.some(

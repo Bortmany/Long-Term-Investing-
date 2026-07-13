@@ -15,6 +15,7 @@ import {
   type FinancialStatements,
   type InstrumentRef,
   type MarketDataProvider,
+  type NewsItem,
   type PricePoint,
   type Quote,
   type StatementKind,
@@ -295,6 +296,36 @@ export function createFmpProvider(options: FmpProviderOptions): MarketDataProvid
       }
       if (upcoming.length === 0) return unavailable("no_data");
       return { ok: true, data: upcoming };
+    },
+
+    async getStockNews(instrument: InstrumentRef): Promise<DataResult<NewsItem[]>> {
+      if (!hasKey) return noKey();
+      const result = await fetchJson("/stock_news", {
+        tickers: instrument.ticker,
+        limit: "10",
+      });
+      if (!result.ok) return result;
+
+      const rows = Array.isArray(result.data)
+        ? (result.data as Record<string, unknown>[])
+        : [];
+      const items: NewsItem[] = [];
+      for (const raw of rows) {
+        const title = typeof raw.title === "string" ? raw.title : null;
+        const url = typeof raw.url === "string" ? raw.url : null;
+        const site = typeof raw.site === "string" ? raw.site : null;
+        const publishedDate = asDate(raw.publishedDate);
+        if (!title || !url || !site || !publishedDate) continue;
+        items.push({
+          title,
+          text: typeof raw.text === "string" ? raw.text : null,
+          url,
+          site,
+          publishedDate,
+        });
+      }
+      if (items.length === 0) return unavailable("no_data");
+      return { ok: true, data: items };
     },
   };
 }
