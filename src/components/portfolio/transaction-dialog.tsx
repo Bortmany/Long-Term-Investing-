@@ -8,6 +8,11 @@
 // Validation is the shared zod schema in src/lib/transaction-schema.ts (the
 // single source of truth), run client-side for inline per-field errors and
 // again server-side by the action.
+//
+// State pattern: the DialogContent unmounts its children while closed, so all
+// form state lives in an inner <TransactionForm> that mounts fresh each time
+// the dialog opens, with its initial values set during render (pre-filled in
+// Edit mode). No "reset the form" effect is needed — remounting IS the reset.
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { Currency, InstrumentType, Market, TransactionType } from "@prisma/client";
@@ -92,65 +97,16 @@ export function TransactionDialog({
   instruments: InstrumentOptionData[];
   baseCurrency: Currency;
 }) {
-  const router = useRouter();
-  const isEdit = editing !== null;
-
-  // Form state — everything is a string until the zod schema coerces it.
-  const [type, setType] = React.useState<TransactionType>("BUY");
-  const [instrumentId, setInstrumentId] = React.useState("");
-  const [quantity, setQuantity] = React.useState("");
-  const [price, setPrice] = React.useState("");
-  const [amount, setAmount] = React.useState("");
-  const [fee, setFee] = React.useState("");
-  const [currency, setCurrency] = React.useState<Currency>(baseCurrency);
-  const [tradeDate, setTradeDate] = React.useState(todayInputValue);
-  const [note, setNote] = React.useState("");
-
-  const [fieldErrors, setFieldErrors] = React.useState<Record<string, string>>({});
-  const [serverError, setServerError] = React.useState<string | null>(null);
+  // Pending lives here (not in the form) so the dialog's dismiss guard can
+  // see it: Escape / overlay / X never close the dialog mid-save.
   const [pending, setPending] = React.useState(false);
 
-  // Instruments created inline during this dialog session, merged into the
+  // Instruments created inline during this page visit, merged into the
   // picker immediately (the server props catch up on the next refresh).
+  // Kept OUTSIDE the form so they survive the form remounting per open.
   const [extraInstruments, setExtraInstruments] = React.useState<
     InstrumentOptionData[]
   >([]);
-  const [showNewInstrument, setShowNewInstrument] = React.useState(false);
-
-  // Reset the form whenever the dialog (re)opens.
-  React.useEffect(() => {
-    if (!open) return;
-    if (editing) {
-      setType(editing.type);
-      setInstrumentId(
-        editing.instrumentId ?? (editing.type === "FEE" ? NO_INSTRUMENT : ""),
-      );
-      setQuantity(editing.quantity !== null ? String(editing.quantity) : "");
-      setPrice(editing.pricePerUnit !== null ? String(editing.pricePerUnit) : "");
-      setAmount(
-        editing.type === "BUY" || editing.type === "SELL"
-          ? ""
-          : String(editing.amount),
-      );
-      setFee(editing.fee > 0 ? String(editing.fee) : "");
-      setCurrency(editing.currency);
-      setTradeDate(storedDateInputValue(editing.tradeDate));
-      setNote(editing.note ?? "");
-    } else {
-      setType("BUY");
-      setInstrumentId("");
-      setQuantity("");
-      setPrice("");
-      setAmount("");
-      setFee("");
-      setCurrency(baseCurrency);
-      setTradeDate(todayInputValue());
-      setNote("");
-    }
-    setFieldErrors({});
-    setServerError(null);
-    setShowNewInstrument(false);
-  }, [open, editing, baseCurrency]);
 
   const allInstruments = React.useMemo(() => {
     const byId = new Map(instruments.map((i) => [i.id, i]));
@@ -160,11 +116,102 @@ export function TransactionDialog({
     return [...byId.values()].sort((a, b) => a.ticker.localeCompare(b.ticker));
   }, [instruments, extraInstruments]);
 
+  return (
+    <Dialog
+      open={open}
+      // Never dismissable mid-save — the request outcome must be seen.
+      onOpenChange={(next) => {
+        if (!pending) onOpenChange(next);
+      }}
+    >
+      <DialogContent className="max-w-lg">
+        {open ? (
+          <TransactionForm
+            // Remount per target so Add / Edit-row-A / Edit-row-B never
+            // share stale state.
+            key={editing?.id ?? "new"}
+            editing={editing}
+            instruments={allInstruments}
+            baseCurrency={baseCurrency}
+            pending={pending}
+            setPending={setPending}
+            onInstrumentCreated={(instrument) =>
+              setExtraInstruments((prev) => [...prev, instrument])
+            }
+            onClose={() => onOpenChange(false)}
+          />
+        ) : null}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// The form itself. Mounted only while the dialog is open, so initial state is
+// set right here in the useState initializers (fresh Add form, or the edited
+// row's values) instead of a setState-in-effect reset.
+// ---------------------------------------------------------------------------
+
+function TransactionForm({
+  editing,
+  instruments,
+  baseCurrency,
+  pending,
+  setPending,
+  onInstrumentCreated,
+  onClose,
+}: {
+  editing: TransactionRowData | null;
+  instruments: InstrumentOptionData[];
+  baseCurrency: Currency;
+  pending: boolean;
+  setPending: (pending: boolean) => void;
+  onInstrumentCreated: (instrument: InstrumentOptionData) => void;
+  onClose: () => void;
+}) {
+  const router = useRouter();
+  const isEdit = editing !== null;
+
+  // Form state — everything is a string until the zod schema coerces it.
+  // Initial values come straight from the edited row (or sensible defaults).
+  const [type, setType] = React.useState<TransactionType>(editing?.type ?? "BUY");
+  const [instrumentId, setInstrumentId] = React.useState(
+    editing
+      ? (editing.instrumentId ?? (editing.type === "FEE" ? NO_INSTRUMENT : ""))
+      : "",
+  );
+  const [quantity, setQuantity] = React.useState(
+    editing?.quantity != null ? String(editing.quantity) : "",
+  );
+  const [price, setPrice] = React.useState(
+    editing?.pricePerUnit != null ? String(editing.pricePerUnit) : "",
+  );
+  const [amount, setAmount] = React.useState(
+    // BUY/SELL amounts are always derived — never shown as an editable value.
+    editing && editing.type !== "BUY" && editing.type !== "SELL"
+      ? String(editing.amount)
+      : "",
+  );
+  const [fee, setFee] = React.useState(
+    editing && editing.fee > 0 ? String(editing.fee) : "",
+  );
+  const [currency, setCurrency] = React.useState<Currency>(
+    editing?.currency ?? baseCurrency,
+  );
+  const [tradeDate, setTradeDate] = React.useState(() =>
+    editing ? storedDateInputValue(editing.tradeDate) : todayInputValue(),
+  );
+  const [note, setNote] = React.useState(editing?.note ?? "");
+
+  const [fieldErrors, setFieldErrors] = React.useState<Record<string, string>>({});
+  const [serverError, setServerError] = React.useState<string | null>(null);
+  const [showNewInstrument, setShowNewInstrument] = React.useState(false);
+
   const hasInstrumentField =
     type === "BUY" || type === "SELL" || type === "DIVIDEND" || type === "FEE";
   const instrumentRequired = type === "BUY" || type === "SELL" || type === "DIVIDEND";
   const isTrade = type === "BUY" || type === "SELL";
-  const noInstrumentsYet = allInstruments.length === 0;
+  const noInstrumentsYet = instruments.length === 0;
 
   function changeType(next: string) {
     const nextType = next as TransactionType;
@@ -180,7 +227,7 @@ export function TransactionDialog({
 
   function changeInstrument(id: string) {
     setInstrumentId(id);
-    const instrument = allInstruments.find((i) => i.id === id);
+    const instrument = instruments.find((i) => i.id === id);
     // Currency defaults to the chosen instrument's currency, still editable.
     if (instrument) setCurrency(instrument.currency);
   }
@@ -253,7 +300,7 @@ export function TransactionDialog({
       setServerError(result.error);
       return;
     }
-    onOpenChange(false);
+    onClose();
     router.refresh();
   }
 
@@ -261,230 +308,222 @@ export function TransactionDialog({
     pending || (instrumentRequired && (noInstrumentsYet || instrumentId === ""));
 
   return (
-    <Dialog
-      open={open}
-      // Never dismissable mid-save — the request outcome must be seen.
-      onOpenChange={(next) => {
-        if (!pending) onOpenChange(next);
-      }}
-    >
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>{isEdit ? "Edit Transaction" : "Add Transaction"}</DialogTitle>
-        </DialogHeader>
+    <>
+      <DialogHeader>
+        <DialogTitle>{isEdit ? "Edit Transaction" : "Add Transaction"}</DialogTitle>
+      </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+      <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label htmlFor="tx-type">Type</Label>
+            <Select
+              id="tx-type"
+              className="mt-1.5"
+              value={type}
+              onValueChange={changeType}
+              options={Object.values(TransactionType).map((t) => ({
+                value: t,
+                label: transactionTypeLabel(t),
+              }))}
+            />
+          </div>
+          <div>
+            <Label htmlFor="tx-date">Trade Date</Label>
+            <Input
+              id="tx-date"
+              type="date"
+              className="mt-1.5"
+              value={tradeDate}
+              onChange={(e) => setTradeDate(e.target.value)}
+            />
+            <FieldError message={fieldErrors.tradeDate} />
+          </div>
+        </div>
+
+        {hasInstrumentField ? (
+          <div>
+            <Label htmlFor="tx-instrument">Instrument</Label>
+            <Select
+              id="tx-instrument"
+              className="mt-1.5"
+              value={instrumentId}
+              onValueChange={changeInstrument}
+              placeholder={
+                type === "FEE" || instrumentId !== "" ? undefined : "Pick an instrument"
+              }
+              options={[
+                ...(type === "FEE"
+                  ? [{ value: NO_INSTRUMENT, label: "— Account-level (no instrument) —" }]
+                  : []),
+                ...instruments.map((i) => ({
+                  value: i.id,
+                  label: `${i.ticker} — ${i.name}`,
+                })),
+              ]}
+            />
+            <FieldError message={fieldErrors.instrumentId} />
+            {noInstrumentsYet && instrumentRequired ? (
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                No instruments yet — track one from the Stocks page first, or
+                create one below.
+              </p>
+            ) : null}
+            {!showNewInstrument ? (
+              <Button
+                type="button"
+                variant="link"
+                size="sm"
+                className="mt-1 h-auto p-0 text-xs"
+                onClick={() => setShowNewInstrument(true)}
+              >
+                New instrument
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
+
+        {showNewInstrument ? (
+          <NewInstrumentFields
+            onCreated={(instrument) => {
+              onInstrumentCreated(instrument);
+              setInstrumentId(instrument.id);
+              setCurrency(instrument.currency);
+              setShowNewInstrument(false);
+            }}
+            onCancel={() => setShowNewInstrument(false)}
+          />
+        ) : null}
+
+        {isTrade ? (
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="tx-type">Type</Label>
-              <Select
-                id="tx-type"
-                className="mt-1.5"
-                value={type}
-                onValueChange={changeType}
-                options={Object.values(TransactionType).map((t) => ({
-                  value: t,
-                  label: transactionTypeLabel(t),
-                }))}
-              />
-            </div>
-            <div>
-              <Label htmlFor="tx-date">Trade Date</Label>
+              <Label htmlFor="tx-quantity">Quantity</Label>
               <Input
-                id="tx-date"
-                type="date"
-                className="mt-1.5"
-                value={tradeDate}
-                onChange={(e) => setTradeDate(e.target.value)}
-              />
-              <FieldError message={fieldErrors.tradeDate} />
-            </div>
-          </div>
-
-          {hasInstrumentField ? (
-            <div>
-              <Label htmlFor="tx-instrument">Instrument</Label>
-              <Select
-                id="tx-instrument"
-                className="mt-1.5"
-                value={instrumentId}
-                onValueChange={changeInstrument}
-                placeholder={
-                  type === "FEE" || instrumentId !== "" ? undefined : "Pick an instrument"
-                }
-                options={[
-                  ...(type === "FEE"
-                    ? [{ value: NO_INSTRUMENT, label: "— Account-level (no instrument) —" }]
-                    : []),
-                  ...allInstruments.map((i) => ({
-                    value: i.id,
-                    label: `${i.ticker} — ${i.name}`,
-                  })),
-                ]}
-              />
-              <FieldError message={fieldErrors.instrumentId} />
-              {noInstrumentsYet && instrumentRequired ? (
-                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                  No instruments yet — track one from the Stocks page first, or
-                  create one below.
-                </p>
-              ) : null}
-              {!showNewInstrument ? (
-                <Button
-                  type="button"
-                  variant="link"
-                  size="sm"
-                  className="mt-1 h-auto p-0 text-xs"
-                  onClick={() => setShowNewInstrument(true)}
-                >
-                  New instrument
-                </Button>
-              ) : null}
-            </div>
-          ) : null}
-
-          {showNewInstrument ? (
-            <NewInstrumentFields
-              onCreated={(instrument) => {
-                setExtraInstruments((prev) => [...prev, instrument]);
-                setInstrumentId(instrument.id);
-                setCurrency(instrument.currency);
-                setShowNewInstrument(false);
-              }}
-              onCancel={() => setShowNewInstrument(false)}
-            />
-          ) : null}
-
-          {isTrade ? (
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="tx-quantity">Quantity</Label>
-                <Input
-                  id="tx-quantity"
-                  type="number"
-                  step="any"
-                  min="0"
-                  className="mt-1.5"
-                  value={quantity}
-                  onChange={(e) => setQuantity(e.target.value)}
-                />
-                <FieldError message={fieldErrors.quantity} />
-              </div>
-              <div>
-                <Label htmlFor="tx-price">Price per unit</Label>
-                <Input
-                  id="tx-price"
-                  type="number"
-                  step="any"
-                  min="0"
-                  className="mt-1.5"
-                  value={price}
-                  onChange={(e) => setPrice(e.target.value)}
-                />
-                <FieldError message={fieldErrors.pricePerUnit} />
-              </div>
-            </div>
-          ) : null}
-
-          {!isTrade ? (
-            <div>
-              <Label htmlFor="tx-amount">Amount</Label>
-              <Input
-                id="tx-amount"
+                id="tx-quantity"
                 type="number"
                 step="any"
                 min="0"
                 className="mt-1.5"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
               />
-              <FieldError message={fieldErrors.amount} />
+              <FieldError message={fieldErrors.quantity} />
             </div>
-          ) : null}
-
-          <div className="grid grid-cols-2 gap-4">
-            {isTrade || type === "DIVIDEND" ? (
-              <div>
-                <Label htmlFor="tx-fee">
-                  {type === "DIVIDEND" ? "Fee / withholding" : "Fee"}
-                </Label>
-                <Input
-                  id="tx-fee"
-                  type="number"
-                  step="any"
-                  min="0"
-                  placeholder="0"
-                  className="mt-1.5"
-                  value={fee}
-                  onChange={(e) => setFee(e.target.value)}
-                />
-                <FieldError message={fieldErrors.fee} />
-              </div>
-            ) : null}
             <div>
-              <Label htmlFor="tx-currency">Currency</Label>
-              <Select
-                id="tx-currency"
+              <Label htmlFor="tx-price">Price per unit</Label>
+              <Input
+                id="tx-price"
+                type="number"
+                step="any"
+                min="0"
                 className="mt-1.5"
-                value={currency}
-                onValueChange={(v) => setCurrency(v as Currency)}
-                options={CURRENCY_OPTIONS}
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
               />
-              <FieldError message={fieldErrors.currency} />
+              <FieldError message={fieldErrors.pricePerUnit} />
             </div>
           </div>
+        ) : null}
 
-          {isTrade ? (
-            // Read-only derived amount — the server computes the stored value.
-            <p className="text-sm text-slate-500 dark:text-slate-400">
-              Amount: {amountComputable ? formatMoney(computedAmount, currency) : "—"}
-            </p>
-          ) : null}
-
+        {!isTrade ? (
           <div>
-            <Label htmlFor="tx-note">Note</Label>
-            <Textarea
-              id="tx-note"
-              rows={2}
-              className="mt-1.5 min-h-0"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
+            <Label htmlFor="tx-amount">Amount</Label>
+            <Input
+              id="tx-amount"
+              type="number"
+              step="any"
+              min="0"
+              className="mt-1.5"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
             />
-            <FieldError message={fieldErrors.note} />
+            <FieldError message={fieldErrors.amount} />
           </div>
+        ) : null}
 
-          {serverError ? (
-            <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-              {serverError}
-            </p>
+        <div className="grid grid-cols-2 gap-4">
+          {isTrade || type === "DIVIDEND" ? (
+            <div>
+              <Label htmlFor="tx-fee">
+                {type === "DIVIDEND" ? "Fee / withholding" : "Fee"}
+              </Label>
+              <Input
+                id="tx-fee"
+                type="number"
+                step="any"
+                min="0"
+                placeholder="0"
+                className="mt-1.5"
+                value={fee}
+                onChange={(e) => setFee(e.target.value)}
+              />
+              <FieldError message={fieldErrors.fee} />
+            </div>
           ) : null}
-          <FieldError message={fieldErrors.form} />
+          <div>
+            <Label htmlFor="tx-currency">Currency</Label>
+            <Select
+              id="tx-currency"
+              className="mt-1.5"
+              value={currency}
+              onValueChange={(v) => setCurrency(v as Currency)}
+              options={CURRENCY_OPTIONS}
+            />
+            <FieldError message={fieldErrors.currency} />
+          </div>
+        </div>
 
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={pending}
-              onClick={() => onOpenChange(false)}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={submitDisabled}>
-              {pending ? (
-                <>
-                  <LoaderCircle className="animate-spin" aria-hidden="true" />
-                  Saving…
-                </>
-              ) : isEdit ? (
-                "Save Changes"
-              ) : (
-                "Add Transaction"
-              )}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+        {isTrade ? (
+          // Read-only derived amount — the server computes the stored value.
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            Amount: {amountComputable ? formatMoney(computedAmount, currency) : "—"}
+          </p>
+        ) : null}
+
+        <div>
+          <Label htmlFor="tx-note">Note</Label>
+          <Textarea
+            id="tx-note"
+            rows={2}
+            className="mt-1.5 min-h-0"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+          />
+          <FieldError message={fieldErrors.note} />
+        </div>
+
+        {serverError ? (
+          <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+            {serverError}
+          </p>
+        ) : null}
+        <FieldError message={fieldErrors.form} />
+
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={pending}
+            onClick={onClose}
+          >
+            Cancel
+          </Button>
+          <Button type="submit" disabled={submitDisabled}>
+            {pending ? (
+              <>
+                <LoaderCircle className="animate-spin" aria-hidden="true" />
+                Saving…
+              </>
+            ) : isEdit ? (
+              "Save Changes"
+            ) : (
+              "Add Transaction"
+            )}
+          </Button>
+        </DialogFooter>
+      </form>
+    </>
   );
 }
 

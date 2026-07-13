@@ -4,6 +4,10 @@
 // provider serves (non-US markets, or US without an FMP key). Saving writes a
 // new MANUAL PriceCache row via the existing updateManualPrice action, so the
 // holding then honestly shows "Manual, as of {date}".
+//
+// State pattern: the DialogContent unmounts its children while closed, so the
+// form state lives in an inner <UpdatePriceForm> that mounts fresh per target
+// with its initial values set during render — no "reset the form" effect.
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { LoaderCircle } from "lucide-react";
@@ -43,27 +47,54 @@ export function UpdatePriceDialog({
   target: UpdatePriceTarget | null;
   onClose: () => void;
 }) {
-  const router = useRouter();
+  // Pending lives here (not in the form) so the dialog's dismiss guard can
+  // see it: Escape / overlay / X never close the dialog mid-save.
+  const [pending, setPending] = React.useState(false);
   const open = target !== null;
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next && !pending) onClose();
+      }}
+    >
+      <DialogContent className="max-w-md">
+        {target ? (
+          <UpdatePriceForm
+            // Remount per holding — a fresh, empty form every time.
+            key={target.instrumentId}
+            target={target}
+            pending={pending}
+            setPending={setPending}
+            onClose={onClose}
+          />
+        ) : null}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function UpdatePriceForm({
+  target,
+  pending,
+  setPending,
+  onClose,
+}: {
+  target: UpdatePriceTarget;
+  pending: boolean;
+  setPending: (pending: boolean) => void;
+  onClose: () => void;
+}) {
+  const router = useRouter();
 
   const [price, setPrice] = React.useState("");
   const [asOf, setAsOf] = React.useState(todayInputValue);
   const [priceError, setPriceError] = React.useState<string | null>(null);
   const [serverError, setServerError] = React.useState<string | null>(null);
-  const [pending, setPending] = React.useState(false);
-
-  // Fresh form each time the dialog opens for a holding.
-  React.useEffect(() => {
-    if (!open) return;
-    setPrice("");
-    setAsOf(todayInputValue());
-    setPriceError(null);
-    setServerError(null);
-  }, [open, target?.instrumentId]);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    if (!target) return;
 
     const priceNumber = Number(price);
     if (price.trim() === "" || !Number.isFinite(priceNumber) || priceNumber <= 0) {
@@ -90,78 +121,71 @@ export function UpdatePriceDialog({
   }
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (!next && !pending) onClose();
-      }}
-    >
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Update Price — {target?.ticker}</DialogTitle>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
-          <div>
-            <Label htmlFor="up-price">Price</Label>
-            <Input
-              id="up-price"
-              type="number"
-              step="any"
-              min="0"
-              className="mt-1.5"
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-            />
-            {priceError ? (
-              <p className="mt-1 text-xs text-red-600 dark:text-red-400">
-                {priceError}
-              </p>
-            ) : null}
-          </div>
-          <div>
-            {/* Read-only: manual prices are always in the instrument's own currency. */}
-            <p className="text-sm font-medium leading-none">Currency</p>
-            <p className="mt-1.5 text-sm text-slate-600 dark:text-slate-400">
-              {target?.currency}
-            </p>
-          </div>
-          <div>
-            <Label htmlFor="up-asof">As of</Label>
-            <Input
-              id="up-asof"
-              type="date"
-              className="mt-1.5"
-              value={asOf}
-              onChange={(e) => setAsOf(e.target.value)}
-            />
-          </div>
-          {serverError ? (
-            <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-              {serverError}
+    <>
+      <DialogHeader>
+        <DialogTitle>Update Price — {target.ticker}</DialogTitle>
+      </DialogHeader>
+      <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+        <div>
+          <Label htmlFor="up-price">Price</Label>
+          <Input
+            id="up-price"
+            type="number"
+            step="any"
+            min="0"
+            className="mt-1.5"
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+          />
+          {priceError ? (
+            <p className="mt-1 text-xs text-red-600 dark:text-red-400">
+              {priceError}
             </p>
           ) : null}
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={pending}
-              onClick={onClose}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={pending}>
-              {pending ? (
-                <>
-                  <LoaderCircle className="animate-spin" aria-hidden="true" />
-                  Saving…
-                </>
-              ) : (
-                "Save"
-              )}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+        </div>
+        <div>
+          {/* Read-only: manual prices are always in the instrument's own currency. */}
+          <p className="text-sm font-medium leading-none">Currency</p>
+          <p className="mt-1.5 text-sm text-slate-600 dark:text-slate-400">
+            {target.currency}
+          </p>
+        </div>
+        <div>
+          <Label htmlFor="up-asof">As of</Label>
+          <Input
+            id="up-asof"
+            type="date"
+            className="mt-1.5"
+            value={asOf}
+            onChange={(e) => setAsOf(e.target.value)}
+          />
+        </div>
+        {serverError ? (
+          <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+            {serverError}
+          </p>
+        ) : null}
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={pending}
+            onClick={onClose}
+          >
+            Cancel
+          </Button>
+          <Button type="submit" disabled={pending}>
+            {pending ? (
+              <>
+                <LoaderCircle className="animate-spin" aria-hidden="true" />
+                Saving…
+              </>
+            ) : (
+              "Save"
+            )}
+          </Button>
+        </DialogFooter>
+      </form>
+    </>
   );
 }
