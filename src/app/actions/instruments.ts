@@ -89,6 +89,106 @@ export async function createInstrument(
   }
 }
 
+// ---------------------------------------------------------------------------
+// Track a Stock (ui-spec §4.1) — the entry point that gets a brand-new ticker
+// into the system: it creates the Instrument (if it doesn't exist yet) AND
+// adds a WatchlistItem for the signed-in user. The dialog only asks for
+// Ticker / Market / Name, so type defaults to STOCK and the currency defaults
+// to a sensible per-market value (always a config attribute, never a
+// displayed market figure — no golden-rule concern).
+// ---------------------------------------------------------------------------
+
+const trackStockSchema = z.object({
+  ticker: z
+    .string({ error: "Enter a ticker symbol." })
+    .trim()
+    .min(1, "Enter a ticker symbol.")
+    .max(20, "Ticker symbols are at most 20 characters."),
+  name: z
+    .string({ error: "Enter the company or fund name." })
+    .trim()
+    .min(1, "Enter the company or fund name.")
+    .max(200, "Names are limited to 200 characters."),
+  market: z.enum(Market, {
+    error: "Pick a market (US, MSX, TADAWUL, DFM or OTHER).",
+  }),
+});
+
+export type TrackStockInput = z.input<typeof trackStockSchema>;
+
+/** A sensible default currency per market — always editable data, never fabricated figures. */
+function defaultCurrencyForMarket(market: Market): Currency {
+  switch (market) {
+    case "US":
+      return "USD";
+    case "MSX":
+      return "OMR";
+    case "TADAWUL":
+      return "SAR";
+    case "DFM":
+      return "AED";
+    case "OTHER":
+      return "OMR";
+  }
+}
+
+/**
+ * Track a stock: create the instrument if new (tickers stored uppercase,
+ * unique per market) and add it to the signed-in user's watchlist. If the
+ * instrument already exists it is reused; if it is already on the watchlist
+ * the call is a friendly no-op. Returns the instrument id either way.
+ */
+export async function trackStock(
+  input: TrackStockInput,
+): Promise<ActionResult<{ id: string; ticker: string; alreadyWatched: boolean }>> {
+  const userId = await getSessionUserId();
+  if (!userId) return actionError(NOT_SIGNED_IN_ERROR);
+
+  const parsed = trackStockSchema.safeParse(input);
+  if (!parsed.success) {
+    return actionError(
+      parsed.error.issues[0]?.message ?? "Please check the stock details.",
+    );
+  }
+
+  const ticker = parsed.data.ticker.toUpperCase();
+  const { market, name } = parsed.data;
+
+  // Reuse an existing instrument (e.g. one already held) rather than failing
+  // on the unique [ticker, market] constraint.
+  let instrument = await prisma.instrument.findUnique({
+    where: { ticker_market: { ticker, market } },
+  });
+  if (!instrument) {
+    instrument = await prisma.instrument.create({
+      data: {
+        ticker,
+        name,
+        market,
+        currency: defaultCurrencyForMarket(market),
+        type: "STOCK",
+      },
+    });
+  }
+
+  // Add to the watchlist unless it is already there (unique per user).
+  const existingWatch = await prisma.watchlistItem.findUnique({
+    where: { userId_instrumentId: { userId, instrumentId: instrument.id } },
+    select: { id: true },
+  });
+  const alreadyWatched = existingWatch !== null;
+  if (!alreadyWatched) {
+    await prisma.watchlistItem.create({
+      data: { userId, instrumentId: instrument.id },
+    });
+  }
+
+  revalidatePath("/stocks");
+  revalidatePath("/portfolio");
+  revalidatePath("/watchlist");
+  return actionOk({ id: instrument.id, ticker: instrument.ticker, alreadyWatched });
+}
+
 export type InstrumentProfilePrefill = {
   name: string;
   sector?: string;

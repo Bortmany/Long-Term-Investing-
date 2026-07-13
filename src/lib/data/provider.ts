@@ -119,6 +119,15 @@ export type UpcomingDividend = {
   source: SourceBadge;
 };
 
+/** One news article about an instrument (Phase 6 news summaries). */
+export type NewsItem = {
+  title: string;
+  text: string | null;
+  url: string;
+  site: string;
+  publishedDate: Date;
+};
+
 // ---------------------------------------------------------------------------
 // The provider interface
 // ---------------------------------------------------------------------------
@@ -142,6 +151,7 @@ export interface MarketDataProvider {
   getUpcomingDividends(
     instrument: InstrumentRef,
   ): Promise<DataResult<UpcomingDividend[]>>;
+  getStockNews(instrument: InstrumentRef): Promise<DataResult<NewsItem[]>>;
 }
 
 // ---------------------------------------------------------------------------

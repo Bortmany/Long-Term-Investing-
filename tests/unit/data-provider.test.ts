@@ -84,6 +84,7 @@ describe("createFmpProvider without an API key", () => {
       provider.getFinancialStatements(instrument, "income", "annual"),
       provider.getDividendHistory(instrument),
       provider.getUpcomingDividends(instrument),
+      provider.getStockNews(instrument),
     ]);
     for (const result of results) {
       expect(result.ok).toBe(false);

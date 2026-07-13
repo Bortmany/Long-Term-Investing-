@@ -134,5 +134,8 @@ export function createManualProvider(
     async getUpcomingDividends() {
       return unavailable("not_supported", "Upcoming dividends require a market data provider.");
     },
+    async getStockNews() {
+      return unavailable("not_supported", "News requires a live market-data connection.");
+    },
   };
 }

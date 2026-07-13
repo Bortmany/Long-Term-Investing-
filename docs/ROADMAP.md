@@ -4,28 +4,33 @@ Phase 1 (done) laid the foundation: database schema, sign-in, the market-data
 layer with honest source badges, portfolio math, and seeded sample data.
 Later phases add screens and AI — the schema already supports all of them.
 
-## Phase 2 — Portfolio & dividends, full UI
+## Phase 2 — Portfolio & dividends, full UI (done)
 - Dashboard: total value, holdings table, cash balances — every figure with its source badge.
 - Transaction entry screens (buy, sell, dividend, deposit, withdrawal, fee).
 - CSV import of transactions.
 - Multi-currency display: portfolio in OMR with USD/SAR/AED conversion, missing-rate warnings shown plainly.
 - Dividend income view (trailing 12 months, upcoming payments).
 
-## Phase 3 — Stock pages + AI health score
+## Phase 3 — Stock pages + AI health score (done)
 - A page per instrument: price, profile, financials, dividend history.
 - AI "health score" per holding, stored in `AiAnalysis` (type `HEALTH_SCORE`), shown with the date of the data it was based on.
 
-## Phase 4 — Thesis tracker
+## Phase 4 — Thesis tracker (done)
 - Write an investment thesis per holding (`Thesis`).
 - Periodic AI thesis checks (`ThesisCheck`): integrity score, recommendation (intact / weakening / broken), evidence.
 
-## Phase 5 — AI committee + buy/sell analysis
+## Phase 5 — AI committee + buy/sell analysis (done)
 - Multi-perspective AI "committee" reviews (type `COMMITTEE`).
 - On-demand buy and sell analyses (`BUY_ANALYSIS`, `SELL_ANALYSIS`).
 
-## Phase 6 — Weekly review + news
-- Automated weekly portfolio review (`WeeklyReview`), generated via the Anthropic Batch API.
-- News summaries per holding (`NEWS_SUMMARY`), also via the Batch API to keep costs low.
+## Phase 6 — Weekly review + news (done)
+- Automated weekly portfolio review (`WeeklyReview`), generated on demand from a manual "Run
+  weekly review" button (the regular API, single-portfolio flow), user-scoped and persisted.
+- Per-holding news summaries (`NEWS_SUMMARY`), Haiku, generated on demand from a "Refresh news" button.
+- Scheduling (a token-protected cron route plus a disabled `.github/workflows/weekly-review.yml.example`)
+  is shipped disabled; adopting the Anthropic Batch API (its ~50% discount) is a deferred future step,
+  worth it once reviews are scheduled and/or run across multiple portfolios rather than a single
+  manual-button flow.
 
 ## AI model choices
 - **claude-sonnet-5** for analysis work (health scores, committee, thesis checks, buy/sell).

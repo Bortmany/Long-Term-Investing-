@@ -1,0 +1,25 @@
+# EXAMPLE ONLY — disabled. Rename this file to weekly-review.yml and set the
+# CRON_SECRET, CRON_USER_ID (on the server) and APP_URL/CRON_SECRET (as repo
+# secrets) to enable. Phase 6 ships the manual "Run weekly review" button
+# instead; scheduling + the Anthropic Batch API are a deferred future step
+# (see docs/BUILD-PLAN.md cross-cutting decision #2).
+
+name: Weekly portfolio review
+
+on:
+  schedule:
+    # Every Monday at 06:00 UTC.
+    - cron: "0 6 * * 1"
+  # Lets the owner trigger it by hand from the Actions tab, once enabled.
+  workflow_dispatch: {}
+
+jobs:
+  run-weekly-review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call the weekly-review cron endpoint
+        run: |
+          curl --fail --show-error \
+            --request POST \
+            --header "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${{ secrets.APP_URL }}/api/cron/weekly-review"

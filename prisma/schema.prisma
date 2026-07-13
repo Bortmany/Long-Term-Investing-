@@ -28,6 +28,9 @@ model User {
   accounts       Account[]
   portfolios     Portfolio[]
   watchlistItems WatchlistItem[]
+  theses         Thesis[]
+  aiAnalyses     AiAnalysis[]
+  weeklyReviews  WeeklyReview[]
 
   @@unique([email])
   @@map("user")
@@ -256,6 +259,8 @@ model FxRate {
 
 model Thesis {
   id           String       @id @default(cuid())
+  userId       String
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   instrumentId String
   instrument   Instrument   @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
   statement    String
@@ -265,7 +270,8 @@ model Thesis {
 
   checks ThesisCheck[]
 
-  @@index([instrumentId, status])
+  @@index([userId, status])
+  @@index([instrumentId])
 }
 
 model ThesisCheck {
@@ -274,6 +280,7 @@ model ThesisCheck {
   thesis         Thesis               @relation(fields: [thesisId], references: [id], onDelete: Cascade)
   integrityScore Int
   recommendation ThesisRecommendation
+  dataAsOf       DateTime
   evidence       Json
   model          String
   createdAt      DateTime             @default(now())
@@ -287,6 +294,12 @@ model ThesisCheck {
 
 model AiAnalysis {
   id          String         @id @default(cuid())
+  // Who generated this analysis. Every AiAnalysis belongs to exactly one user —
+  // committee/sell/health outputs can embed that user's private thesis wording
+  // and position size, so reads AND the reuse-by-hash lookup are scoped by
+  // userId; one user's analysis is never shown to or reused by another.
+  userId      String
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   type        AiAnalysisType
   // What the analysis is about, e.g. subjectType "instrument" + subjectId.
   subjectType String
@@ -299,7 +312,7 @@ model AiAnalysis {
   dataAsOf    DateTime
   createdAt   DateTime       @default(now())
 
-  @@index([type, subjectType, subjectId, createdAt(sort: Desc)])
+  @@index([userId, type, subjectType, subjectId, createdAt(sort: Desc)])
   @@index([inputHash])
 }
 
@@ -316,11 +329,22 @@ model WatchlistItem {
 }
 
 model WeeklyReview {
-  id        String   @id @default(cuid())
+  id     String @id @default(cuid())
+  // Who this review was generated for. Like AiAnalysis, a WeeklyReview can
+  // embed a user's private portfolio composition and dividend history, so
+  // every query here is scoped to userId — never read/reused across users.
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   // ISO week label, e.g. "2026-W28".
-  period    String
+  period String
+  // Stored alongside `output` (same precedent as ThesisCheck's model/dataAsOf)
+  // so the UI's AiPanel caption can be rendered by reading WeeklyReview alone,
+  // without joining AiAnalysis.
+  model     String
+  dataAsOf  DateTime
   output    Json
   createdAt DateTime @default(now())
 
-  @@unique([period])
+  @@unique([userId, period])
+  @@index([userId, createdAt(sort: Desc)])
 }

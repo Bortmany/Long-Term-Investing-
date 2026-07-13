@@ -47,6 +47,14 @@ export {
   type AllocationSlice,
 } from "./allocation";
 export {
+  computeConcentration,
+  computeHhi,
+  computeSectorHhi,
+  computeTopHoldingWeight,
+  type ConcentrationHolding,
+  type ConcentrationMetrics,
+} from "./concentration";
+export {
   fromPrismaFxRate,
   fromPrismaPriceCache,
   fromPrismaTransaction,

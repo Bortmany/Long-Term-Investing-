@@ -216,6 +216,25 @@ async function main() {
     },
   });
 
+  // --- Thesis: one ACTIVE thesis on MSFT (idempotent check-then-create — no
+  // natural unique key beyond id). No ThesisCheck rows are seeded: that
+  // requires a real AI call, out of scope for seeding; the detail page's
+  // "no analysis yet" state is the correct, honest empty state here. ---
+  const existingThesis = await prisma.thesis.findFirst({
+    where: { userId, instrumentId: instruments["MSFT"] },
+  });
+  if (!existingThesis) {
+    await prisma.thesis.create({
+      data: {
+        userId,
+        instrumentId: instruments["MSFT"],
+        statement:
+          "Microsoft's Azure and Office 365 franchises give it durable, high-margin recurring revenue with a wide moat; I expect double-digit earnings growth to continue for at least 3-5 years and the dividend to keep growing.",
+        status: "ACTIVE",
+      },
+    });
+  }
+
   console.log("Seed complete:");
   console.log(`  user:         ${DEMO_EMAIL} (password: ${DEMO_PASSWORD})`);
   console.log(`  portfolio:    ${portfolio.name} (base OMR)`);
@@ -223,6 +242,7 @@ async function main() {
   console.log(`  transactions: ${transactions.length}`);
   console.log(`  seed prices:  ${prices.length}, fx rates: ${fxRates.length}`);
   console.log(`  watchlist:    1 item (JNJ — watched, not held)`);
+  console.log(`  thesis:       1 ACTIVE thesis (MSFT), no checks yet`);
 }
 
 main()
