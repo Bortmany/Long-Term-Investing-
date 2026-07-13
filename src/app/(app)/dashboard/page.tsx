@@ -55,6 +55,8 @@ export default async function DashboardPage() {
   // Every query is scoped to the signed-in user's id (from the server session).
   const portfolio = await prisma.portfolio.findFirst({
     where: { userId: session.user.id },
+    // Oldest portfolio is THE portfolio — same rule as /portfolio and /settings.
+    orderBy: { createdAt: "asc" },
   });
 
   if (!portfolio) {
