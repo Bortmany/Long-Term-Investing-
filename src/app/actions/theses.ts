@@ -161,6 +161,7 @@ export async function checkThesis(
   };
 
   const result = await runAnalysis({
+    userId,
     type: "THESIS_CHECK",
     subjectType: "thesis",
     subjectId: thesis.id,

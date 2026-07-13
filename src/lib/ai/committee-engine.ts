@@ -48,6 +48,8 @@ const MAX_TOKENS = 4096;
 const COMMITTEE_TYPE: AiAnalysisType = "COMMITTEE";
 
 export type CommitteeEngineParams = {
+  /** The signed-in user this committee run belongs to (from the server session). */
+  userId: string;
   /** The instrumentId this committee is about. */
   subjectId: string;
   model: string;
@@ -76,14 +78,16 @@ export type CommitteeEngineResult = {
 export async function runCommittee(
   params: CommitteeEngineParams,
 ): Promise<DataResult<CommitteeEngineResult>> {
-  const { subjectId, model, input, dataAsOf } = params;
+  const { userId, subjectId, model, input, dataAsOf } = params;
   const store = params.store ?? createPrismaAiAnalysisStore();
 
   const inputHash = hashInput(input);
 
-  // Reuse: an identical shared input for this instrument has already been
-  // analyzed. Never call the API again for the same question.
+  // Reuse: an identical shared input for this user+instrument has already been
+  // analyzed. Never call the API again for the same question, and never reuse
+  // another user's run (whose input folds in their private thesis/position).
   const existing = await store.findLatest({
+    userId,
     type: COMMITTEE_TYPE,
     subjectType: "instrument",
     subjectId,
@@ -222,6 +226,7 @@ export async function runCommittee(
   }
 
   const created = await store.create({
+    userId,
     type: COMMITTEE_TYPE,
     subjectType: "instrument",
     subjectId,

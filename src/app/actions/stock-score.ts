@@ -65,6 +65,7 @@ export async function generateStockScore(
   };
 
   const result = await runAnalysis({
+    userId,
     type: STOCK_SCORE,
     subjectType: "instrument",
     subjectId: instrument.id,

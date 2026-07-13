@@ -176,7 +176,15 @@ export default async function CommitteePage({
 
     const analysisTypes: AiAnalysisType[] = ["COMMITTEE", "BUY_ANALYSIS", "SELL_ANALYSIS"];
     const rows = await prisma.aiAnalysis.findMany({
-      where: { subjectType: "instrument", subjectId: selectedId, type: { in: analysisTypes } },
+      // Scoped to this user: committee/buy/sell outputs can embed the user's own
+      // private thesis wording and position size, so another user's runs on the
+      // same instrument must never appear here.
+      where: {
+        userId,
+        subjectType: "instrument",
+        subjectId: selectedId,
+        type: { in: analysisTypes },
+      },
       orderBy: { createdAt: "desc" },
     });
 

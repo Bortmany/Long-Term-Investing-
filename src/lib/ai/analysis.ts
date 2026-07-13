@@ -51,12 +51,14 @@ export type StoredAiAnalysis = {
 
 export interface AiAnalysisStore {
   findLatest(key: {
+    userId: string;
     type: AiAnalysisType;
     subjectType: string;
     subjectId: string;
     inputHash: string;
   }): Promise<StoredAiAnalysis | null>;
   create(row: {
+    userId: string;
     type: AiAnalysisType;
     subjectType: string;
     subjectId: string;
@@ -69,9 +71,11 @@ export interface AiAnalysisStore {
 
 export function createPrismaAiAnalysisStore(): AiAnalysisStore {
   return {
-    async findLatest({ type, subjectType, subjectId, inputHash }) {
+    async findLatest({ userId, type, subjectType, subjectId, inputHash }) {
+      // Scoped by userId: a reuse hit only ever comes from THIS user's own
+      // prior run, never another user's (whose output could differ / be private).
       const row = await prisma.aiAnalysis.findFirst({
-        where: { type, subjectType, subjectId, inputHash },
+        where: { userId, type, subjectType, subjectId, inputHash },
         orderBy: { createdAt: "desc" },
       });
       if (!row) return null;
@@ -82,9 +86,10 @@ export function createPrismaAiAnalysisStore(): AiAnalysisStore {
         createdAt: row.createdAt,
       };
     },
-    async create({ type, subjectType, subjectId, model, inputHash, output, dataAsOf }) {
+    async create({ userId, type, subjectType, subjectId, model, inputHash, output, dataAsOf }) {
       const row = await prisma.aiAnalysis.create({
         data: {
+          userId,
           type,
           subjectType,
           subjectId,
@@ -135,6 +140,8 @@ export function hashInput(input: unknown): string {
 // ---------------------------------------------------------------------------
 
 export type RunAnalysisParams<T> = {
+  /** The signed-in user this analysis belongs to (from the server session). */
+  userId: string;
   type: AiAnalysisType;
   /** What the analysis is about, e.g. "instrument" / "portfolio". */
   subjectType: string;
@@ -161,15 +168,15 @@ export type RunAnalysisResult<T> = {
 export async function runAnalysis<T>(
   params: RunAnalysisParams<T>,
 ): Promise<DataResult<RunAnalysisResult<T>>> {
-  const { type, subjectType, subjectId, model, buildInput, schema } = params;
+  const { userId, type, subjectType, subjectId, model, buildInput, schema } = params;
   const store = params.store ?? createPrismaAiAnalysisStore();
 
   const { input, dataAsOf } = await buildInput();
   const inputHash = hashInput(input);
 
-  // Reuse: an identical input for this subject+type has already been
+  // Reuse: an identical input for this user+subject+type has already been
   // analyzed. Never call the API again for the same question.
-  const existing = await store.findLatest({ type, subjectType, subjectId, inputHash });
+  const existing = await store.findLatest({ userId, type, subjectType, subjectId, inputHash });
   if (existing) {
     const revalidated = schema.safeParse(existing.output);
     if (!revalidated.success) {
@@ -227,6 +234,7 @@ export async function runAnalysis<T>(
   }
 
   const created = await store.create({
+    userId,
     type,
     subjectType,
     subjectId,

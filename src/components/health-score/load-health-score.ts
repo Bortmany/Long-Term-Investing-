@@ -15,10 +15,12 @@ import { healthScoreSchema } from "@/lib/ai/schemas";
 import type { HealthScorePanelAnalysis } from "@/components/health-score/health-score-panel";
 
 export async function loadPersistedHealthScore(
+  userId: string,
   portfolioId: string,
 ): Promise<HealthScorePanelAnalysis | null> {
   const row = await prisma.aiAnalysis.findFirst({
     where: {
+      userId,
       type: "HEALTH_SCORE",
       subjectType: "portfolio",
       subjectId: portfolioId,

@@ -32,6 +32,7 @@ export async function generateHealthScore(): Promise<ActionResult<null>> {
   const portfolio = await getOrCreatePortfolio(userId);
 
   const result = await runAnalysis({
+    userId,
     type: "HEALTH_SCORE",
     subjectType: "portfolio",
     subjectId: portfolio.id,

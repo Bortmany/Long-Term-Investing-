@@ -10,12 +10,13 @@ import {
 import { thesisCheckSchema } from "@/lib/ai/schemas";
 
 function keyFor(key: {
+  userId: string;
   type: AiAnalysisType;
   subjectType: string;
   subjectId: string;
   inputHash: string;
 }): string {
-  return `${key.type}:${key.subjectType}:${key.subjectId}:${key.inputHash}`;
+  return `${key.userId}:${key.type}:${key.subjectType}:${key.subjectId}:${key.inputHash}`;
 }
 
 /** An in-memory fake of the AiAnalysis table — no database touched. */
@@ -62,6 +63,7 @@ const wellFormedOutput = {
 };
 
 const baseParams = {
+  userId: "user-1",
   type: AiAnalysisType.THESIS_CHECK,
   subjectType: "thesis",
   subjectId: "thesis-1",

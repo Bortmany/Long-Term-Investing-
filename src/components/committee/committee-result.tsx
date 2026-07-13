@@ -160,6 +160,7 @@ export function CommitteeResultBody({ output }: { output: CommitteeOutput }) {
 export function BuyResultBody({
   output,
   currentPrice,
+  instrumentCurrency,
 }: {
   output: BuyAnalysisOutput;
   currentPrice: {
@@ -167,6 +168,9 @@ export function BuyResultBody({
     currency: string;
     badge: Pick<SourceBadgeProps, "variant" | "date">;
   } | null;
+  /** The instrument's own trading currency, so Fair Value still shows a unit
+   * when the live price is unavailable. */
+  instrumentCurrency: string;
 }) {
   const marginColor =
     output.marginOfSafety > 0
@@ -203,9 +207,10 @@ export function BuyResultBody({
       <div>
         <p className="text-sm text-slate-500 dark:text-slate-400">Fair Value Estimate</p>
         <p className="text-2xl font-semibold tabular-nums">
-          {currentPrice
-            ? formatMoney(output.fairValueEstimate.value, currentPrice.currency)
-            : output.fairValueEstimate.value}
+          {formatMoney(
+            output.fairValueEstimate.value,
+            currentPrice?.currency ?? instrumentCurrency,
+          )}
         </p>
         {output.fairValueEstimate.assumptions.length > 0 ? (
           <ul className="mt-1 flex flex-col gap-0.5">

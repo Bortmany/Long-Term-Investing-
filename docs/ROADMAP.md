@@ -19,7 +19,7 @@ Later phases add screens and AI — the schema already supports all of them.
 - Write an investment thesis per holding (`Thesis`).
 - Periodic AI thesis checks (`ThesisCheck`): integrity score, recommendation (intact / weakening / broken), evidence.
 
-## Phase 5 — AI committee + buy/sell analysis
+## Phase 5 — AI committee + buy/sell analysis (done)
 - Multi-perspective AI "committee" reviews (type `COMMITTEE`).
 - On-demand buy and sell analyses (`BUY_ANALYSIS`, `SELL_ANALYSIS`).
 

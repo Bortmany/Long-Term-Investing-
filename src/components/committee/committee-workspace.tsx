@@ -279,7 +279,11 @@ export function CommitteeWorkspace({
           error={error}
         >
           {latestBuy ? (
-            <BuyResultBody output={latestBuy.output} currentPrice={currentPrice} />
+            <BuyResultBody
+              output={latestBuy.output}
+              currentPrice={currentPrice}
+              instrumentCurrency={selectedInstrument.currency}
+            />
           ) : null}
         </AiPanel>
       ) : null}

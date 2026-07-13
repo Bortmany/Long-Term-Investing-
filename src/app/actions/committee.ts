@@ -220,6 +220,7 @@ export async function conveneCommittee(
   };
 
   const result = await runCommittee({
+    userId,
     subjectId: instrument.id,
     model: ANALYSIS_MODEL,
     input,
@@ -270,6 +271,7 @@ export async function runBuyAnalysis(
   };
 
   const result = await runAnalysis({
+    userId,
     type: "BUY_ANALYSIS",
     subjectType: "instrument",
     subjectId: instrument.id,
@@ -341,6 +343,7 @@ export async function runSellAnalysis(
   };
 
   const result = await runAnalysis({
+    userId,
     type: "SELL_ANALYSIS",
     subjectType: "instrument",
     subjectId: instrument.id,

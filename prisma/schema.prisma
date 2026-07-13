@@ -29,6 +29,7 @@ model User {
   portfolios     Portfolio[]
   watchlistItems WatchlistItem[]
   theses         Thesis[]
+  aiAnalyses     AiAnalysis[]
 
   @@unique([email])
   @@map("user")
@@ -292,6 +293,12 @@ model ThesisCheck {
 
 model AiAnalysis {
   id          String         @id @default(cuid())
+  // Who generated this analysis. Every AiAnalysis belongs to exactly one user —
+  // committee/sell/health outputs can embed that user's private thesis wording
+  // and position size, so reads AND the reuse-by-hash lookup are scoped by
+  // userId; one user's analysis is never shown to or reused by another.
+  userId      String
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   type        AiAnalysisType
   // What the analysis is about, e.g. subjectType "instrument" + subjectId.
   subjectType String
@@ -304,7 +311,7 @@ model AiAnalysis {
   dataAsOf    DateTime
   createdAt   DateTime       @default(now())
 
-  @@index([type, subjectType, subjectId, createdAt(sort: Desc)])
+  @@index([userId, type, subjectType, subjectId, createdAt(sort: Desc)])
   @@index([inputHash])
 }
 

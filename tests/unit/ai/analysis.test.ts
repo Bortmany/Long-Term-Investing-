@@ -18,12 +18,13 @@ const testSchema = z.object({
 });
 
 function keyFor(key: {
+  userId: string;
   type: AiAnalysisType;
   subjectType: string;
   subjectId: string;
   inputHash: string;
 }): string {
-  return `${key.type}:${key.subjectType}:${key.subjectId}:${key.inputHash}`;
+  return `${key.userId}:${key.type}:${key.subjectType}:${key.subjectId}:${key.inputHash}`;
 }
 
 /** An in-memory fake of the AiAnalysis table — no database touched. */
@@ -58,6 +59,7 @@ function createFakeClient(
 }
 
 const baseParams = {
+  userId: "user-1",
   type: AiAnalysisType.HEALTH_SCORE,
   subjectType: "portfolio",
   subjectId: "portfolio-1",

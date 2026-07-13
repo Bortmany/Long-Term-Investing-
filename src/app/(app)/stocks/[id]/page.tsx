@@ -211,7 +211,14 @@ export default async function StockDetailPage({
       select: { id: true },
     }),
     prisma.aiAnalysis.findFirst({
-      where: { type: "STOCK_SCORE", subjectType: "instrument", subjectId: id },
+      // Scoped to this user — every AiAnalysis row belongs to whoever generated
+      // it; a user only ever sees a score they themselves generated.
+      where: {
+        userId,
+        type: "STOCK_SCORE",
+        subjectType: "instrument",
+        subjectId: id,
+      },
       orderBy: { createdAt: "desc" },
     }),
   ]);

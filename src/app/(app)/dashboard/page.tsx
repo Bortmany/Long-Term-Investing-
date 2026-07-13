@@ -204,7 +204,10 @@ export default async function DashboardPage() {
 
   // Persisted Health Score (a READ — never generates on render). Plus whether
   // the AI key is set, so the panel can show ConnectKeyNotice honestly.
-  const healthAnalysis = await loadPersistedHealthScore(portfolio.id);
+  const healthAnalysis = await loadPersistedHealthScore(
+    session.user.id,
+    portfolio.id,
+  );
   const hasAiKey = hasAnthropicKey();
 
   const incomplete =

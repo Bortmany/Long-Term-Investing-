@@ -22,9 +22,10 @@ import {
 export const metadata = { title: "Past Run — InvestIQ AI" };
 
 // /committee/history/[id] — a single historical Committee/Buy/Sell run,
-// read-only (ui-spec §6.5's last paragraph). Same "shared instrument data"
-// precedent as /stocks/[id]'s STOCK_SCORE: not further owner-scoped, since
-// instruments and their AI analyses aren't per-user private in this app.
+// read-only (ui-spec §6.5's last paragraph). These outputs can embed the
+// user's own private thesis wording and position size, so the row is scoped to
+// the signed-in user: another user's run id resolves to notFound(), never a
+// readable page.
 export default async function CommitteeHistoryPage({
   params,
 }: {
@@ -36,8 +37,9 @@ export default async function CommitteeHistoryPage({
   if (!session) {
     redirect("/sign-in");
   }
+  const userId = session.user.id;
 
-  const row = await prisma.aiAnalysis.findFirst({ where: { id } });
+  const row = await prisma.aiAnalysis.findFirst({ where: { id, userId } });
   if (!row || (row.type !== "COMMITTEE" && row.type !== "BUY_ANALYSIS" && row.type !== "SELL_ANALYSIS")) {
     notFound();
   }
@@ -81,7 +83,13 @@ export default async function CommitteeHistoryPage({
         };
       }
     }
-    body = <BuyResultBody output={parsed.data} currentPrice={currentPrice} />;
+    body = (
+      <BuyResultBody
+        output={parsed.data}
+        currentPrice={currentPrice}
+        instrumentCurrency={instrument?.currency ?? currentPrice?.currency ?? "USD"}
+      />
+    );
   } else {
     const parsed = sellAnalysisSchema.safeParse(row.output);
     if (!parsed.success) notFound();

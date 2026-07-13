@@ -193,7 +193,7 @@ export default async function PortfolioPage() {
   // account may have no portfolio yet; the panel still renders so the user can
   // generate one (the server action creates the portfolio on first click).
   const healthAnalysis = portfolio
-    ? await loadPersistedHealthScore(portfolio.id)
+    ? await loadPersistedHealthScore(session.user.id, portfolio.id)
     : null;
   const hasAiKey = hasAnthropicKey();
 
