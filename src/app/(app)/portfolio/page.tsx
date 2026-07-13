@@ -12,8 +12,11 @@ import {
   fromPrismaTransaction,
   type PriceInput,
 } from "@/lib/portfolio";
+import { hasAnthropicKey } from "@/lib/ai/client";
 import { badgePropsForValueSources } from "@/components/source-badge";
 import { PortfolioView } from "@/components/portfolio/portfolio-view";
+import { HealthScorePanel } from "@/components/health-score/health-score-panel";
+import { loadPersistedHealthScore } from "@/components/health-score/load-health-score";
 import type {
   HoldingRowData,
   InstrumentOptionData,
@@ -186,13 +189,29 @@ export default async function PortfolioPage() {
     market: i.market,
   }));
 
+  // Persisted Health Score (a READ — never generates on render). A brand-new
+  // account may have no portfolio yet; the panel still renders so the user can
+  // generate one (the server action creates the portfolio on first click).
+  const healthAnalysis = portfolio
+    ? await loadPersistedHealthScore(portfolio.id)
+    : null;
+  const hasAiKey = hasAnthropicKey();
+
   return (
-    <PortfolioView
-      baseCurrency={base}
-      holdings={holdings}
-      transactions={transactionData}
-      instruments={instrumentOptions}
-      aggregateBadge={badgePropsForValueSources(portfolioValue.sources)}
-    />
+    <>
+      <PortfolioView
+        baseCurrency={base}
+        holdings={holdings}
+        transactions={transactionData}
+        instruments={instrumentOptions}
+        aggregateBadge={badgePropsForValueSources(portfolioValue.sources)}
+      />
+
+      {/* Portfolio Health Score (AI) — same persisted analysis, same panel as
+          the dashboard card, so the two never diverge. */}
+      <div className="mt-6">
+        <HealthScorePanel hasKey={hasAiKey} analysis={healthAnalysis} />
+      </div>
+    </>
   );
 }

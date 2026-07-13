@@ -45,9 +45,16 @@ Naming: files kebab-case (`market-data.ts`), types/components PascalCase, functi
 - A portfolio's cash balance is DERIVED from transactions (`computeCashBalances`) and never stored.
 - Every query for user-owned data (portfolios, transactions, watchlist) is scoped to the signed-in user's id, taken from the server session (`auth.api.getSession`) — never from client input.
 
-## AI rule (future phases)
+## AI rule
 
-AI outputs are persisted in `AiAnalysis` and never regenerated on page view. A page shows the stored analysis with its `dataAsOf` date; generating a new one is an explicit user action (or scheduled job), never a side effect of rendering.
+AI outputs are persisted in `AiAnalysis` and NEVER regenerated on page view. A page shows the stored analysis with its `createdAt`/`model`/`dataAsOf`; generating a new one only happens from an explicit user action (a button click via a server action, or a scheduled job) — never as a side effect of rendering or of a Server Component's data-fetching.
+
+In practice (`src/lib/ai/`):
+
+- `runAnalysis({ type, subjectType, subjectId, model, buildInput, schema })` (`src/lib/ai/analysis.ts`) is the one engine every phase calls. It stable-stringifies (sorted keys) and SHA-256-hashes the built input into an `inputHash`; a stored `AiAnalysis` row matching `{type, subjectType, subjectId, inputHash}` is reused as-is — **zero API calls** — after re-validating its stored output against the zod schema. Only a genuinely new input triggers a new model call.
+- No `ANTHROPIC_API_KEY` (`src/lib/ai/client.ts`, `hasAnthropicKey()`/`createAiClient()`) → a typed `{ok:false, unavailable:"no_api_key"}` result, same `DataResult` pattern as the market-data layer. Never throw, never fabricate a client, never fabricate an analysis.
+- A failed generation (network error, or output that fails schema validation) returns a typed failure and persists nothing — the UI shows "Analysis failed", never a fake or partial result.
+- `AiPanel` (`src/components/ai-panel.tsx`) is the one container every persisted result renders through, with `ConnectKeyNotice` (`src/components/connect-key-notice.tsx`) as the fixed "AI is off" state and `AiDisclaimer` (`src/components/ai-disclaimer.tsx`) in its footer. Never paraphrase either component's copy.
 
 ## VERIFY RECIPE
 

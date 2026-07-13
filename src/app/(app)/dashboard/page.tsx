@@ -17,6 +17,9 @@ import {
   type AllocatableHolding,
 } from "@/lib/portfolio";
 import { getUpcomingDividends, type UpcomingDividend } from "@/lib/data";
+import { hasAnthropicKey } from "@/lib/ai/client";
+import { HealthScorePanel } from "@/components/health-score/health-score-panel";
+import { loadPersistedHealthScore } from "@/components/health-score/load-health-score";
 import {
   formatMoney,
   formatPercent,
@@ -199,6 +202,11 @@ export default async function DashboardPage() {
     return bv - av;
   });
 
+  // Persisted Health Score (a READ — never generates on render). Plus whether
+  // the AI key is set, so the panel can show ConnectKeyNotice honestly.
+  const healthAnalysis = await loadPersistedHealthScore(portfolio.id);
+  const hasAiKey = hasAnthropicKey();
+
   const incomplete =
     !portfolioValue.complete ||
     !dividendIncome.complete ||
@@ -265,6 +273,12 @@ export default async function DashboardPage() {
           }
           badge={<SourceBadge {...returnBadge} />}
         />
+      </div>
+
+      {/* Portfolio Health Score (AI) — reads the latest persisted analysis;
+          generation only happens on an explicit click via the server action. */}
+      <div className="mt-6">
+        <HealthScorePanel hasKey={hasAiKey} analysis={healthAnalysis} />
       </div>
 
       {/* Allocation donuts row */}
