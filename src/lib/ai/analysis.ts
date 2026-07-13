@@ -126,7 +126,7 @@ export function stableStringify(value: unknown): string {
   return JSON.stringify(sortKeysDeep(value));
 }
 
-function hashInput(input: unknown): string {
+export function hashInput(input: unknown): string {
   return createHash("sha256").update(stableStringify(input)).digest("hex");
 }
 

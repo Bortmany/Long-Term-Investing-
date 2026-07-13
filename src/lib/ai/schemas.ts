@@ -30,7 +30,7 @@ const subscoresSchema = z.object({
 });
 
 /** A single "point + optional supporting evidence" entry (EvidenceList's shape). */
-const evidencedPointSchema = z.object({
+export const evidencedPointSchema = z.object({
   point: z.string(),
   evidence: z.array(z.string()).optional(),
 });
@@ -73,3 +73,100 @@ export const thesisCheckSchema = z.object({
   summary: z.string(),
 });
 export type ThesisCheckOutput = z.infer<typeof thesisCheckSchema>;
+
+// ---------------------------------------------------------------------------
+// AiAnalysisType.COMMITTEE — six persona analyses + a synthesis, with the
+// verdict/consensusScore computed deterministically server-side (see
+// src/lib/ai/consensus.ts) rather than asked of any single model call.
+// ---------------------------------------------------------------------------
+
+/** One persona's independent take (value/growth/dividend/quality/macro/contrarian). */
+export const personaOutputSchema = z.object({
+  recommendation: z.enum(["BUY", "HOLD", "SELL"]),
+  confidence: z.number().min(0).max(100),
+  reasoning: z.string(),
+  evidence: z.array(z.string()),
+  risks: z.array(z.string()),
+  counterarguments: z.array(z.string()),
+});
+export type PersonaOutput = z.infer<typeof personaOutputSchema>;
+
+/** The committee's fixed six-persona roster. */
+export const COMMITTEE_PERSONAS = [
+  "value",
+  "growth",
+  "dividend",
+  "quality",
+  "macro",
+  "contrarian",
+] as const;
+export type CommitteePersona = (typeof COMMITTEE_PERSONAS)[number];
+
+/**
+ * The one model call that synthesizes across the six persona outputs. Note:
+ * deliberately has NO `verdict` and NO `consensusScore` — those are never
+ * asked of the model, they are computed purely from the persona votes (see
+ * computeConsensusScore / verdictForConsensusScore in ./consensus).
+ */
+export const committeeSynthesisSchema = z.object({
+  disagreements: z.array(z.string()),
+  wouldChangeVerdict: z.array(z.string()),
+  thesisAssessment: z.string().optional(),
+});
+export type CommitteeSynthesisOutput = z.infer<typeof committeeSynthesisSchema>;
+
+/**
+ * The full shape persisted in one AiAnalysis(COMMITTEE) row — assembled
+ * server-side from the 6 persona calls + the synthesis call + the computed
+ * verdict/score. Never itself sent to any single model call.
+ */
+export const committeeSchema = z.object({
+  verdict: z.enum(["BUY", "HOLD", "SELL"]),
+  consensusScore: z.number().min(0).max(100),
+  personas: z.object({
+    value: personaOutputSchema,
+    growth: personaOutputSchema,
+    dividend: personaOutputSchema,
+    quality: personaOutputSchema,
+    macro: personaOutputSchema,
+    contrarian: personaOutputSchema,
+  }),
+  disagreements: z.array(z.string()),
+  wouldChangeVerdict: z.array(z.string()),
+  thesisAssessment: z.string().optional(),
+});
+export type CommitteeOutput = z.infer<typeof committeeSchema>;
+
+// ---------------------------------------------------------------------------
+// AiAnalysisType.BUY_ANALYSIS — one instrument, evaluated as a potential buy
+// under the investor's own stated assumptions (intended price/horizon/risk).
+// ---------------------------------------------------------------------------
+
+export const buyAnalysisSchema = z.object({
+  score: z.number().min(0).max(100),
+  fairValueEstimate: z.object({
+    value: z.number(),
+    assumptions: z.array(z.string()),
+  }),
+  marginOfSafety: z.number(),
+  upside: z.number(),
+  downside: z.number(),
+  suggestedAllocationPct: z.number(),
+  confidence: z.number().min(0).max(100),
+  alternatives: z.array(z.object({ ticker: z.string(), why: z.string() })),
+});
+export type BuyAnalysisOutput = z.infer<typeof buyAnalysisSchema>;
+
+// ---------------------------------------------------------------------------
+// AiAnalysisType.SELL_ANALYSIS — one held instrument, evaluated for whether
+// to sell. `reasons` and `counterarguments` each carry their own nested
+// evidence (the EvidenceList shape), matching the UI spec's layout.
+// ---------------------------------------------------------------------------
+
+export const sellAnalysisSchema = z.object({
+  sellScore: z.number().min(0).max(100),
+  reasons: z.array(evidencedPointSchema),
+  counterarguments: z.array(evidencedPointSchema),
+  confidence: z.number().min(0).max(100),
+});
+export type SellAnalysisOutput = z.infer<typeof sellAnalysisSchema>;
