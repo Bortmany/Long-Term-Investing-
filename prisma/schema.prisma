@@ -30,6 +30,7 @@ model User {
   watchlistItems WatchlistItem[]
   theses         Thesis[]
   aiAnalyses     AiAnalysis[]
+  weeklyReviews  WeeklyReview[]
 
   @@unique([email])
   @@map("user")
@@ -328,11 +329,22 @@ model WatchlistItem {
 }
 
 model WeeklyReview {
-  id        String   @id @default(cuid())
+  id     String @id @default(cuid())
+  // Who this review was generated for. Like AiAnalysis, a WeeklyReview can
+  // embed a user's private portfolio composition and dividend history, so
+  // every query here is scoped to userId — never read/reused across users.
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   // ISO week label, e.g. "2026-W28".
-  period    String
+  period String
+  // Stored alongside `output` (same precedent as ThesisCheck's model/dataAsOf)
+  // so the UI's AiPanel caption can be rendered by reading WeeklyReview alone,
+  // without joining AiAnalysis.
+  model     String
+  dataAsOf  DateTime
   output    Json
   createdAt DateTime @default(now())
 
-  @@unique([period])
+  @@unique([userId, period])
+  @@index([userId, createdAt(sort: Desc)])
 }

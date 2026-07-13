@@ -170,3 +170,38 @@ export const sellAnalysisSchema = z.object({
   confidence: z.number().min(0).max(100),
 });
 export type SellAnalysisOutput = z.infer<typeof sellAnalysisSchema>;
+
+// ---------------------------------------------------------------------------
+// AiAnalysisType.WEEKLY_REVIEW — one week's portfolio review: what changed,
+// new risks, drift from target allocation, and suggested actions.
+// ---------------------------------------------------------------------------
+
+export const weeklyReviewSchema = z.object({
+  summary: z.string(),
+  newRisks: z.array(z.string()),
+  improvedHoldings: z.array(z.object({ ticker: z.string(), reason: z.string() })),
+  weakenedHoldings: z.array(z.object({ ticker: z.string(), reason: z.string() })),
+  allocationDrift: z.array(z.object({
+    category: z.string(),
+    targetPercent: z.number(),
+    actualPercent: z.number(),
+    drift: z.number(),
+  })),
+  suggestedActions: z.array(z.string()),
+  behavioralNote: z.string(),
+});
+export type WeeklyReviewOutput = z.infer<typeof weeklyReviewSchema>;
+
+// ---------------------------------------------------------------------------
+// AiAnalysisType.NEWS_SUMMARY — a Haiku summary of recent news for one
+// instrument, with an optional read on how it bears on a held thesis.
+// ---------------------------------------------------------------------------
+
+export const newsSummarySchema = z.object({
+  whatHappened: z.string(),
+  whyItMatters: z.string(),
+  thesisImpact: z.string().optional(),
+  shouldInvestorCare: z.string(),
+  quotes: z.array(z.object({ text: z.string(), source: z.string().optional() })),
+});
+export type NewsSummaryOutput = z.infer<typeof newsSummarySchema>;

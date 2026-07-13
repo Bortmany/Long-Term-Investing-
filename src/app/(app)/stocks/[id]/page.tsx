@@ -1,11 +1,15 @@
 import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
-import { Newspaper } from "lucide-react";
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { hasAnthropicKey } from "@/lib/ai/client";
-import { stockScoreSchema, type StockScoreOutput } from "@/lib/ai/schemas";
+import {
+  newsSummarySchema,
+  stockScoreSchema,
+  type NewsSummaryOutput,
+  type StockScoreOutput,
+} from "@/lib/ai/schemas";
 import {
   getDividendHistory,
   getFinancialStatements,
@@ -13,6 +17,7 @@ import {
   getProfile,
   getQuote,
   getUpcomingDividends,
+  resolveProviderName,
   type FinancialStatements,
   type InstrumentRef,
   type PricePoint,
@@ -39,11 +44,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { EmptyState } from "@/components/empty-state";
 import { WatchStar } from "@/components/stocks/watch-star";
 import { PriceHistoryChart } from "@/components/stocks/price-history-chart";
 import { StatementsCard, type StatementTabData } from "@/components/stocks/statements-card";
 import { HealthScorePanel } from "@/components/stocks/health-score-panel";
+import { NewsSummaryPanel } from "@/components/stocks/news-summary-panel";
 import { cn } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------
@@ -197,6 +202,7 @@ export default async function StockDetailPage({
     upcomingResult,
     watchItem,
     scoreRow,
+    newsRow,
   ] = await Promise.all([
     getProfile(ref),
     getQuote(ref),
@@ -216,6 +222,17 @@ export default async function StockDetailPage({
       where: {
         userId,
         type: "STOCK_SCORE",
+        subjectType: "instrument",
+        subjectId: id,
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.aiAnalysis.findFirst({
+      // Same userId-scoped read as STOCK_SCORE above — never by
+      // subjectId/period alone.
+      where: {
+        userId,
+        type: "NEWS_SUMMARY",
         subjectType: "instrument",
         subjectId: id,
       },
@@ -241,6 +258,30 @@ export default async function StockDetailPage({
       };
     }
   }
+
+  // Parse the persisted NEWS_SUMMARY for rendering (same defense-in-depth
+  // idiom as STOCK_SCORE above).
+  let newsOutput: NewsSummaryOutput | null = null;
+  let newsAnalysis: { createdAt: Date; model: string; dataAsOf: Date } | null =
+    null;
+  if (newsRow) {
+    const parsed = newsSummarySchema.safeParse(newsRow.output);
+    if (parsed.success) {
+      newsOutput = parsed.data;
+      newsAnalysis = {
+        createdAt: newsRow.createdAt,
+        model: newsRow.model,
+        dataAsOf: newsRow.dataAsOf,
+      };
+    }
+  }
+
+  // Provider routing rule (docs/CONVENTIONS.md): US-market + FMP_API_KEY set
+  // → fmp, everything else → manual. News summaries need a live market-data
+  // connection, same routing the Portfolio page's "Update price" row-action
+  // visibility already keys off of.
+  const newsSourceAvailable =
+    resolveProviderName(instrument.market, process.env.FMP_API_KEY ?? null) === "fmp";
 
   // --- Profile header data ---
   const sector = instrument.sector ?? (profileR.ok ? profileR.data.sector : null);
@@ -513,21 +554,29 @@ export default async function StockDetailPage({
         output={scoreOutput}
       />
 
-      {/* News — Phase 6 placeholder, same last-section position. */}
-      <Card className="gap-4">
-        <CardHeader>
-          <CardTitle>Recent News</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <EmptyState
-            icon={Newspaper}
-            heading="Recent News"
-            sentence="News summaries are coming in a later phase."
-            comingSoon
-            className="min-h-32"
-          />
-        </CardContent>
-      </Card>
+      {/* News (AI) — same last-section position as the Phase 3 placeholder. */}
+      {newsSourceAvailable ? (
+        <NewsSummaryPanel
+          instrumentId={instrument.id}
+          hasKey={hasKey}
+          analysis={newsAnalysis}
+          output={newsOutput}
+        />
+      ) : (
+        // Golden rule: no source, no fabricated button — genuinely nothing
+        // to click, same pattern as the Financial Statements card's
+        // unsupported-source case above.
+        <Card className="gap-4">
+          <CardHeader>
+            <CardTitle>Recent News</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="py-12 text-center text-sm text-slate-500 dark:text-slate-400">
+              News summaries require a live market-data connection for this instrument.
+            </p>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
