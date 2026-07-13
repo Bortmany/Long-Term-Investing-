@@ -28,6 +28,7 @@ model User {
   accounts       Account[]
   portfolios     Portfolio[]
   watchlistItems WatchlistItem[]
+  theses         Thesis[]
 
   @@unique([email])
   @@map("user")
@@ -256,6 +257,8 @@ model FxRate {
 
 model Thesis {
   id           String       @id @default(cuid())
+  userId       String
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   instrumentId String
   instrument   Instrument   @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
   statement    String
@@ -265,7 +268,8 @@ model Thesis {
 
   checks ThesisCheck[]
 
-  @@index([instrumentId, status])
+  @@index([userId, status])
+  @@index([instrumentId])
 }
 
 model ThesisCheck {
@@ -274,6 +278,7 @@ model ThesisCheck {
   thesis         Thesis               @relation(fields: [thesisId], references: [id], onDelete: Cascade)
   integrityScore Int
   recommendation ThesisRecommendation
+  dataAsOf       DateTime
   evidence       Json
   model          String
   createdAt      DateTime             @default(now())

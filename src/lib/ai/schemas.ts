@@ -57,6 +57,19 @@ export const stockScoreSchema = scoredAnalysisSchema();
 export type StockScoreOutput = z.infer<typeof stockScoreSchema>;
 
 // Later phases add their schemas below, alongside these, e.g.:
-//   export const thesisCheckSchema = z.object({ ... });
 //   export const committeeSchema = z.object({ ... });
 // each exported independently — never folded into a shared switch.
+
+/** AiAnalysisType.THESIS_CHECK — is a held/watched thesis still holding up? */
+export const thesisCheckSchema = z.object({
+  integrityScore: z.number().min(0).max(100).describe("0-100, higher = thesis more intact"),
+  recommendation: z.enum(["INTACT", "WEAKENING", "BROKEN"]),
+  evidence: z.object({
+    supporting: z.array(z.string()),
+    weakening: z.array(z.string()),
+    improving: z.array(z.string()),
+  }),
+  watchItems: z.array(z.string()),
+  summary: z.string(),
+});
+export type ThesisCheckOutput = z.infer<typeof thesisCheckSchema>;
