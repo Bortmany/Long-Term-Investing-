@@ -16,7 +16,20 @@ import { PrismaClient, type Prisma } from "@prisma/client";
 const prisma = new PrismaClient();
 
 const DEMO_EMAIL = "owner@example.com";
-const DEMO_PASSWORD = "investiq-demo";
+// The demo login's password comes from SEED_DEMO_PASSWORD — there is NO
+// built-in default on purpose. This stops a guessable demo account (the old
+// hardcoded "investiq-demo") from ever ending up on a public site.
+const DEMO_PASSWORD = process.env.SEED_DEMO_PASSWORD;
+
+function assertStrongDemoPassword(pw: string | undefined): asserts pw is string {
+  if (!pw || pw.length < 12 || pw === "investiq-demo") {
+    throw new Error(
+      "Set a strong SEED_DEMO_PASSWORD in your .env before seeding the demo " +
+        "account — at least 12 characters, and not the old \"investiq-demo\" " +
+        "default. This keeps a guessable demo login off any public site.",
+    );
+  }
+}
 
 async function ensureDemoUser(): Promise<string> {
   const existing = await prisma.user.findUnique({
@@ -26,6 +39,10 @@ async function ensureDemoUser(): Promise<string> {
     console.log(`Demo user ${DEMO_EMAIL} already exists.`);
     return existing.id;
   }
+
+  // Only reached when the demo user must be created — so require a strong
+  // password now (re-running the seed on an existing DB doesn't need it).
+  assertStrongDemoPassword(DEMO_PASSWORD);
 
   // Create via Better Auth's server API so password hashing is correct.
   const { auth } = await import("../src/lib/auth");
@@ -217,7 +234,8 @@ async function main() {
   });
 
   console.log("Seed complete:");
-  console.log(`  user:         ${DEMO_EMAIL} (password: ${DEMO_PASSWORD})`);
+  // Never print the password — it's the one you set in SEED_DEMO_PASSWORD.
+  console.log(`  user:         ${DEMO_EMAIL} (password: the SEED_DEMO_PASSWORD you set)`);
   console.log(`  portfolio:    ${portfolio.name} (base OMR)`);
   console.log(`  instruments:  ${instrumentDefs.length}`);
   console.log(`  transactions: ${transactions.length}`);

@@ -18,4 +18,4 @@ Plain-English list of what to set up before this goes public. Full context lives
 - None. This app has no payment or email features.
 
 ## Security note
-No committed secrets; login and per-user data scoping are sound. The two go-live gotchas above (signups + demo account) are the only real exposure.
+No committed secrets; login and per-user data scoping are sound. Audit item **B3 is now fixed**: the seed no longer has a hardcoded demo password — it reads `SEED_DEMO_PASSWORD` and refuses to create the demo login unless you set a strong value (≥12 chars), so a guessable public account can't slip through. Turning signups off before a public deploy remains your step.
