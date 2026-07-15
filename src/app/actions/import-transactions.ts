@@ -8,6 +8,7 @@
 //      the signed-in user's portfolio: if anything fails, nothing imports.
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import {
   actionError,
@@ -24,8 +25,36 @@ import {
   type MappedImportRow,
 } from "@/lib/import-rows";
 import { getOrCreatePortfolio, getSessionUserId } from "@/lib/user-portfolio";
+import {
+  IMPORT_RATE_LIMIT,
+  rateLimit,
+  rateLimitMessage,
+  userKey,
+} from "@/lib/rate-limit";
 
 export type { ImportRowResult, ImportValidationReport, MappedImportRow };
+
+// Outer shape guard for the action's OWN arguments — the client sends an array
+// of mapped rows and we never trust its structure. Deep per-row validation
+// (numbers, dates, ticker resolution) still happens in src/lib/import-rows.ts;
+// this only proves the top-level input is a bounded array of the right shape
+// before any of it is read. The 2000-row cap keeps a single import bounded.
+const importArgsSchema = z
+  .array(
+    z.object({
+      ticker: z.string().optional(),
+      market: z.string().optional(),
+      type: z.string().optional(),
+      quantity: z.string().optional(),
+      pricePerUnit: z.string().optional(),
+      amount: z.string().optional(),
+      currency: z.string().optional(),
+      fee: z.string().optional(),
+      tradeDate: z.string().optional(),
+      note: z.string().optional(),
+    }),
+  )
+  .max(2000, "That's more rows than one import allows (max 2000). Split the file and try again.");
 
 async function loadKnownInstruments(): Promise<KnownInstrument[]> {
   const rows = await prisma.instrument.findMany({
@@ -64,12 +93,24 @@ export async function importTransactions(
   const userId = await getSessionUserId();
   if (!userId) return actionError(NOT_SIGNED_IN_ERROR);
 
-  if (!Array.isArray(mappedRows) || mappedRows.length === 0) {
+  const limited = rateLimit(userKey("tx-import", userId), IMPORT_RATE_LIMIT);
+  if (!limited.ok) return actionError(rateLimitMessage(limited.retryAfterSeconds));
+
+  // Top-level shape guard on this action's own arguments.
+  const parsedArgs = importArgsSchema.safeParse(mappedRows);
+  if (!parsedArgs.success) {
+    return actionError(
+      parsedArgs.error.issues[0]?.message ??
+        "Those import rows aren't in the expected format. Refresh the page and try again.",
+    );
+  }
+  const rows = parsedArgs.data;
+  if (rows.length === 0) {
     return actionError("There are no rows to import.");
   }
 
   const instruments = await loadKnownInstruments();
-  const report = validateMappedRows(mappedRows, instruments);
+  const report = validateMappedRows(rows, instruments);
 
   const failed = report.results.filter((r) => !r.ok);
   if (failed.length > 0) {
