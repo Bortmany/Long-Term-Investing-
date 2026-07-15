@@ -19,6 +19,12 @@ import {
   type TransactionInput,
 } from "@/lib/transaction-schema";
 import { getOrCreatePortfolio, getSessionUserId } from "@/lib/user-portfolio";
+import {
+  rateLimit,
+  rateLimitMessage,
+  userKey,
+  WRITE_ACTION_RATE_LIMIT,
+} from "@/lib/rate-limit";
 
 function revalidatePortfolioPages() {
   revalidatePath("/portfolio");
@@ -27,6 +33,17 @@ function revalidatePortfolioPages() {
 
 function firstIssueMessage(error: { issues: { message: string }[] }): string {
   return error.issues[0]?.message ?? "Please check the form and try again.";
+}
+
+/**
+ * Per-user write limit for the transaction actions. Returns an action error
+ * when the user is over the limit, or null when the write may proceed.
+ */
+function writeRateLimitError(
+  userId: string,
+): { ok: false; error: string } | null {
+  const result = rateLimit(userKey("tx-write", userId), WRITE_ACTION_RATE_LIMIT);
+  return result.ok ? null : actionError(rateLimitMessage(result.retryAfterSeconds));
 }
 
 /** Instrument-carrying inputs must point at an instrument that exists. */
@@ -47,6 +64,9 @@ export async function createTransaction(
 ): Promise<ActionResult<{ id: string }>> {
   const userId = await getSessionUserId();
   if (!userId) return actionError(NOT_SIGNED_IN_ERROR);
+
+  const limited = writeRateLimitError(userId);
+  if (limited) return limited;
 
   const parsed = transactionInputSchema.safeParse(input);
   if (!parsed.success) return actionError(firstIssueMessage(parsed.error));
@@ -77,6 +97,9 @@ export async function updateTransaction(
 ): Promise<ActionResult<{ id: string }>> {
   const userId = await getSessionUserId();
   if (!userId) return actionError(NOT_SIGNED_IN_ERROR);
+
+  const limited = writeRateLimitError(userId);
+  if (limited) return limited;
 
   if (!transactionId || typeof transactionId !== "string") {
     return actionError("That transaction could not be found.");
@@ -118,6 +141,9 @@ export async function deleteTransaction(
 ): Promise<ActionResult<{ id: string }>> {
   const userId = await getSessionUserId();
   if (!userId) return actionError(NOT_SIGNED_IN_ERROR);
+
+  const limited = writeRateLimitError(userId);
+  if (limited) return limited;
 
   if (!transactionId || typeof transactionId !== "string") {
     return actionError("That transaction could not be found.");
