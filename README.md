@@ -11,6 +11,20 @@ the market-data service), *manual as of a date* (entered by hand), or
 *sample data* (the demo seed). When a data source is unavailable the app says
 so instead of guessing. See `docs/CONVENTIONS.md`.
 
+## Where the project stands
+
+- **Phase 1 — done.** Sign-in, database, market-data layer with source
+  badges, portfolio math, and a seeded demo portfolio.
+- **Phase 2 — half done.** The server side (transaction entry, CSV import,
+  FX, returns and dividend math) is built and tested; the screens for it are
+  the next thing to build.
+- **Phases 3–6 (stock pages, AI health scores, thesis tracker, AI committee,
+  weekly reviews) — designed but not started.** Their pages exist as
+  "coming soon" placeholders.
+
+The exact hand-over state lives in `docs/BUILD-PLAN.md` (STATUS section at
+the top) — any session resuming the build starts there.
+
 ## Run it locally
 
 1. **Start PostgreSQL** (already installed on this machine):
@@ -81,7 +95,10 @@ never run `playwright install` on this machine.
 ## Where things live
 
 - `docs/CONVENTIONS.md` — the rules of this repo (read first).
-- `docs/ROADMAP.md` — what each future phase adds.
+- `docs/BUILD-PLAN.md` — the owner-approved plan for Phases 2–6, with a
+  STATUS section saying what is built and what comes next.
+- `docs/ROADMAP.md` — what each future phase adds, in one page.
+- `docs/design/` — the approved screen designs the build follows.
 - `prisma/` — database schema, migrations, and the demo seed.
 - `src/lib/data/` — market data with caching and source badges.
 - `src/lib/portfolio/` — portfolio math (holdings, cash, value, dividends, FX).
