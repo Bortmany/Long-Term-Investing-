@@ -22,7 +22,10 @@ const contentSecurityPolicy = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob:",
   "font-src 'self' data:",
-  "connect-src 'self'",
+  // 'self' plus Sentry's ingest servers — without these, switching on the
+  // dormant browser error tracking (NEXT_PUBLIC_SENTRY_DSN) would have every
+  // error report silently blocked by this policy.
+  "connect-src 'self' https://*.ingest.sentry.io https://*.ingest.us.sentry.io https://*.ingest.de.sentry.io",
   "frame-ancestors 'self'",
   "object-src 'none'",
   "base-uri 'self'",
