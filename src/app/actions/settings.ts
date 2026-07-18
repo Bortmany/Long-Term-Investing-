@@ -19,6 +19,13 @@ import {
   type ActionResult,
 } from "@/lib/action-result";
 import { getOrCreatePortfolio, getSessionUserId } from "@/lib/user-portfolio";
+import {
+  EXTERNAL_LOOKUP_RATE_LIMIT,
+  rateLimit,
+  rateLimitMessage,
+  userKey,
+  WRITE_ACTION_RATE_LIMIT,
+} from "@/lib/rate-limit";
 
 export type { FxRefreshReport };
 
@@ -26,6 +33,20 @@ function revalidateMoneyPages() {
   revalidatePath("/settings");
   revalidatePath("/dashboard");
   revalidatePath("/portfolio");
+}
+
+/**
+ * Per-user write limit for the settings actions. Returns an action error
+ * when the user is over the limit, or null when the write may proceed.
+ */
+function settingsRateLimitError(
+  userId: string,
+): { ok: false; error: string } | null {
+  const result = rateLimit(
+    userKey("settings-write", userId),
+    WRITE_ACTION_RATE_LIMIT,
+  );
+  return result.ok ? null : actionError(rateLimitMessage(result.retryAfterSeconds));
 }
 
 /**
@@ -37,6 +58,9 @@ export async function setBaseCurrency(
 ): Promise<ActionResult<{ baseCurrency: Currency }>> {
   const userId = await getSessionUserId();
   if (!userId) return actionError(NOT_SIGNED_IN_ERROR);
+
+  const limited = settingsRateLimitError(userId);
+  if (limited) return limited;
 
   const parsed = z
     .enum(Currency, { error: "Pick a valid currency (OMR, USD, SAR or AED)." })
@@ -81,6 +105,9 @@ export async function addFxRate(
   const userId = await getSessionUserId();
   if (!userId) return actionError(NOT_SIGNED_IN_ERROR);
 
+  const limited = settingsRateLimitError(userId);
+  if (limited) return limited;
+
   const parsed = addFxRateSchema.safeParse(input);
   if (!parsed.success) {
     return actionError(
@@ -120,6 +147,9 @@ export async function deleteFxRate(
   const userId = await getSessionUserId();
   if (!userId) return actionError(NOT_SIGNED_IN_ERROR);
 
+  const limited = settingsRateLimitError(userId);
+  if (limited) return limited;
+
   if (!id || typeof id !== "string") {
     return actionError("That FX rate could not be found.");
   }
@@ -149,6 +179,14 @@ export async function deleteFxRate(
 export async function refreshFxRates(): Promise<ActionResult<FxRefreshReport>> {
   const userId = await getSessionUserId();
   if (!userId) return actionError(NOT_SIGNED_IN_ERROR);
+
+  // Per-user limit: this action can reach the external FMP API, so it is
+  // throttled harder than a plain database write.
+  const limited = rateLimit(
+    userKey("fx-refresh", userId),
+    EXTERNAL_LOOKUP_RATE_LIMIT,
+  );
+  if (!limited.ok) return actionError(rateLimitMessage(limited.retryAfterSeconds));
 
   const portfolio = await getOrCreatePortfolio(userId);
   const report = await refreshFxRatesFromProvider(portfolio.baseCurrency);

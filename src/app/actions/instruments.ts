@@ -24,6 +24,13 @@ import {
   type ActionResult,
 } from "@/lib/action-result";
 import { getSessionUserId } from "@/lib/user-portfolio";
+import {
+  EXTERNAL_LOOKUP_RATE_LIMIT,
+  rateLimit,
+  rateLimitMessage,
+  userKey,
+  WRITE_ACTION_RATE_LIMIT,
+} from "@/lib/rate-limit";
 
 const createInstrumentSchema = z.object({
   ticker: z
@@ -55,6 +62,12 @@ export async function createInstrument(
 ): Promise<ActionResult<{ id: string; ticker: string }>> {
   const userId = await getSessionUserId();
   if (!userId) return actionError(NOT_SIGNED_IN_ERROR);
+
+  const limited = rateLimit(
+    userKey("instrument-write", userId),
+    WRITE_ACTION_RATE_LIMIT,
+  );
+  if (!limited.ok) return actionError(rateLimitMessage(limited.retryAfterSeconds));
 
   const parsed = createInstrumentSchema.safeParse(input);
   if (!parsed.success) {
@@ -129,6 +142,16 @@ export async function prefillInstrumentProfile(
 ): Promise<PrefillResult> {
   const userId = await getSessionUserId();
   if (!userId) return unavailable("not_supported", NOT_SIGNED_IN_ERROR);
+
+  // Per-user limit: this action can reach the external FMP API, so it is
+  // throttled harder than a plain database write.
+  const limited = rateLimit(
+    userKey("instrument-prefill", userId),
+    EXTERNAL_LOOKUP_RATE_LIMIT,
+  );
+  if (!limited.ok) {
+    return unavailable("rate_limited", rateLimitMessage(limited.retryAfterSeconds));
+  }
 
   const cleanTicker = ticker?.trim().toUpperCase();
   if (!cleanTicker) {

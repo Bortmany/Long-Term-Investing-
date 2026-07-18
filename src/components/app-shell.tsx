@@ -230,6 +230,12 @@ export function AppShell({ email, children }: { email: string; children: React.R
       {/* Page content */}
       <main className="min-h-screen md:pl-16 lg:pl-60">
         <div className="mx-auto w-full max-w-6xl p-4 sm:p-6 lg:p-8">{children}</div>
+        {/* Persistent disclaimer shown under every authenticated page. */}
+        <footer className="mx-auto w-full max-w-6xl px-4 pb-4 sm:px-6 lg:px-8">
+          <p className="text-center text-xs text-slate-500 dark:text-slate-400">
+            Analysis to support your own decisions — not financial advice.
+          </p>
+        </footer>
       </main>
     </div>
   );

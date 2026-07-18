@@ -1,6 +1,7 @@
-// Server wrapper for the sign-up page. When ALLOW_SIGNUPS=false the form is
-// replaced by a calm registration-closed message — and the server rejects
-// sign-up attempts too (see src/lib/auth.ts), so the gate is not just visual.
+// Server wrapper for the sign-up page. Sign-ups are closed by default (only
+// ALLOW_SIGNUPS="true" opens them): the form is replaced by a calm
+// registration-closed message — and the server rejects sign-up attempts too
+// (see src/lib/auth.ts), so the gate is not just visual.
 
 import Link from "next/link";
 import { connection } from "next/server";

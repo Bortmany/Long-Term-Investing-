@@ -61,14 +61,14 @@ the top) — any session resuming the build starts there.
    **owner@example.com** / **investiq-demo**. The seed gives it a year of
    realistic sample transactions across six stocks in three currencies.
 
-> **Security note:** by default the `/sign-up` page lets anyone create an
-> account — fine for local use only. Before deploying anywhere public, set
-> `ALLOW_SIGNUPS="false"` in the environment: the sign-up page then shows a
-> "registration is closed" message and the server rejects sign-up attempts
-> too. Any value other than the literal string `false` (including leaving it
-> unset) keeps sign-ups open. Note the demo seed creates its user through
-> the normal sign-up path, so run `npx prisma db seed` on a fresh database
-> **before** turning sign-ups off.
+> **Security note:** sign-ups are CLOSED by default — the `/sign-up` page
+> shows a "registration is closed" message and the server rejects sign-up
+> attempts too. Only setting `ALLOW_SIGNUPS="true"` (the literal string)
+> opens them; any other value, including leaving it unset, keeps them closed.
+> The demo seed creates its user through the normal sign-up path, so keep
+> `ALLOW_SIGNUPS="true"` in your local `.env` (the `.env.example` already has
+> it) while running `npx prisma db seed` on a fresh database — and never set
+> it on a public deployment.
 
 ## API keys (optional — get these later)
 
