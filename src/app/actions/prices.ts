@@ -15,6 +15,12 @@ import {
   type ActionResult,
 } from "@/lib/action-result";
 import { getSessionUserId } from "@/lib/user-portfolio";
+import {
+  rateLimit,
+  rateLimitMessage,
+  userKey,
+  WRITE_ACTION_RATE_LIMIT,
+} from "@/lib/rate-limit";
 
 const updateManualPriceSchema = z.object({
   instrumentId: z
@@ -38,6 +44,12 @@ export async function updateManualPrice(
 ): Promise<ActionResult<{ id: string; asOf: Date }>> {
   const userId = await getSessionUserId();
   if (!userId) return actionError(NOT_SIGNED_IN_ERROR);
+
+  const limited = rateLimit(
+    userKey("price-write", userId),
+    WRITE_ACTION_RATE_LIMIT,
+  );
+  if (!limited.ok) return actionError(rateLimitMessage(limited.retryAfterSeconds));
 
   const parsed = updateManualPriceSchema.safeParse(input);
   if (!parsed.success) {

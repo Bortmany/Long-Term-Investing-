@@ -57,10 +57,11 @@ async function ensureDemoUser(): Promise<string> {
     console.log(`Created demo user ${DEMO_EMAIL}.`);
     return result.user.id;
   } catch (error) {
-    if (process.env.ALLOW_SIGNUPS === "false") {
+    if (process.env.ALLOW_SIGNUPS !== "true") {
       throw new Error(
-        "Could not create the demo user because sign-ups are disabled (ALLOW_SIGNUPS=false). " +
-          "Seed a fresh database with ALLOW_SIGNUPS unset (or \"true\") first, then disable sign-ups.",
+        "Could not create the demo user because sign-ups are closed (they are " +
+          "closed unless ALLOW_SIGNUPS=\"true\"). Seed a fresh database with " +
+          "ALLOW_SIGNUPS=\"true\" set first, then remove it to close sign-ups again.",
       );
     }
     throw error;

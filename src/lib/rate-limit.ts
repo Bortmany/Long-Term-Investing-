@@ -131,3 +131,10 @@ export const WRITE_ACTION_RATE_LIMIT: RateLimitOptions = {
   windowMs: 60_000,
 };
 export const IMPORT_RATE_LIMIT: RateLimitOptions = { limit: 10, windowMs: 60_000 };
+// Actions that call the external market-data service (FMP) get a tighter
+// per-user limit than plain database writes, so one user can't burn through
+// the API allowance.
+export const EXTERNAL_LOOKUP_RATE_LIMIT: RateLimitOptions = {
+  limit: 10,
+  windowMs: 60_000,
+};
