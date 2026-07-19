@@ -1,5 +1,15 @@
 import { expect, test } from "@playwright/test";
 
+// The demo login's password is never hardcoded — it comes from the same
+// SEED_DEMO_PASSWORD the seed script used. Load .env so the test sees it.
+try {
+  process.loadEnvFile();
+} catch {
+  // no .env file — rely on the environment
+}
+
+const DEMO_PASSWORD = process.env.SEED_DEMO_PASSWORD;
+
 test("health endpoint answers ok with a live database", async ({ request }) => {
   const response = await request.get("/api/health");
   expect(response.status()).toBe(200);
@@ -15,9 +25,13 @@ test("unauthenticated visitors are redirected to sign-in", async ({ page }) => {
 });
 
 test("demo user can sign in and sign out", async ({ page }) => {
+  test.skip(
+    !DEMO_PASSWORD,
+    "Set SEED_DEMO_PASSWORD in .env (the one used when seeding) to run the signed-in smoke test",
+  );
   await page.goto("/sign-in");
   await page.getByLabel("Email").fill("owner@example.com");
-  await page.getByLabel("Password").fill("investiq-demo");
+  await page.getByLabel("Password").fill(DEMO_PASSWORD!);
   await page.getByRole("button", { name: /^sign in$/i }).click();
 
   // Signing in lands on the dashboard; the sidebar shows the user's email.
