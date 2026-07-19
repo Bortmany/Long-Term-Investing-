@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { isEmailConfigured } from "@/lib/email/send";
 
 // Always answers 200. `db` tells you whether the database is reachable;
 // `sentry` reports whether error tracking is configured or still dormant.
@@ -16,5 +17,6 @@ export async function GET() {
     db,
     sentry: process.env.SENTRY_DSN ? "configured" : "dormant",
     cron: process.env.CRON_SECRET ? "configured" : "dormant",
+    email: isEmailConfigured() ? "configured" : "dormant",
   });
 }

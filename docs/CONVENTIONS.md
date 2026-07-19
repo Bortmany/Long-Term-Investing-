@@ -75,6 +75,22 @@ Naming: files kebab-case (`market-data.ts`), types/components PascalCase, functi
   message, or a response body. The shared logger (`src/lib/logger.ts`) also redacts any context
   value whose key name looks like a secret, as a second line of defense.
 
+## Alert honesty rule (Phase 7)
+
+- **An alert never fires on sample data.** `evaluatePriceAlert` in
+  `src/lib/alerts/evaluate.ts` refuses to fire whenever the received quote's
+  source is `sample` — no matter how far past the threshold the seeded price
+  sits — and records an honest outcome instead ("Not checked — only sample
+  data is available for this stock."). This is the golden rule applied to
+  alerts specifically: a `Notification`'s `priceSource` can only ever be
+  `FMP` or `MANUAL`, never `SEED`, because a sample-sourced quote can never
+  reach the code path that writes one. A `DAY_DROP` alert with no previous
+  closing price on record is the same story — it stays honestly "not
+  checked" rather than guessing a drop percentage. This is why the seeded
+  demo alert ships `PAUSED`: an `ACTIVE` alert on seed-only data would just
+  sit forever saying "not checked," which is honest but not a useful demo
+  state.
+
 ## VERIFY RECIPE
 
 Run these in order from the repo root; all must pass before reporting work as done:

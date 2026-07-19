@@ -23,6 +23,23 @@ export default function DashboardLoading() {
         ))}
       </div>
 
+      {/* Weekly Review card */}
+      <div className="mt-6">
+        <Card className="gap-4">
+          <CardHeader className="flex-row items-center gap-3">
+            <Skeleton className="size-5 rounded-full" />
+            <Skeleton className="h-5 w-32" />
+          </CardHeader>
+          <CardContent>
+            <Skeleton className="h-4 w-40" />
+            <Skeleton className="mt-3 h-4 w-full" />
+            <Skeleton className="mt-1.5 h-4 w-full" />
+            <Skeleton className="mt-1.5 h-4 w-2/3" />
+            <Skeleton className="mt-3 h-4 w-40" />
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Return cards */}
       <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
         {Array.from({ length: 2 }).map((_, i) => (

@@ -103,8 +103,17 @@ function NavLink({
   );
 }
 
-/** The sidebar footer: theme toggle, user row, sign out. */
-function ShellFooter({ email, compact }: { email: string; compact?: boolean }) {
+/** The sidebar footer: notification bell + theme toggle, user row, sign out. */
+function ShellFooter({
+  email,
+  compact,
+  notificationBell,
+}: {
+  email: string;
+  compact?: boolean;
+  /** Already resolved for this placement's alignment — see AppShell. */
+  notificationBell?: React.ReactNode;
+}) {
   const signOutButton = (
     <form action={signOutAction} className={cn(compact ? "" : "w-full")}>
       <Button
@@ -125,7 +134,10 @@ function ShellFooter({ email, compact }: { email: string; compact?: boolean }) {
   return (
     <div className={cn("flex flex-col gap-2 p-3", compact && "items-center")}>
       <Separator className="mb-1" />
-      <ThemeToggle />
+      <div className={cn("flex items-center gap-1", compact && "flex-col")}>
+        {notificationBell}
+        <ThemeToggle />
+      </div>
       <div className={cn("flex items-center gap-2 px-1", compact && "justify-center px-0")}>
         <Avatar>
           <AvatarFallback>{initialsFromEmail(email)}</AvatarFallback>
@@ -148,7 +160,27 @@ function ShellFooter({ email, compact }: { email: string; compact?: boolean }) {
   );
 }
 
-export function AppShell({ email, children }: { email: string; children: React.ReactNode }) {
+export function AppShell({
+  email,
+  notificationBellSidebar,
+  notificationBellMobile,
+  children,
+}: {
+  email: string;
+  /**
+   * Optional — the server layout builds these from the signed-in user's
+   * notifications (Phase 7). Two pre-built variants, not one node reused,
+   * because the bell renders at different screen edges (desktop sidebar,
+   * tablet rail vs. mobile top bar) and its dropdown panel must hang from
+   * the matching side — "start" (left-0) near the sidebar's left edge,
+   * "end" (right-0) near the mobile header's right edge — or a wide panel
+   * renders mostly off-screen. (Plain nodes, not a function: this is a
+   * Server Component prop, and functions can't cross that boundary.)
+   */
+  notificationBellSidebar?: React.ReactNode;
+  notificationBellMobile?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   const pathname = usePathname();
   // The drawer closes on nav-link taps (onNavigate below), overlay clicks,
   // and Escape — no route-change effect needed.
@@ -181,10 +213,10 @@ export function AppShell({ email, children }: { email: string; children: React.R
           ))}
         </nav>
         <div className="mt-auto lg:hidden">
-          <ShellFooter email={email} compact />
+          <ShellFooter email={email} compact notificationBell={notificationBellSidebar} />
         </div>
         <div className="mt-auto hidden lg:block">
-          <ShellFooter email={email} />
+          <ShellFooter email={email} notificationBell={notificationBellSidebar} />
         </div>
       </aside>
 
@@ -200,7 +232,8 @@ export function AppShell({ email, children }: { email: string; children: React.R
           <Menu className="size-5" />
         </Button>
         <span className="text-lg font-semibold">InvestIQ AI</span>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-1">
+          {notificationBellMobile}
           <ThemeToggle />
         </div>
       </header>

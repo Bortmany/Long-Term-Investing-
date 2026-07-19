@@ -249,6 +249,28 @@ async function main() {
     });
   }
 
+  // --- Alert: one PAUSED sample alert on AAPL (Phase 7) ---
+  // Paused on purpose: AAPL's seeded price has source SEED ("sample data"),
+  // and alerts honestly never fire on sample data (see the guarantee in
+  // src/lib/alerts/evaluate.ts) — so an ACTIVE alert here would just sit
+  // silently "not checked" forever. Paused says so plainly instead.
+  const existingAlert = await prisma.alert.findFirst({
+    where: { userId, instrumentId: instruments["AAPL"], kind: "PRICE_BELOW" },
+  });
+  if (!existingAlert) {
+    await prisma.alert.create({
+      data: {
+        userId,
+        kind: "PRICE_BELOW",
+        instrumentId: instruments["AAPL"],
+        threshold: 200,
+        status: "PAUSED",
+        lastOutcome:
+          "Paused in the seed data — AAPL's seeded price is sample data, and alerts honestly never fire on sample prices. Set FMP_API_KEY (or enter a manual price) and switch this alert back to Active to have it checked for real.",
+      },
+    });
+  }
+
   console.log("Seed complete:");
   // Never print the password — it's the one you set in SEED_DEMO_PASSWORD.
   console.log(`  user:         ${DEMO_EMAIL} (password: the SEED_DEMO_PASSWORD you set)`);
@@ -258,6 +280,7 @@ async function main() {
   console.log(`  seed prices:  ${prices.length}, fx rates: ${fxRates.length}`);
   console.log(`  watchlist:    1 item (JNJ — watched, not held)`);
   console.log(`  theses:       1 active (MSFT)`);
+  console.log(`  alerts:       1 paused (AAPL price alert — sample data, honestly ignored)`);
 }
 
 main()

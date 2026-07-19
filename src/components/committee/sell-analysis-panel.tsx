@@ -9,6 +9,7 @@ import { AlertCircle } from "lucide-react";
 import { runSellAnalysis } from "@/app/actions/committee";
 import { AiPanel, type AiPanelAnalysis } from "@/components/ai-panel";
 import { EvidenceList } from "@/components/evidence-list";
+import { ExplainerTip } from "@/components/explainer-tip";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { SellAnalysisOutput } from "@/lib/ai/schemas";
 
@@ -54,7 +55,9 @@ export function SellAnalysisPanel({
       {output ? (
         <div className="space-y-6">
           <div>
-            <p className="text-sm text-slate-500 dark:text-slate-400">Sell Score</p>
+            <p className="inline-flex items-center gap-1 text-sm text-slate-500 dark:text-slate-400">
+              Sell Score <ExplainerTip term="sell-score" />
+            </p>
             <p className="mt-1 text-5xl font-semibold tabular-nums">{output.sellScore}</p>
           </div>
 

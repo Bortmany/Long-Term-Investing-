@@ -46,3 +46,24 @@ test("demo user can sign in and sign out", async ({ page }) => {
     .click();
   await expect(page).toHaveURL(/\/sign-in/);
 });
+
+test("the explainer tip next to Cash Balance opens a glossary dialog and Escape closes it", async ({
+  page,
+}) => {
+  test.skip(
+    !DEMO_PASSWORD,
+    "Set SEED_DEMO_PASSWORD in .env (the one used when seeding) to run the signed-in smoke test",
+  );
+  await page.goto("/sign-in");
+  await page.getByLabel("Email").fill("owner@example.com");
+  await page.getByLabel("Password").fill(DEMO_PASSWORD!);
+  await page.getByRole("button", { name: /^sign in$/i }).click();
+  await expect(page).toHaveURL(/\/dashboard/);
+
+  await page.getByRole("button", { name: "What is Cash balance?" }).click();
+  const dialog = page.getByRole("dialog", { name: "Cash balance" });
+  await expect(dialog).toBeVisible();
+
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+});

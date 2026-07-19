@@ -8,6 +8,7 @@ import { Check } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { EvidenceList, type EvidenceListItem } from "@/components/evidence-list";
+import { ExplainerTip } from "@/components/explainer-tip";
 import type { HealthScoreOutput } from "@/lib/ai/schemas";
 
 const SUBSCORE_LABELS: Record<keyof HealthScoreOutput["subscores"], string> = {
@@ -50,20 +51,27 @@ export function HealthScoreContent({
   return (
     <div className="space-y-6">
       <div>
-        <p className="text-sm text-slate-500 dark:text-slate-400">{heroLabel}</p>
+        <p className="inline-flex items-center gap-1 text-sm text-slate-500 dark:text-slate-400">
+          {heroLabel} <ExplainerTip term="health-score" />
+        </p>
         <div className="mt-1 flex items-baseline gap-3">
           <span className="text-6xl font-semibold tabular-nums">{output.score}</span>
           <Badge variant="secondary">{scoreBandLabel(output.score)}</Badge>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {SUBSCORE_KEYS.map((key) => (
-          <div key={key}>
-            <p className="text-xs text-slate-500 dark:text-slate-400">{SUBSCORE_LABELS[key]}</p>
-            <p className="text-xl font-semibold tabular-nums">{output.subscores[key]}</p>
-          </div>
-        ))}
+      <div>
+        <h3 className="mb-2 inline-flex items-center gap-1 text-sm font-semibold">
+          Subscores <ExplainerTip term="health-subscores" />
+        </h3>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {SUBSCORE_KEYS.map((key) => (
+            <div key={key}>
+              <p className="text-xs text-slate-500 dark:text-slate-400">{SUBSCORE_LABELS[key]}</p>
+              <p className="text-xl font-semibold tabular-nums">{output.subscores[key]}</p>
+            </div>
+          ))}
+        </div>
       </div>
 
       {output.strengths.length > 0 ? (

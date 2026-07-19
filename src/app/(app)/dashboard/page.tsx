@@ -28,6 +28,8 @@ import {
   type SourceBadgeProps,
 } from "@/components/source-badge";
 import { EmptyState } from "@/components/empty-state";
+import { ExplainerTip } from "@/components/explainer-tip";
+import { LatestReviewCard } from "@/components/latest-review-card";
 import {
   HealthScorePanel,
   parseHealthScoreAnalysis,
@@ -311,21 +313,39 @@ export default async function DashboardPage() {
           badge={<SourceBadge {...totalBadge} />}
         />
         <SummaryCard
-          label="Cash Balance"
+          label={
+            <span className="inline-flex items-center gap-1">
+              Cash Balance <ExplainerTip term="cash-balance" />
+            </span>
+          }
           value={formatMoney(portfolioValue.cashValue, base)}
           badge={<SourceBadge {...cashBadge} />}
         />
         <SummaryCard
-          label="Trailing 12-Month Dividend Income"
+          label={
+            <span className="inline-flex items-center gap-1">
+              Trailing 12-Month Dividend Income <ExplainerTip term="trailing-dividend-income" />
+            </span>
+          }
           value={formatMoney(dividendIncome.total, base)}
           badge={<SourceBadge {...dividendBadge} />}
         />
       </div>
 
+      {/* Weekly Review — reads whatever is already stored, never generates
+          anything on render (THE AI RULE). */}
+      <div className="mt-6">
+        <LatestReviewCard userId={session.user.id} />
+      </div>
+
       {/* Return cards */}
       <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <SummaryCard
-          label="Total Return (with dividends)"
+          label={
+            <span className="inline-flex items-center gap-1">
+              Total Return (with dividends) <ExplainerTip term="total-return" />
+            </span>
+          }
           value={
             <>
               {signedMoney(withDividendsFigure.absolute, base)}{" "}
@@ -338,7 +358,11 @@ export default async function DashboardPage() {
           badge={<SourceBadge {...returnsBadgeProps} />}
         />
         <SummaryCard
-          label="Total Return (without dividends)"
+          label={
+            <span className="inline-flex items-center gap-1">
+              Total Return (without dividends) <ExplainerTip term="total-return" />
+            </span>
+          }
           value={
             <>
               {signedMoney(withoutDividendsFigure.absolute, base)}{" "}
@@ -355,19 +379,31 @@ export default async function DashboardPage() {
       {/* Allocation donuts */}
       <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
         <AllocationCard
-          title="By Sector"
+          title={
+            <span className="inline-flex items-center gap-1">
+              By Sector <ExplainerTip term="allocation" />
+            </span>
+          }
           allocation={sectorAllocation}
           badge={<SourceBadge {...totalBadge} />}
           baseCurrency={base}
         />
         <AllocationCard
-          title="By Country"
+          title={
+            <span className="inline-flex items-center gap-1">
+              By Country <ExplainerTip term="allocation" />
+            </span>
+          }
           allocation={countryAllocation}
           badge={<SourceBadge {...totalBadge} />}
           baseCurrency={base}
         />
         <AllocationCard
-          title="By Market"
+          title={
+            <span className="inline-flex items-center gap-1">
+              By Market <ExplainerTip term="allocation" />
+            </span>
+          }
           allocation={marketAllocation}
           badge={<SourceBadge {...totalBadge} />}
           baseCurrency={base}
@@ -550,7 +586,7 @@ function SummaryCard({
   badge,
   valueClassName,
 }: {
-  label: string;
+  label: React.ReactNode;
   value: React.ReactNode;
   badge: React.ReactNode;
   /** Optional override (e.g. green/red for a signed return figure). */
@@ -559,15 +595,20 @@ function SummaryCard({
   return (
     <Card className="py-0">
       <CardContent className="p-5">
-        <p className="text-sm text-slate-500 dark:text-slate-400">{label}</p>
-        <p
+        {/* label/value are plain <div>s, not <p>: label carries ExplainerTip
+            (a Dialog — DialogContent/DialogHeader/DialogTitle render <div>s
+            and an <h2>), and a <p> can never legally contain block-level
+            children. The old <p> wrapping caused real invalid-nesting
+            hydration warnings whenever an explainer was opened. */}
+        <div className="text-sm text-slate-500 dark:text-slate-400">{label}</div>
+        <div
           className={cn(
             "mt-1 text-2xl font-semibold tabular-nums sm:text-3xl",
             valueClassName,
           )}
         >
           {value}
-        </p>
+        </div>
         <div className="mt-2">{badge}</div>
       </CardContent>
     </Card>
@@ -580,7 +621,7 @@ function AllocationCard({
   badge,
   baseCurrency,
 }: {
-  title: string;
+  title: React.ReactNode;
   allocation: Allocation;
   badge: React.ReactNode;
   baseCurrency: string;

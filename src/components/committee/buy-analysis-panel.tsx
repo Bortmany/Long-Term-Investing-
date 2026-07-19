@@ -14,6 +14,7 @@
 // shared component for this one screen.
 import { runBuyAnalysis } from "@/app/actions/committee";
 import { AiPanel, type AiPanelAnalysis } from "@/components/ai-panel";
+import { ExplainerTip } from "@/components/explainer-tip";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SourceBadge, type SourceBadgeProps } from "@/components/source-badge";
 import { formatMoney, formatPercent } from "@/lib/format";
@@ -89,12 +90,16 @@ export function BuyAnalysisPanel({
         {output ? (
           <div className="space-y-6">
             <div>
-              <p className="text-sm text-slate-500 dark:text-slate-400">Buy Score</p>
+              <p className="inline-flex items-center gap-1 text-sm text-slate-500 dark:text-slate-400">
+                Buy Score <ExplainerTip term="buy-score" />
+              </p>
               <p className="mt-1 text-5xl font-semibold tabular-nums">{output.score}</p>
             </div>
 
             <div>
-              <p className="text-sm text-slate-500 dark:text-slate-400">Fair Value</p>
+              <p className="inline-flex items-center gap-1 text-sm text-slate-500 dark:text-slate-400">
+                Fair Value <ExplainerTip term="fair-value" />
+              </p>
               <p className="mt-1 text-2xl font-semibold tabular-nums">
                 {formatMoney(output.fairValueEstimate.value, instrumentCurrency)}
               </p>
@@ -106,7 +111,9 @@ export function BuyAnalysisPanel({
             </div>
 
             <div>
-              <p className="text-sm text-slate-500 dark:text-slate-400">Margin of Safety</p>
+              <p className="inline-flex items-center gap-1 text-sm text-slate-500 dark:text-slate-400">
+                Margin of Safety <ExplainerTip term="margin-of-safety" />
+              </p>
               <p
                 className={`mt-1 text-xl font-semibold tabular-nums ${signedPercentColor(output.marginOfSafetyPct)}`}
               >
@@ -116,7 +123,9 @@ export function BuyAnalysisPanel({
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="rounded-lg border border-slate-200 p-3 dark:border-slate-800">
-                <p className="text-xs text-slate-500 dark:text-slate-400">Upside case</p>
+                <p className="inline-flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
+                  Upside case <ExplainerTip term="upside-downside" />
+                </p>
                 <p
                   className={`mt-1 text-lg font-semibold tabular-nums ${signedPercentColor(output.upsidePct)}`}
                 >
@@ -124,7 +133,9 @@ export function BuyAnalysisPanel({
                 </p>
               </div>
               <div className="rounded-lg border border-slate-200 p-3 dark:border-slate-800">
-                <p className="text-xs text-slate-500 dark:text-slate-400">Downside case</p>
+                <p className="inline-flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
+                  Downside case <ExplainerTip term="upside-downside" />
+                </p>
                 <p
                   className={`mt-1 text-lg font-semibold tabular-nums ${signedPercentColor(output.downsidePct)}`}
                 >
@@ -134,7 +145,10 @@ export function BuyAnalysisPanel({
             </div>
 
             <p className="text-sm">
-              Suggested position size:{" "}
+              <span className="inline-flex items-center gap-1">
+                Suggested position size <ExplainerTip term="suggested-allocation" />
+              </span>
+              :{" "}
               <span className="font-medium tabular-nums">
                 {formatPercent(output.suggestedAllocationPct)}
               </span>{" "}

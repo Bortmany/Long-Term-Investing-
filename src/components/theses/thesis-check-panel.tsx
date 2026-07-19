@@ -8,6 +8,7 @@ import { Circle } from "lucide-react";
 
 import { checkThesis } from "@/app/actions/theses";
 import { AiPanel, type AiPanelAnalysis } from "@/components/ai-panel";
+import { ExplainerTip } from "@/components/explainer-tip";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { ThesisCheckOutput } from "@/lib/ai/schemas";
 import { RecommendationChip } from "./recommendation-chip";
@@ -79,7 +80,9 @@ export function ThesisCheckPanel({
       {output ? (
         <div className="space-y-6">
           <div>
-            <p className="text-sm text-slate-500 dark:text-slate-400">Integrity Score</p>
+            <p className="inline-flex items-center gap-1 text-sm text-slate-500 dark:text-slate-400">
+              Integrity Score <ExplainerTip term="integrity-score" />
+            </p>
             <div className="mt-1 flex items-baseline gap-3">
               <span className="text-4xl font-semibold tabular-nums">
                 {output.integrityScore}

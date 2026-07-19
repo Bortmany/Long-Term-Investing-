@@ -45,7 +45,7 @@ export function AiPanel({
   onAction,
   className,
 }: {
-  title: string;
+  title: React.ReactNode;
   /** Button text, e.g. "Convene Committee", "Generate investment score", "Re-analyze". */
   actionLabel: string;
   /** Present-participle label shown on the button while a run is in flight, e.g. "Analyzing…". */

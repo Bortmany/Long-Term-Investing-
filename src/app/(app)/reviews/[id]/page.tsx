@@ -13,6 +13,7 @@ import {
 } from "@/lib/reviews/output";
 import { AiPanel } from "@/components/ai-panel";
 import { EmptyState } from "@/components/empty-state";
+import { ExplainerTip } from "@/components/explainer-tip";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -170,7 +171,9 @@ export default async function ReviewDetailPage({
           </div>
 
           <div>
-            <h3 className="text-sm font-semibold">Allocation Drift</h3>
+            <h3 className="inline-flex items-center gap-1 text-sm font-semibold">
+              Allocation Drift <ExplainerTip term="allocation" />
+            </h3>
             <p className="mt-2 text-sm leading-relaxed">{output.allocationDrift}</p>
             {/* The Last Week/This Week/Drift numbers below are computed purely
                 in code (src/lib/reviews/delta.ts), never asked of the model —

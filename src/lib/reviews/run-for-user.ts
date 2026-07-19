@@ -10,10 +10,48 @@ import { logger } from "@/lib/logger";
 import { actionError, actionOk, type ActionResult } from "@/lib/action-result";
 import { AI_GENERATION_RATE_LIMIT, rateLimit, rateLimitMessage, userKey } from "@/lib/rate-limit";
 import { ANALYSIS_MODEL } from "@/lib/ai/client";
+import { isEmailConfigured, sendEmail } from "@/lib/email/send";
+import { buildWeeklyBriefEmail } from "@/lib/email/weekly-brief";
 import { runWeeklyReviewEngine } from "./engine";
 import { currentIsoPeriod } from "./period";
 import { extractWeeklyReviewSnapshot } from "./output";
 import { buildWeeklyReviewInput } from "./snapshot";
+
+/**
+ * Fire-and-forget the weekly-brief email for one just-persisted review. The
+ * review itself has already succeeded and been upserted by the time this
+ * runs — a send failure (missing user email, Resend down, etc.) must NEVER
+ * fail the review, so every error path here only ever logs a warning. Only
+ * ever called when isEmailConfigured() is already true, so no work happens
+ * at all while the integration stays dormant.
+ */
+async function sendWeeklyBriefEmailForUser(
+  userId: string,
+  review: { id: string; period: string },
+  summary: string,
+): Promise<void> {
+  const appBaseUrl = process.env.BETTER_AUTH_URL;
+  if (!appBaseUrl) return;
+
+  // Scoped to this one user's own row — same discipline as every other
+  // user-owned query in this app.
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
+  if (!user?.email) return;
+
+  const email = buildWeeklyBriefEmail(
+    { id: review.id, period: review.period, summary },
+    appBaseUrl,
+  );
+  const result = await sendEmail({
+    to: user.email,
+    subject: email.subject,
+    text: email.text,
+    html: email.html,
+  });
+  if (!result.ok) {
+    logger.warn("Weekly-brief email did not send", { unavailable: result.unavailable });
+  }
+}
 
 /**
  * Every user-owned query here is scoped to `userId` (docs/CONVENTIONS.md) —
@@ -57,6 +95,20 @@ export async function runWeeklyReviewForUser(
   });
 
   if (!result.ok) return actionError(result.message);
+
+  // Fire-and-forget: this single hook covers BOTH callers of
+  // runWeeklyReviewForUser (the "Run weekly review" button and the
+  // scheduled cron loop below), so the email only needs wiring in one
+  // place. Never awaited by the caller, and its own errors never surface
+  // here — see sendWeeklyBriefEmailForUser's own doc comment.
+  if (isEmailConfigured()) {
+    void sendWeeklyBriefEmailForUser(userId, result.review, result.data.summary).catch((error) => {
+      logger.warn("Weekly-brief email failed", {
+        message: error instanceof Error ? error.message : String(error),
+      });
+    });
+  }
+
   return actionOk({ id: result.review.id });
 }
 

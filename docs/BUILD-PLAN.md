@@ -56,6 +56,22 @@
   `getNews` in the data layer with a 1-day cache, and the secure scheduled-run pattern:
   token-protected POST `/api/cron/weekly-review` (dormant 503 without `CRON_SECRET`, timing-safe
   compare) + a disabled `.github/workflows/weekly-review.yml.example`. 213 unit + 10 e2e green.
+- **Phase 7 — DONE, verified and reviewed** (owner-requested extras beyond the original plan).
+  (a) Alerts & notifications: price above/below, sharp-day-drop and thesis-review-due alerts with
+  the hard guarantee that sample data can never fire one (pure evaluator + regression tests; the
+  review caught the day-drop baseline accepting a SEED prior close — fixed with a test pinning
+  the exclusion), a bounded throttled sweep (25 instruments per run, least-recently-checked
+  first) that runs quietly while the app is used and via the token-protected
+  `/api/cron/check-alerts` route (+ disabled workflow example), a notification bell in the shell
+  (price notifications carry their source badge), and `/watchlist` reborn as the alert manager.
+  (b) Weekly-brief delivery: newest weekly review surfaced on the dashboard, plus a dormant email
+  module (plain-fetch Resend client, inert unless BOTH `RESEND_API_KEY` and `RESEND_FROM` are
+  set, html-escaped, carries NO figures by tested rule, send failures never fail the review).
+  (c) Learn-as-you-go explainers: a ~30-term plain-English glossary + an `ExplainerTip` "?"
+  next to metric labels across dashboard, portfolio, stocks, health/integrity/consensus scores,
+  committee, reviews, settings and the alert dialog (dialog-on-click at every breakpoint —
+  deliberate deviation from a hover tooltip, which cannot hold multi-sentence text).
+  388 unit + 12 e2e green.
 - **Keys:** the owner will supply `FMP_API_KEY` and `ANTHROPIC_API_KEY` **at the end** — build everything against injectable mocks + honest "connect your key" states (the `DataResult.unavailable` pattern), then run the finale's live smoke.
 
 ## Cross-cutting decisions (owner-approved)

@@ -12,6 +12,7 @@ import {
   SourceBadge,
 } from "@/components/source-badge";
 import { EmptyState } from "@/components/empty-state";
+import { ExplainerTip } from "@/components/explainer-tip";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -168,7 +169,11 @@ export default async function StocksPage() {
             <TableHead>Ticker</TableHead>
             <TableHead>Name</TableHead>
             <TableHead className="text-right">Quote</TableHead>
-            <TableHead className="text-right">Change</TableHead>
+            <TableHead className="text-right">
+              <span className="inline-flex items-center justify-end gap-1">
+                Change <ExplainerTip term="day-change" />
+              </span>
+            </TableHead>
             <TableHead>Held</TableHead>
             <TableHead>
               <span className="sr-only">Watch</span>

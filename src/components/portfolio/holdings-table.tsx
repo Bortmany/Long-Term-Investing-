@@ -26,6 +26,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/empty-state";
+import { ExplainerTip } from "@/components/explainer-tip";
 import {
   SourceBadge,
   badgePropsForValueSource,
@@ -89,11 +90,27 @@ export function HoldingsTable({
                 <TableHead>Ticker</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead className="text-right">Quantity</TableHead>
-                <TableHead className="text-right">Avg Cost</TableHead>
+                <TableHead className="text-right">
+                  <span className="inline-flex items-center justify-end gap-1">
+                    Avg Cost <ExplainerTip term="avg-cost" />
+                  </span>
+                </TableHead>
                 <TableHead className="text-right">Current Price</TableHead>
-                <TableHead className="text-right">Market Value ({baseCurrency})</TableHead>
-                <TableHead className="text-right">Unrealized Gain/Loss</TableHead>
-                <TableHead className="text-right">Weight</TableHead>
+                <TableHead className="text-right">
+                  <span className="inline-flex items-center justify-end gap-1">
+                    Market Value ({baseCurrency}) <ExplainerTip term="market-value" />
+                  </span>
+                </TableHead>
+                <TableHead className="text-right">
+                  <span className="inline-flex items-center justify-end gap-1">
+                    Unrealized Gain/Loss <ExplainerTip term="unrealized-gain" />
+                  </span>
+                </TableHead>
+                <TableHead className="text-right">
+                  <span className="inline-flex items-center justify-end gap-1">
+                    Weight <ExplainerTip term="weight" />
+                  </span>
+                </TableHead>
                 <TableHead>
                   <span className="sr-only">Actions</span>
                 </TableHead>

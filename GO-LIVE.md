@@ -16,7 +16,12 @@ Plain-English list of what to set up before this goes public. Full context lives
 - [ ] `ANTHROPIC_API_KEY` — listed for a future phase; **not used by any code yet**, so nothing to set up now.
 
 ## Payments / email
-- None. This app has no payment or email features.
+- Payments: none.
+- Email: optional and dormant by default. Set `RESEND_API_KEY` and
+  `RESEND_FROM` to turn on a short weekly-brief email sent to a user's own
+  address each time their weekly review finishes. Leave either blank and
+  nothing changes — no network call is ever made. Check `/api/health`'s
+  `email` field ("configured" or "dormant") to confirm which state you're in.
 
 ## Security note
 No committed secrets; login and per-user data scoping are sound. Audit item **B3 is now fixed**: the seed no longer has a hardcoded demo password — it reads `SEED_DEMO_PASSWORD` and refuses to create the demo login unless you set a strong value (≥12 chars), so a guessable public account can't slip through. Sign-ups are now closed by default (they only open when `ALLOW_SIGNUPS="true"` is set) — your step is just making sure the live environment doesn't set it.

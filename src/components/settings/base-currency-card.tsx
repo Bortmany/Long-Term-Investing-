@@ -9,6 +9,7 @@ import type { Currency } from "@prisma/client";
 
 import { setBaseCurrency } from "@/app/actions/settings";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ExplainerTip } from "@/components/explainer-tip";
 import { Select } from "@/components/ui/select";
 
 export function BaseCurrencyCard({
@@ -41,7 +42,9 @@ export function BaseCurrencyCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Base Currency</CardTitle>
+        <CardTitle className="inline-flex items-center gap-1">
+          Base Currency <ExplainerTip term="base-currency" />
+        </CardTitle>
       </CardHeader>
       <CardContent>
         <Select

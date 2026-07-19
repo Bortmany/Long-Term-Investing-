@@ -104,8 +104,18 @@ function DropdownMenuTrigger({
 
 function DropdownMenuContent({
   className,
+  align = "end",
   ...props
-}: React.HTMLAttributes<HTMLDivElement>) {
+}: React.HTMLAttributes<HTMLDivElement> & {
+  /**
+   * Which edge of the trigger the panel hangs from. "end" (default, right-0)
+   * suits row-action kebabs near the right edge of their container. "start"
+   * (left-0) is for triggers that sit near the LEFT edge of the viewport —
+   * e.g. the sidebar-anchored notification bell — where "end" would push a
+   * wide panel off-screen to the left.
+   */
+  align?: "start" | "end";
+}) {
   const { open } = useDropdownMenu();
   if (!open) return null;
   return (
@@ -113,7 +123,8 @@ function DropdownMenuContent({
       data-slot="dropdown-menu-content"
       role="menu"
       className={cn(
-        "absolute right-0 top-full z-50 mt-1 min-w-40 rounded-md border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-800 dark:bg-slate-900",
+        "absolute top-full z-50 mt-1 min-w-40 rounded-md border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-800 dark:bg-slate-900",
+        align === "start" ? "left-0" : "right-0",
         className,
       )}
       {...props}

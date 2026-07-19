@@ -7,6 +7,7 @@ import { GitBranch } from "lucide-react";
 
 import { conveneCommittee } from "@/app/actions/committee";
 import { AiPanel, type AiPanelAnalysis } from "@/components/ai-panel";
+import { ExplainerTip } from "@/components/explainer-tip";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -74,8 +75,8 @@ export function CommitteeResultPanel({
         <div className="space-y-6">
           <div className="flex flex-wrap items-center gap-3">
             <VerdictChip verdict={output.verdict} size="lg" />
-            <span className="text-sm text-slate-600 dark:text-slate-400">
-              Consensus:{" "}
+            <span className="inline-flex items-center gap-1 text-sm text-slate-600 dark:text-slate-400">
+              Consensus <ExplainerTip term="consensus-score" />:{" "}
               <span className="tabular-nums font-medium text-slate-900 dark:text-slate-50">
                 {output.consensusScore}/100
               </span>

@@ -6,6 +6,7 @@ import type { Currency, Market } from "@prisma/client";
 import type { RatioResult } from "@/lib/stocks/ratios";
 import type { StatementTable } from "@/lib/stocks/statement-table";
 import type { SourceBadgeProps } from "@/components/source-badge";
+import type { GlossaryKey } from "@/lib/glossary";
 
 /** One row of the /stocks table. */
 export type StockListRow = {
@@ -38,6 +39,8 @@ export type RatioTile = {
   result: RatioResult;
   /** How to render the number when it's available. */
   kind: "multiple" | "percent";
+  /** Glossary key for the label's explainer tip. */
+  term: GlossaryKey;
 };
 
 export type StatementBlock =

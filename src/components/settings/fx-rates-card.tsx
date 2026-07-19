@@ -20,6 +20,7 @@ import {
 import { SourceBadge, type SourceBadgeProps } from "@/components/source-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ExplainerTip } from "@/components/explainer-tip";
 import {
   Dialog,
   DialogContent,
@@ -161,7 +162,9 @@ export function FxRatesCard({
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between">
-        <CardTitle>FX Rates</CardTitle>
+        <CardTitle className="inline-flex items-center gap-1">
+          FX Rates <ExplainerTip term="fx-rate" />
+        </CardTitle>
         {hasFmpKey ? (
           <Button
             type="button"

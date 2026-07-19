@@ -31,6 +31,8 @@ model User {
   theses         Thesis[]
   aiAnalyses     AiAnalysis[]
   weeklyReviews  WeeklyReview[]
+  alerts         Alert[]
+  notifications  Notification[]
 
   @@unique([email])
   @@map("user")
@@ -136,6 +138,23 @@ enum ThesisRecommendation {
   BROKEN
 }
 
+// ---------------------------------------------------------------------------
+// Alerts & notifications (Phase 7)
+// ---------------------------------------------------------------------------
+
+enum AlertKind {
+  PRICE_ABOVE
+  PRICE_BELOW
+  DAY_DROP
+  THESIS_REVIEW_DUE
+}
+
+enum AlertStatus {
+  ACTIVE
+  PAUSED
+  TRIGGERED
+}
+
 enum AiAnalysisType {
   HEALTH_SCORE
   STOCK_SCORE
@@ -184,6 +203,7 @@ model Instrument {
   fundamentalsCache  FundamentalsCache[]
   theses             Thesis[]
   watchlistItems     WatchlistItem[]
+  alerts             Alert[]
 
   @@unique([ticker, market])
 }
@@ -269,6 +289,7 @@ model Thesis {
   updatedAt    DateTime     @updatedAt
 
   checks ThesisCheck[]
+  alerts Alert[]
 
   @@index([instrumentId, status])
   @@index([userId, status])
@@ -334,4 +355,67 @@ model WeeklyReview {
   createdAt DateTime @default(now())
 
   @@unique([userId, period])
+}
+
+// ---------------------------------------------------------------------------
+// Alerts & notifications (Phase 7 UI, schema now)
+// ---------------------------------------------------------------------------
+
+model Alert {
+  id     String      @id @default(cuid())
+  userId String
+  user   User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind   AlertKind
+
+  // PRICE_ABOVE / PRICE_BELOW / DAY_DROP only.
+  instrumentId String?
+  instrument   Instrument? @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+  // THESIS_REVIEW_DUE only.
+  thesisId     String?
+  thesis       Thesis?     @relation(fields: [thesisId], references: [id], onDelete: Cascade)
+
+  // Price in the instrument's own currency for PRICE_ABOVE/PRICE_BELOW; a
+  // positive percent for DAY_DROP. Null for THESIS_REVIEW_DUE.
+  threshold Decimal? @db.Decimal(20, 8)
+  // THESIS_REVIEW_DUE only: how many days between reviews.
+  intervalDays Int?
+
+  status          AlertStatus @default(ACTIVE)
+  lastEvaluatedAt DateTime?
+  lastTriggeredAt DateTime?
+  // Plain-English note from the last sweep (why it did or didn't fire).
+  lastOutcome     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  notifications Notification[]
+
+  @@index([userId, status])
+  @@index([status, lastEvaluatedAt])
+}
+
+model Notification {
+  id      String @id @default(cuid())
+  userId  String
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  alertId String?
+  alert   Alert?  @relation(fields: [alertId], references: [id], onDelete: SetNull)
+
+  title String
+  body  String
+
+  // The golden-rule price snapshot for price-kind alerts — source is only
+  // ever "live" or "manual" (never "sample": see src/lib/alerts/evaluate.ts,
+  // a sample-sourced price can never fire an alert in the first place).
+  priceAtTrigger Decimal?     @db.Decimal(20, 8)
+  priceCurrency  Currency?
+  priceSource    PriceSource?
+  priceAsOf      DateTime?
+
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, readAt])
+  @@index([userId, createdAt(sort: Desc)])
 }

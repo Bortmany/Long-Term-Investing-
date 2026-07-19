@@ -248,31 +248,37 @@ export default async function StockDetailPage({
       label: "P/E",
       result: computePriceToEarnings(price, income),
       kind: "multiple",
+      term: "pe-ratio",
     },
     {
       label: "P/B",
       result: computePriceToBook(price, income, balance),
       kind: "multiple",
+      term: "pb-ratio",
     },
     {
       label: "Dividend Yield",
       result: computeDividendYield(price, trailingDividendPerShare),
       kind: "percent",
+      term: "dividend-yield",
     },
     {
       label: "Debt/Equity",
       result: computeDebtToEquity(balance),
       kind: "multiple",
+      term: "debt-to-equity",
     },
     {
       label: "ROE",
       result: computeReturnOnEquity(income, balance),
       kind: "percent",
+      term: "roe",
     },
     {
       label: "Current Ratio",
       result: computeCurrentRatio(balance),
       kind: "multiple",
+      term: "current-ratio",
     },
   ];
 

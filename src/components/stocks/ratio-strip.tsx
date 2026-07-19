@@ -4,6 +4,7 @@
 // blanks the rest of the strip. Plain neutral numbers — not return figures,
 // so no green/red banding.
 import type { RatioTile } from "./types";
+import { ExplainerTip } from "@/components/explainer-tip";
 import { formatPercent } from "@/lib/format";
 
 function formatValue(tile: RatioTile): string {
@@ -21,8 +22,8 @@ export function RatioStrip({ tiles }: { tiles: RatioTile[] }) {
           key={tile.label}
           className="rounded-lg border border-slate-200 p-3 dark:border-slate-800"
         >
-          <p className="text-xs text-slate-500 dark:text-slate-400">
-            {tile.label}
+          <p className="inline-flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
+            {tile.label} <ExplainerTip term={tile.term} />
           </p>
           <p className="mt-1 text-lg font-semibold tabular-nums">
             {formatValue(tile)}
