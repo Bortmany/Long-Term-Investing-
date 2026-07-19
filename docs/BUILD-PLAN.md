@@ -7,7 +7,23 @@
 > phase on branch `claude/investiq-next-phases-oulgfj`. Demo login: `owner@example.com` with the
 > password from `SEED_DEMO_PASSWORD` in `.env` (the old fixed demo password is refused by the seed).
 
-## STATUS (as of 2026-07-19)
+## STATUS (as of 2026-07-19 — all phases built this session)
+
+**Finale walkthrough — PASSED.** A real-browser acceptance tour of all 13 pages/flows (dashboard,
+portfolio + dialogs, import wizard, settings incl. data-rights cards, stocks list/detail, theses,
+committee, reviews, watchlist + alerts, notification bell, explainers, signed-out privacy/terms):
+every screen renders with honest badges and connect-your-key states, zero browser console errors,
+and the AiAnalysis row count stayed identical across the entire tour — nothing generates on render.
+The production build's security headers (CSP incl. the Sentry allowance, HSTS, frame/sniff
+protection) were verified against a RUNNING `next start` server, and `/privacy` + `/terms` answer
+publicly. Note: the local dev database has accumulated duplicate test data (extra AAPL theses, a
+few repeated notifications, a stray same-day transaction) from repeated e2e runs — harmless here,
+and a fresh production database starts clean.
+
+**What remains for the owner (the app is code-complete):** pick a host and deploy (GO-LIVE.md is
+the checklist), connect `FMP_API_KEY` + `ANTHROPIC_API_KEY` when ready — every screen lights up
+with zero code changes — then run the live-key smoke below, turn on + restore-test host database
+backups, and keep `ALLOW_SIGNUPS` off until you mean to open the doors.
 
 - **Phase 1 — DONE, pushed** (commit `b7d6f02`): foundation, schema, auth, dashboard, data layer, portfolio math, seed, tests.
 - **Phase 2 — DONE (Waves 1 + 2), verified and reviewed.** All three screen chunks are built: the
