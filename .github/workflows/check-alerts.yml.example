@@ -1,0 +1,41 @@
+# DISABLED — this file ends in ".yml.example", not ".yml"/".yaml", so GitHub
+# Actions ignores it. To turn scheduled alert checks on:
+#
+#   1. Set CRON_SECRET in your deployed app's environment (see .env.example)
+#      — the SAME value used for weekly-review.yml.example, if that is also
+#      turned on. Both cron routes share one secret.
+#   2. In this GitHub repo, go to Settings -> Secrets and variables ->
+#      Actions, and add two repository secrets (skip any that already exist
+#      from turning on weekly-review.yml):
+#        APP_URL      e.g. https://your-app.example.com (no trailing slash)
+#        CRON_SECRET  the SAME value you set in step 1
+#   3. Rename this file to check-alerts.yml and commit it.
+#
+# Once enabled, this calls POST /api/cron/check-alerts once an hour, which
+# checks every user's active price/thesis alerts and returns aggregate counts
+# only (no user data, no alert contents). Until CRON_SECRET is set on the app
+# itself, that endpoint answers "dormant" (503) even if this workflow runs.
+#
+# Alerts are ALSO checked while a signed-in user is active in the app
+# (src/app/(app)/layout.tsx sweeps that user's due alerts after each page
+# load, throttled to once per 10 minutes) — this schedule just keeps alerts
+# checked even when nobody is currently browsing.
+
+name: Check Alerts
+
+on:
+  schedule:
+    # Every hour, on the hour.
+    - cron: "0 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  run-check-alerts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger the alert check
+        run: |
+          curl --fail --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${{ secrets.APP_URL }}/api/cron/check-alerts"

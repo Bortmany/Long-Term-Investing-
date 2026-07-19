@@ -15,6 +15,7 @@ import {
   type FinancialStatements,
   type InstrumentRef,
   type MarketDataProvider,
+  type NewsArticle,
   type PricePoint,
   type Quote,
   type StatementKind,
@@ -118,6 +119,48 @@ export async function fetchFmpFxRate(
   const timestamp = asNumber(row.timestamp);
   const asOf = timestamp !== null ? new Date(timestamp * 1000) : new Date();
   return { ok: true, data: { rate, asOf } };
+}
+
+// ---------------------------------------------------------------------------
+// News — not part of MarketDataProvider (same reasoning as FX above): not
+// every provider can answer it, so market-data.ts's getNews calls this
+// directly rather than going through the provider interface. Same golden-
+// rule behavior: no key or a failed request returns the typed unavailable
+// result, and error messages never contain the request URL (it carries the
+// API key — see makeFetchJson's fetch failure branch).
+// ---------------------------------------------------------------------------
+
+export async function fetchFmpNews(
+  instrument: InstrumentRef,
+  options: FmpProviderOptions,
+): Promise<DataResult<NewsArticle[]>> {
+  if (!options.apiKey) {
+    return unavailable("no_api_key", "FMP_API_KEY is not configured.");
+  }
+  const fetchJson = makeFetchJson(options);
+  const result = await fetchJson("/stock_news", {
+    tickers: instrument.ticker,
+    limit: "10",
+  });
+  if (!result.ok) return result;
+
+  const rows = Array.isArray(result.data) ? (result.data as Record<string, unknown>[]) : [];
+  const articles: NewsArticle[] = [];
+  for (const raw of rows) {
+    const publishedAt = asDate(raw.publishedDate);
+    const title = typeof raw.title === "string" ? raw.title : null;
+    if (!publishedAt || !title) continue;
+    articles.push({
+      title,
+      text: typeof raw.text === "string" ? raw.text : null,
+      source: typeof raw.site === "string" ? raw.site : null,
+      publishedAt,
+    });
+  }
+  if (articles.length === 0) {
+    return unavailable("no_data", `No recent news found for ${instrument.ticker}.`);
+  }
+  return { ok: true, data: articles };
 }
 
 export function createFmpProvider(options: FmpProviderOptions): MarketDataProvider {

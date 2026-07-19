@@ -1,7 +1,7 @@
 # InvestIQ AI — UI Spec, Phases 2–6
 
 Desktop-first personal tool (English only, LTR, single owner — no i18n/RTL work). Ground truth for
-visual language is `docs/specs/investiq-ai/phase-1-ui.md` (design tokens, the golden-rule
+visual language is `docs/design/ui-spec-phase-1.md` (design tokens, the golden-rule
 `SourceBadge` component, app shell, empty-state, loading/error patterns) — **this document does not
 repeat those, it builds on them.** Read that spec first. Every rule in `docs/CONVENTIONS.md` (the
 golden rule, the AI rule, the data-provider rule) applies to everything below without exception.

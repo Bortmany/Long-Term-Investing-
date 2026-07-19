@@ -45,9 +45,62 @@ Naming: files kebab-case (`market-data.ts`), types/components PascalCase, functi
 - A portfolio's cash balance is DERIVED from transactions (`computeCashBalances`) and never stored.
 - Every query for user-owned data (portfolios, transactions, watchlist) is scoped to the signed-in user's id, taken from the server session (`auth.api.getSession`) — never from client input.
 
-## AI rule (future phases)
+## AI rules (Phase 3+)
 
-AI outputs are persisted in `AiAnalysis` and never regenerated on page view. A page shows the stored analysis with its `dataAsOf` date; generating a new one is an explicit user action (or scheduled job), never a side effect of rendering.
+- **Persist, never regenerate on view.** AI outputs are persisted in `AiAnalysis` and never
+  regenerated on page view. A page shows the stored analysis with its `dataAsOf` date;
+  generating a new one is an explicit user action (or scheduled job), never a side effect of
+  rendering. The engine (`src/lib/ai/analysis.ts`, `runAnalysis`) enforces this by reusing any
+  stored row whose input hash still matches instead of calling the API again.
+- **AI numbers carry no `SourceBadge`.** A `SourceBadge` states where a fetched/entered figure
+  came from; an AI judgment isn't one of those, so it never wears one. Instead every `AiPanel`
+  shows a fixed caption — "Analysis from {date} · {model} · based on data as of {dataAsOf}" —
+  which is the AI-specific equivalent of the golden rule: it always says when the analysis ran,
+  which model produced it, and how fresh the data behind it was.
+- **`AiDisclaimer` on every AI surface.** Any screen that shows a persisted `AiAnalysis` result
+  shows the exact line "This is analysis to support your own decision, not financial advice."
+  — never paraphrased per-screen.
+- **Daily spend cap.** Each user may generate at most `DAILY_AI_ANALYSIS_LIMIT` (25) new
+  `AiAnalysis` rows per UTC day (`src/lib/ai/spend-cap.ts`). One persisted row is one unit
+  against the cap, regardless of how many model calls produced it (e.g. a Committee run makes
+  several API calls but persists one row). Reusing a stored analysis by input hash never counts
+  against the cap. A refusal is a typed result with a plain-English message: what happened, when
+  it resets, and that existing analyses are still available — never a silent failure.
+- **No key → `ConnectKeyNotice`, honest and first-class.** When `ANTHROPIC_API_KEY` is unset,
+  every AI trigger and every AI output is replaced by the `ConnectKeyNotice` component (or, on an
+  AI-only page, the page's whole trigger button is hidden and its content area shows the notice).
+  This is never rendered as an error — it's a normal, first-class state.
+- **The key is never logged or returned.** `ANTHROPIC_API_KEY` is read once in
+  `src/lib/ai/client.ts` and handed to the SDK; it is never written to a log line, an error
+  message, or a response body. The shared logger (`src/lib/logger.ts`) also redacts any context
+  value whose key name looks like a secret, as a second line of defense.
+
+## Alert honesty rule (Phase 7)
+
+- **An alert never fires on sample data.** `evaluatePriceAlert` in
+  `src/lib/alerts/evaluate.ts` refuses to fire whenever the received quote's
+  source is `sample` — no matter how far past the threshold the seeded price
+  sits — and records an honest outcome instead ("Not checked — only sample
+  data is available for this stock."). This is the golden rule applied to
+  alerts specifically: a `Notification`'s `priceSource` can only ever be
+  `FMP` or `MANUAL`, never `SEED`, because a sample-sourced quote can never
+  reach the code path that writes one. A `DAY_DROP` alert with no previous
+  closing price on record is the same story — it stays honestly "not
+  checked" rather than guessing a drop percentage. This is why the seeded
+  demo alert ships `PAUSED`: an `ACTIVE` alert on seed-only data would just
+  sit forever saying "not checked," which is honest but not a useful demo
+  state.
+
+## Privacy page stays in sync (Phase 8)
+
+- **Any diff that stores a NEW personal field updates `/privacy` in the same
+  diff.** `src/app/privacy/page.tsx` is written against exactly what
+  `prisma/schema.prisma` stores — a schema change that adds a personal field
+  without touching that page is an incomplete diff, not a follow-up.
+- Data rights live in Settings: "Your data" (download everything, one JSON
+  file, `src/lib/account-export.ts`) and "Danger" (delete my account,
+  password-confirmed, rate-limited like sign-in, wipes everything via the
+  database's `ON DELETE CASCADE`).
 
 ## VERIFY RECIPE
 

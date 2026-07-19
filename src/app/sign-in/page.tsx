@@ -121,6 +121,15 @@ export default function SignInPage() {
           </CardFooter>
         </form>
       </Card>
+      <p className="mt-6 text-center text-xs text-slate-400 dark:text-slate-500">
+        <Link href="/privacy" className="hover:underline">
+          Privacy
+        </Link>
+        {" · "}
+        <Link href="/terms" className="hover:underline">
+          Terms
+        </Link>
+      </p>
     </main>
   );
 }

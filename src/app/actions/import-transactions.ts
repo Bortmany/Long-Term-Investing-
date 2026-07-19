@@ -74,12 +74,26 @@ export async function validateImportRows(
   const userId = await getSessionUserId();
   if (!userId) return actionError(NOT_SIGNED_IN_ERROR);
 
-  if (!Array.isArray(mappedRows) || mappedRows.length === 0) {
+  const limited = rateLimit(userKey("tx-validate", userId), IMPORT_RATE_LIMIT);
+  if (!limited.ok) return actionError(rateLimitMessage(limited.retryAfterSeconds));
+
+  // Same top-level shape + row-count guard as importTransactions below, so a
+  // stuck client (or a re-fired "Validate" click) can't force an unbounded
+  // per-row validation loop or an unbounded instrument-table read.
+  const parsedArgs = importArgsSchema.safeParse(mappedRows);
+  if (!parsedArgs.success) {
+    return actionError(
+      parsedArgs.error.issues[0]?.message ??
+        "Those import rows aren't in the expected format. Refresh the page and try again.",
+    );
+  }
+  const rows = parsedArgs.data;
+  if (rows.length === 0) {
     return actionError("There are no rows to check — upload or paste a CSV first.");
   }
 
   const instruments = await loadKnownInstruments();
-  return actionOk(validateMappedRows(mappedRows, instruments));
+  return actionOk(validateMappedRows(rows, instruments));
 }
 
 /**

@@ -119,6 +119,22 @@ export type UpcomingDividend = {
   source: SourceBadge;
 };
 
+/**
+ * One news article, trimmed to what NEWS_SUMMARY actually needs (no article
+ * URL is kept — nothing in the UI links out to one, so there's no reason to
+ * carry it through the cache at all). Not part of MarketDataProvider: like
+ * FX rates, news isn't a thing every provider can answer, so it's fetched
+ * directly from FMP (src/lib/data/fmp.ts's fetchFmpNews) and typed
+ * unavailable for every other routing outcome (see getNews in market-data.ts).
+ */
+export type NewsArticle = {
+  title: string;
+  text: string | null;
+  /** Publication name, e.g. "Reuters" — null when FMP didn't report one. */
+  source: string | null;
+  publishedAt: Date;
+};
+
 // ---------------------------------------------------------------------------
 // The provider interface
 // ---------------------------------------------------------------------------
