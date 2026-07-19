@@ -16,6 +16,7 @@ import { markAllNotificationsRead, markNotificationRead } from "@/app/actions/al
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { SourceBadge, type SourceBadgeVariant } from "@/components/source-badge";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatShortDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -98,24 +99,29 @@ export function NotificationBell({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"}
-        >
-          <span className="relative inline-flex">
-            <Bell className="size-5" aria-hidden="true" />
-            {unreadCount > 0 ? (
-              <span
-                aria-hidden="true"
-                className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-600 px-1 text-[10px] font-semibold text-white dark:bg-blue-500"
-              >
-                {badgeLabel}
+        <Tooltip>
+          <TooltipTrigger>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"}
+            >
+              <span className="relative inline-flex">
+                <Bell className="size-5" aria-hidden="true" />
+                {unreadCount > 0 ? (
+                  <span
+                    aria-hidden="true"
+                    className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-600 px-1 text-[10px] font-semibold text-white dark:bg-blue-500"
+                  >
+                    {badgeLabel}
+                  </span>
+                ) : null}
               </span>
-            ) : null}
-          </span>
-        </Button>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Notifications</TooltipContent>
+        </Tooltip>
       </DropdownMenuTrigger>
       <DropdownMenuContent align={align} className="w-80 max-w-[calc(100vw-2rem)] py-0">
         <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2 dark:border-slate-800">

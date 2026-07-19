@@ -200,15 +200,20 @@ export function TransactionsTable({
                     <TableCell className="text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="size-9"
-                            aria-label={`Actions for the ${transactionTypeLabel(row.type).toLowerCase()} on ${formatShortDate(row.tradeDate)}`}
-                          >
-                            <EllipsisVertical aria-hidden="true" />
-                          </Button>
+                          <Tooltip>
+                            <TooltipTrigger>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="size-9"
+                                aria-label={`Actions for the ${transactionTypeLabel(row.type).toLowerCase()} on ${formatShortDate(row.tradeDate)}`}
+                              >
+                                <EllipsisVertical aria-hidden="true" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="left">Actions</TooltipContent>
+                          </Tooltip>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent>
                           <DropdownMenuItem onClick={() => onEdit(row)}>Edit</DropdownMenuItem>

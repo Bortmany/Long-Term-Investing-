@@ -258,19 +258,24 @@ export function FxRatesCard({
                     <SourceBadge {...row.badge} />
                   </TableCell>
                   <TableCell>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="size-9"
-                      aria-label={`Delete the ${row.base} to ${row.quote} rate as of ${row.asOfLabel}`}
-                      onClick={() => {
-                        setDeleteError(null);
-                        setDeleting(row);
-                      }}
-                    >
-                      <Trash2 aria-hidden="true" />
-                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="size-9"
+                          aria-label={`Delete the ${row.base} to ${row.quote} rate as of ${row.asOfLabel}`}
+                          onClick={() => {
+                            setDeleteError(null);
+                            setDeleting(row);
+                          }}
+                        >
+                          <Trash2 aria-hidden="true" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="left">{`Delete the ${row.base} to ${row.quote} rate`}</TooltipContent>
+                    </Tooltip>
                   </TableCell>
                 </TableRow>
               ))}

@@ -149,15 +149,20 @@ function AlertRowActions({
     <>
       <DropdownMenu>
         <DropdownMenuTrigger>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="size-9"
-            aria-label={`Actions for the ${alert.instrumentTicker ?? alert.thesisTicker ?? ""} alert`}
-          >
-            <EllipsisVertical aria-hidden="true" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="size-9"
+                aria-label={`Actions for the ${alert.instrumentTicker ?? alert.thesisTicker ?? ""} alert`}
+              >
+                <EllipsisVertical aria-hidden="true" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Alert actions</TooltipContent>
+          </Tooltip>
         </DropdownMenuTrigger>
         <DropdownMenuContent>
           <DropdownMenuItem onClick={() => onEdit(alert)}>Edit</DropdownMenuItem>

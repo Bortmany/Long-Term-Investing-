@@ -25,6 +25,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { EmptyState } from "@/components/empty-state";
 import { ExplainerTip } from "@/components/explainer-tip";
 import {
@@ -203,15 +204,20 @@ export function HoldingsTable({
                   <TableCell className="text-right">
                     <DropdownMenu>
                       <DropdownMenuTrigger>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="size-9"
-                          aria-label={`Actions for ${row.ticker}`}
-                        >
-                          <EllipsisVertical aria-hidden="true" />
-                        </Button>
+                        <Tooltip>
+                          <TooltipTrigger>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="size-9"
+                              aria-label={`Actions for ${row.ticker}`}
+                            >
+                              <EllipsisVertical aria-hidden="true" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="left">{`Actions for ${row.ticker}`}</TooltipContent>
+                        </Tooltip>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent>
                         {row.manualPricing ? (

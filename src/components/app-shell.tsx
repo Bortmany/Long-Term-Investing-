@@ -222,15 +222,20 @@ export function AppShell({
 
       {/* Mobile top bar */}
       <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-slate-200 bg-white px-2 md:hidden dark:border-slate-800 dark:bg-slate-950">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={() => setDrawerOpen(true)}
-          aria-label="Open navigation menu"
-        >
-          <Menu className="size-5" />
-        </Button>
+        <Tooltip>
+          <TooltipTrigger>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => setDrawerOpen(true)}
+              aria-label="Open navigation menu"
+            >
+              <Menu className="size-5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Open navigation menu</TooltipContent>
+        </Tooltip>
         <span className="text-lg font-semibold">InvestIQ AI</span>
         <div className="ml-auto flex items-center gap-1">
           {notificationBellMobile}

@@ -9,6 +9,7 @@ import { LoaderCircle, Star, StarOff } from "lucide-react";
 
 import { addToWatchlist, removeFromWatchlist } from "@/app/actions/stocks";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 export function WatchToggleButton({
   instrumentId,
@@ -65,26 +66,31 @@ export function WatchToggleButton({
   }
 
   return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="icon"
-      className="size-9"
-      disabled={isPending}
-      onClick={handleClick}
-      aria-label={label}
-      aria-pressed={watched}
-    >
-      {isPending ? (
-        <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
-      ) : watched ? (
-        <Star
-          className="size-4 fill-blue-600 text-blue-600 dark:fill-blue-500 dark:text-blue-500"
-          aria-hidden="true"
-        />
-      ) : (
-        <StarOff className="size-4 text-slate-400 dark:text-slate-500" aria-hidden="true" />
-      )}
-    </Button>
+    <Tooltip>
+      <TooltipTrigger>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="size-9"
+          disabled={isPending}
+          onClick={handleClick}
+          aria-label={label}
+          aria-pressed={watched}
+        >
+          {isPending ? (
+            <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
+          ) : watched ? (
+            <Star
+              className="size-4 fill-blue-600 text-blue-600 dark:fill-blue-500 dark:text-blue-500"
+              aria-hidden="true"
+            />
+          ) : (
+            <StarOff className="size-4 text-slate-400 dark:text-slate-500" aria-hidden="true" />
+          )}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
   );
 }
