@@ -1,0 +1,34 @@
+# DISABLED — this file ends in ".yml.example", not ".yml"/".yaml", so GitHub
+# Actions ignores it. To turn scheduled weekly reviews on:
+#
+#   1. Set CRON_SECRET in your deployed app's environment (see .env.example)
+#      — a long random value, generated the same way as BETTER_AUTH_SECRET.
+#   2. In this GitHub repo, go to Settings -> Secrets and variables ->
+#      Actions, and add two repository secrets:
+#        APP_URL      e.g. https://your-app.example.com (no trailing slash)
+#        CRON_SECRET  the SAME value you set in step 1
+#   3. Rename this file to weekly-review.yml and commit it.
+#
+# Once enabled, this calls POST /api/cron/weekly-review once a week, which
+# runs the weekly review for every user who has a portfolio and returns
+# aggregate counts only (no user data). Until CRON_SECRET is set on the app
+# itself, that endpoint answers "dormant" (503) even if this workflow runs.
+
+name: Weekly Review
+
+on:
+  schedule:
+    # Every Monday at 06:00 UTC.
+    - cron: "0 6 * * 1"
+  workflow_dispatch: {}
+
+jobs:
+  run-weekly-review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger the weekly review
+        run: |
+          curl --fail --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${{ secrets.APP_URL }}/api/cron/weekly-review"

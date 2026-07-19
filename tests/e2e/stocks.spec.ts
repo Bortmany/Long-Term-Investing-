@@ -66,12 +66,14 @@ test("shows held and watched stocks, and a stock's detail page renders honest un
   // from, each one honestly says "Unavailable" rather than showing a 0.
   await expect(page.getByText("Unavailable").first()).toBeVisible();
 
-  // No ANTHROPIC_API_KEY in this environment: the Health Score panel shows
-  // the first-class ConnectKeyNotice, never a faked AI score.
-  await expect(page.getByText("AI features are turned off")).toBeVisible();
-
-  // News is a Phase 6 placeholder.
-  await expect(page.getByText("News summaries are coming in a later phase.")).toBeVisible();
+  // No ANTHROPIC_API_KEY in this environment: both AI panels on this page
+  // (Health Score and, since Phase 6, Recent News) independently show the
+  // first-class ConnectKeyNotice, never a faked AI score or summary — so
+  // the same heading legitimately appears twice; `.first()` matches the
+  // existing "Unavailable" ratio-tile check above.
+  await expect(page.getByText("AI features are turned off").first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Health Score" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Recent News" })).toBeVisible();
 });
 
 test("the watch star toggles a stock in and out of the watchlist", async ({ page }) => {

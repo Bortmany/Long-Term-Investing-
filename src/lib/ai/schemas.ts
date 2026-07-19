@@ -224,3 +224,67 @@ export type SellAnalysisOutput = z.infer<typeof sellAnalysisSchema>;
 export const sellAnalysisJsonSchema = z.toJSONSchema(sellAnalysisSchema, {
   target: "draft-2020-12",
 });
+
+// ---------------------------------------------------------------------------
+// WEEKLY_REVIEW (ui-spec-phases-2-6.md §7.2, BUILD-PLAN.md Phase 6)
+// ---------------------------------------------------------------------------
+
+/** Ticker + one-line reason, the shape ui-spec §7.2's Improved/Weakened lists render. */
+const weeklyReviewHoldingNoteSchema = z.object({
+  ticker: z.string().min(1),
+  reason: z.string().min(1),
+});
+
+/**
+ * `allocationDrift` is a plain-English paragraph, not a numeric struct —
+ * BUILD-PLAN.md Phase 6 leaves this shape to the builder ("your call,
+ * document it"). Reasoning: src/lib/reviews/delta.ts already computes the
+ * per-sector drift numbers EXACTLY, in code, and hands them to the model as
+ * part of its INPUT (see src/lib/reviews/snapshot.ts) — asking the model to
+ * echo those same numbers back out as schema-validated OUTPUT would risk a
+ * transcription mismatch, and the golden rule's "never display a fabricated
+ * number" applies just as much to an AI echo of a real number as to an
+ * invented one. The numeric Last Week/This Week/Drift table the UI shows
+ * (ui-spec §7.2) is rendered straight from the same code-computed numbers
+ * (persisted separately as WeeklyReview.output.sectorDrift, never asked of
+ * the model) — this field is the model's own prose gloss on that table, nothing more.
+ */
+export const weeklyReviewSchema = z.object({
+  summary: z.string().min(1),
+  newRisks: z.array(z.string().min(1)),
+  improvedHoldings: z.array(weeklyReviewHoldingNoteSchema),
+  weakenedHoldings: z.array(weeklyReviewHoldingNoteSchema),
+  allocationDrift: z.string().min(1),
+  suggestedActions: z.array(z.string().min(1)),
+  behavioralNote: z.string().min(1),
+});
+export type WeeklyReviewOutput = z.infer<typeof weeklyReviewSchema>;
+export const weeklyReviewJsonSchema = z.toJSONSchema(weeklyReviewSchema, {
+  target: "draft-2020-12",
+});
+
+// ---------------------------------------------------------------------------
+// NEWS_SUMMARY (ui-spec-phases-2-6.md §7.2 "News summary card", BUILD-PLAN.md Phase 6)
+// ---------------------------------------------------------------------------
+
+const newsQuoteSchema = z.object({
+  quote: z.string().min(1),
+  // Plain-English attribution, e.g. "Reuters, Jul 10, 2026" — null when the
+  // source articles didn't give the model enough to cite (never invented).
+  source: z.string().min(1).nullable(),
+});
+
+export const newsSummarySchema = z.object({
+  whatHappened: z.string().min(1),
+  whyItMatters: z.string().min(1),
+  // Rendered only when an ACTIVE thesis exists for this instrument (ui-spec
+  // §7.2); the model is told to write null when there is none to assess —
+  // same discipline as committeeSynthesisSchema.thesisAssessment.
+  thesisImpact: z.string().min(1).nullable(),
+  shouldInvestorCare: z.string().min(1),
+  quotes: z.array(newsQuoteSchema),
+});
+export type NewsSummaryOutput = z.infer<typeof newsSummarySchema>;
+export const newsSummaryJsonSchema = z.toJSONSchema(newsSummarySchema, {
+  target: "draft-2020-12",
+});

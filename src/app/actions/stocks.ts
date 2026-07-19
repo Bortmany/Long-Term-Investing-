@@ -26,12 +26,14 @@ import {
 import {
   getDividendHistory,
   getFinancialStatements,
+  getNews,
   getProfile,
   getQuote,
+  type NewsArticle,
 } from "@/lib/data";
-import { ANALYSIS_MODEL } from "@/lib/ai/client";
+import { ANALYSIS_MODEL, FAST_MODEL } from "@/lib/ai/client";
 import { runAnalysis } from "@/lib/ai/analysis";
-import { stockScoreSchema } from "@/lib/ai/schemas";
+import { newsSummarySchema, stockScoreSchema } from "@/lib/ai/schemas";
 import {
   computeCurrentRatio,
   computeDebtToEquity,
@@ -346,6 +348,106 @@ export async function generateStockScore(
     model: ANALYSIS_MODEL,
     buildInput: () => buildStockScoreInput(instrument),
     schema: stockScoreSchema,
+  });
+
+  if (!result.ok) return actionError(result.message);
+
+  revalidatePath(`/stocks/${instrument.id}`);
+  return actionOk({ id: result.analysis.id });
+}
+
+// ---------------------------------------------------------------------------
+// NEWS_SUMMARY generation
+// ---------------------------------------------------------------------------
+
+const NEWS_SUMMARY_INSTRUCTIONS =
+  "Produce a NEWS_SUMMARY for this stock's recent news coverage (the articles " +
+  "below, most recent first). Summarize what happened and why it matters for " +
+  "an investor. Only when an active thesis statement is given, judge whether " +
+  "this news affects that thesis specifically (thesisImpact) — write null for " +
+  "thesisImpact when no thesis is given, never invent one. Give a direct, " +
+  "plain answer for whether the investor should care right now. Pull 2-4 " +
+  "short, verbatim quotes from the articles, each with its source name when " +
+  "known (write null for a quote's source when the article didn't give you " +
+  "one — never guess a publication).";
+
+async function buildNewsSummaryInput(
+  instrument: Instrument,
+  articles: NewsArticle[],
+  activeThesisStatement: string | null,
+): Promise<{ input: unknown; dataAsOf: Date }> {
+  const sorted = [...articles].sort(
+    (a, b) => b.publishedAt.getTime() - a.publishedAt.getTime(),
+  );
+  return {
+    input: {
+      instructions: NEWS_SUMMARY_INSTRUCTIONS,
+      instrument: {
+        ticker: instrument.ticker,
+        name: instrument.name,
+        market: instrument.market,
+      },
+      activeThesisStatement,
+      articles: sorted.map((article) => ({
+        title: article.title,
+        text: article.text,
+        source: article.source,
+        publishedAt: article.publishedAt.toISOString(),
+      })),
+    },
+    dataAsOf: sorted[0]?.publishedAt ?? new Date(),
+  };
+}
+
+/**
+ * Generate (or reuse, by input hash) a NEWS_SUMMARY for one instrument. Fails
+ * honestly, WITHOUT calling the model, when there is nothing to summarize —
+ * no live market-data connection for this instrument, or no recent articles
+ * found — rather than asking the AI to write about an empty input.
+ */
+export async function generateNewsSummary(
+  instrumentId: string,
+): Promise<ActionResult<{ id: string }>> {
+  const userId = await getSessionUserId();
+  if (!userId) return actionError(NOT_SIGNED_IN_ERROR);
+
+  const limited = rateLimit(userKey("ai-news-summary", userId), AI_GENERATION_RATE_LIMIT);
+  if (!limited.ok) return actionError(rateLimitMessage(limited.retryAfterSeconds));
+
+  const parsed = instrumentIdSchema.safeParse(instrumentId);
+  if (!parsed.success) {
+    return actionError(parsed.error.issues[0]?.message ?? "Pick a stock first.");
+  }
+
+  const instrument = await prisma.instrument.findUnique({ where: { id: parsed.data } });
+  if (!instrument) return actionError("That stock could not be found.");
+
+  const ref = {
+    id: instrument.id,
+    ticker: instrument.ticker,
+    market: instrument.market,
+    currency: instrument.currency,
+  };
+  const newsResult = await getNews(ref);
+  if (!newsResult.ok) {
+    return actionError(
+      newsResult.message ?? "News summaries aren't available for this stock right now.",
+    );
+  }
+
+  const activeThesis = await prisma.thesis.findFirst({
+    where: { userId, instrumentId: instrument.id, status: "ACTIVE" },
+  });
+
+  const result = await runAnalysis({
+    userId,
+    type: "NEWS_SUMMARY",
+    subjectType: "instrument",
+    subjectId: instrument.id,
+    model: FAST_MODEL,
+    buildInput: () =>
+      buildNewsSummaryInput(instrument, newsResult.data, activeThesis?.statement ?? null),
+    schema: newsSummarySchema,
   });
 
   if (!result.ok) return actionError(result.message);

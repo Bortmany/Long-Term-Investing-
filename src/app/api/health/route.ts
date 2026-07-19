@@ -15,5 +15,6 @@ export async function GET() {
     status: "ok",
     db,
     sentry: process.env.SENTRY_DSN ? "configured" : "dormant",
+    cron: process.env.CRON_SECRET ? "configured" : "dormant",
   });
 }

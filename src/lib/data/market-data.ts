@@ -15,10 +15,11 @@ import { prisma } from "@/lib/prisma";
 import {
   areFundamentalsFresh,
   isFxRateFresh,
+  isNewsFresh,
   isQuoteFresh,
 } from "./cache";
 import { createManualProvider, createPrismaPriceStore, type ManualPriceStore } from "./manual";
-import { createFmpProvider, fetchFmpFxRate } from "./fmp";
+import { createFmpProvider, fetchFmpFxRate, fetchFmpNews } from "./fmp";
 import {
   badgeForPriceSource,
   resolveProviderName,
@@ -28,6 +29,7 @@ import {
   type FinancialStatements,
   type InstrumentRef,
   type MarketDataProvider,
+  type NewsArticle,
   type PricePoint,
   type Quote,
   type SourceBadge,
@@ -130,7 +132,7 @@ function resolveDeps(instrument: InstrumentRef, deps: MarketDataDeps) {
     (providerName === "fmp"
       ? createFmpProvider({ apiKey, fetchFn: deps.fetchFn })
       : createManualProvider(store));
-  return { store, now, provider, providerName };
+  return { store, now, provider, providerName, apiKey };
 }
 
 // ---------------------------------------------------------------------------
@@ -217,11 +219,14 @@ async function throughFundamentalsCache<T>(
   deps: MarketDataDeps,
   fetchFresh: (provider: MarketDataProvider) => Promise<DataResult<T>>,
   reviveDates: (payload: unknown) => T,
+  // Defaults to the 7-day fundamentals TTL; getNews below passes isNewsFresh
+  // (1 day) instead — same FundamentalsCache table, its own freshness rule.
+  isFresh: (fetchedAt: Date, now: Date) => boolean = areFundamentalsFresh,
 ): Promise<DataResult<T>> {
   const { store, now, provider, providerName } = resolveDeps(instrument, deps);
 
   const cached = await store.getFundamentals(instrument.id, cacheKey);
-  if (cached && areFundamentalsFresh(cached.fetchedAt, now)) {
+  if (cached && isFresh(cached.fetchedAt, now)) {
     return { ok: true, data: reviveDates(cached.payload) };
   }
 
@@ -319,6 +324,42 @@ export async function getUpcomingDividends(
         exDate: reviveDate(d.exDate),
         paymentDate: reviveNullableDate(d.paymentDate),
       })),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// News — FundamentalsCache under period key "news", 1-DAY TTL (its own,
+// shorter freshness rule — see isNewsFresh in ./cache.ts). Not every provider
+// can answer this (same reasoning as FX): only FMP-routed instruments ever
+// have news, so anything else — a manual market (MSX/TADAWUL/DFM/OTHER), or
+// a US instrument with no FMP_API_KEY — gets the typed unavailable result,
+// never a fabricated "no news" that pretends to have checked.
+// ---------------------------------------------------------------------------
+
+export async function getNews(
+  instrument: InstrumentRef,
+  deps: MarketDataDeps = {},
+): Promise<DataResult<NewsArticle[]>> {
+  const { providerName, apiKey } = resolveDeps(instrument, deps);
+
+  if (providerName !== "fmp") {
+    return unavailable(
+      "not_supported",
+      "News summaries require a live market-data connection for this instrument.",
+    );
+  }
+
+  return throughFundamentalsCache(
+    instrument,
+    "news",
+    deps,
+    () => fetchFmpNews(instrument, { apiKey, fetchFn: deps.fetchFn }),
+    (payload) =>
+      (payload as NewsArticle[]).map((article) => ({
+        ...article,
+        publishedAt: reviveDate(article.publishedAt),
+      })),
+    isNewsFresh,
   );
 }
 

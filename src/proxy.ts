@@ -2,7 +2,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getSessionCookie } from "better-auth/cookies";
 
 // Routes anyone may visit without being signed in.
-const PUBLIC_PATHS = ["/sign-in", "/sign-up", "/api/auth", "/api/health"];
+// /api/cron is public here because it does its OWN auth (a bearer secret
+// checked against CRON_SECRET, see src/app/api/cron/weekly-review/route.ts)
+// rather than the session cookie every other route needs.
+const PUBLIC_PATHS = ["/sign-in", "/sign-up", "/api/auth", "/api/health", "/api/cron"];
 
 function isPublic(pathname: string): boolean {
   return PUBLIC_PATHS.some(

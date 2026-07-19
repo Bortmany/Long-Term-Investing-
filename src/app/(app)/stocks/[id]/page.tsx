@@ -2,7 +2,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { ChartLine, Newspaper } from "lucide-react";
+import { ChartLine } from "lucide-react";
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -15,7 +15,7 @@ import {
   type Unavailable,
 } from "@/lib/data";
 import { getAiClient } from "@/lib/ai/client";
-import { stockScoreSchema } from "@/lib/ai/schemas";
+import { newsSummarySchema, stockScoreSchema } from "@/lib/ai/schemas";
 import {
   badgePropsForValueSource,
   SourceBadge,
@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/table";
 import { WatchToggleButton } from "@/components/stocks/watch-toggle-button";
 import { FinancialStatementsCard } from "@/components/stocks/financial-statements-card";
+import { NewsSummaryCard } from "@/components/stocks/news-summary-card";
 import { RatioStrip } from "@/components/stocks/ratio-strip";
 import { StockScorePanel } from "@/components/stocks/stock-score-panel";
 import type {
@@ -160,6 +161,7 @@ export default async function StockDetailPage({
     dividendResult,
     upcomingResult,
     storedAnalysis,
+    storedNewsAnalysis,
   ] = await Promise.all([
     prisma.watchlistItem.findUnique({
       where: { userId_instrumentId: { userId, instrumentId: instrument.id } },
@@ -180,6 +182,15 @@ export default async function StockDetailPage({
       },
       orderBy: { createdAt: "desc" },
     }),
+    prisma.aiAnalysis.findFirst({
+      where: {
+        userId,
+        type: "NEWS_SUMMARY",
+        subjectType: "instrument",
+        subjectId: instrument.id,
+      },
+      orderBy: { createdAt: "desc" },
+    }),
   ]);
 
   const hasAiKey = getAiClient().ok;
@@ -194,6 +205,20 @@ export default async function StockDetailPage({
           createdAt: storedAnalysis.createdAt,
           model: storedAnalysis.model,
           dataAsOf: storedAnalysis.dataAsOf,
+        }
+      : null;
+
+  let newsSummaryOutput = null;
+  if (storedNewsAnalysis) {
+    const parsed = newsSummarySchema.safeParse(storedNewsAnalysis.output);
+    if (parsed.success) newsSummaryOutput = parsed.data;
+  }
+  const newsSummaryAnalysis =
+    storedNewsAnalysis && newsSummaryOutput
+      ? {
+          createdAt: storedNewsAnalysis.createdAt,
+          model: storedNewsAnalysis.model,
+          dataAsOf: storedNewsAnalysis.dataAsOf,
         }
       : null;
 
@@ -479,21 +504,13 @@ export default async function StockDetailPage({
         output={stockScoreOutput}
       />
 
-      {/* News placeholder (Phase 6) */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Recent News</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <EmptyState
-            icon={Newspaper}
-            heading="Recent News"
-            sentence="News summaries are coming in a later phase."
-            comingSoon
-            className="min-h-32"
-          />
-        </CardContent>
-      </Card>
+      {/* Recent News */}
+      <NewsSummaryCard
+        instrumentId={instrument.id}
+        hasKey={hasAiKey}
+        analysis={newsSummaryAnalysis}
+        output={newsSummaryOutput}
+      />
     </div>
   );
 }

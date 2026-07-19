@@ -47,7 +47,15 @@
   fixed). Code review: clean on every priority, one accepted-minor note (the sell mode is
   reachable by URL for a non-held stock; the server answers honestly with a "not currently
   held" data gap).
-- **Phase 6 — NOT started.** Full spec below.
+- **Phase 6 — DONE, verified and reviewed.** Weekly Review + news: `/reviews` list by ISO week
+  with the run button honestly hidden when no AI key, `/reviews/[id]` read-only (summary, amber
+  new-risks, neutral improved/weakened, allocation drift computed purely in code, suggested
+  actions, quiet behavioral note), week-over-week deltas against the most recent prior review
+  (review caught and fixed an exact-previous-week lookup that would have dropped deltas after a
+  skipped week), per-holding news summaries on the cheap model filling the Phase-3 placeholder,
+  `getNews` in the data layer with a 1-day cache, and the secure scheduled-run pattern:
+  token-protected POST `/api/cron/weekly-review` (dormant 503 without `CRON_SECRET`, timing-safe
+  compare) + a disabled `.github/workflows/weekly-review.yml.example`. 213 unit + 10 e2e green.
 - **Keys:** the owner will supply `FMP_API_KEY` and `ANTHROPIC_API_KEY` **at the end** — build everything against injectable mocks + honest "connect your key" states (the `DataResult.unavailable` pattern), then run the finale's live smoke.
 
 ## Cross-cutting decisions (owner-approved)
