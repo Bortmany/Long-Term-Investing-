@@ -28,7 +28,13 @@
   per-ratio strip, dividends, investment score panel, news placeholder), and the Portfolio Health
   Score (dashboard card + portfolio section, pure pre-compute in `health-inputs.ts`). 151 unit
   tests green, full recipe + e2e green, code-reviewed clean on all priorities.
-- **Phases 4–6 — NOT started.** Full specs below.
+- **Phase 4 — DONE, verified and reviewed.** The Thesis Tracker: `/theses` list (ACTIVE/CLOSED
+  chips, New Thesis dialog), `/theses/[id]` (quoted statement, badged instrument snapshot,
+  integrity trend sparkline, latest check panel with INTACT/WEAKENING/BROKEN in neutral colors,
+  check history, close/reopen), "Check thesis now" via the shared AI engine with honest data-gap
+  reporting, seeded MSFT thesis, 164 unit + 7 e2e tests green. Review caught and fixed a
+  cross-user leak in the page title lookup (now session-scoped like the page body).
+- **Phases 5–6 — NOT started.** Full specs below.
 - **Keys:** the owner will supply `FMP_API_KEY` and `ANTHROPIC_API_KEY` **at the end** — build everything against injectable mocks + honest "connect your key" states (the `DataResult.unavailable` pattern), then run the finale's live smoke.
 
 ## Cross-cutting decisions (owner-approved)

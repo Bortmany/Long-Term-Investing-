@@ -15,7 +15,7 @@ Later phases add screens and AI — the schema already supports all of them.
 - A page per instrument: price, profile, financials, dividend history.
 - AI "health score" per holding, stored in `AiAnalysis` (type `HEALTH_SCORE`), shown with the date of the data it was based on.
 
-## Phase 4 — Thesis tracker
+## Phase 4 — Thesis tracker (done)
 - Write an investment thesis per holding (`Thesis`).
 - Periodic AI thesis checks (`ThesisCheck`): integrity score, recommendation (intact / weakening / broken), evidence.
 

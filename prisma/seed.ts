@@ -234,6 +234,21 @@ async function main() {
     },
   });
 
+  // --- Thesis: one ACTIVE thesis on MSFT for the demo user (Phase 4) ---
+  const existingMsftThesis = await prisma.thesis.findFirst({
+    where: { userId, instrumentId: instruments["MSFT"] },
+  });
+  if (!existingMsftThesis) {
+    await prisma.thesis.create({
+      data: {
+        userId,
+        instrumentId: instruments["MSFT"],
+        statement:
+          "Microsoft's cloud business (Azure) keeps growing at a healthy double-digit rate, and its AI products (Copilot, the OpenAI partnership) are turning into real revenue rather than just a story. The balance sheet is strong, the dividend keeps growing every year, and the Office/Windows franchise gives it a wide moat. I'm holding as long as Azure growth stays above 15% and the dividend keeps growing.",
+      },
+    });
+  }
+
   console.log("Seed complete:");
   // Never print the password — it's the one you set in SEED_DEMO_PASSWORD.
   console.log(`  user:         ${DEMO_EMAIL} (password: the SEED_DEMO_PASSWORD you set)`);
@@ -242,6 +257,7 @@ async function main() {
   console.log(`  transactions: ${transactions.length}`);
   console.log(`  seed prices:  ${prices.length}, fx rates: ${fxRates.length}`);
   console.log(`  watchlist:    1 item (JNJ — watched, not held)`);
+  console.log(`  theses:       1 active (MSFT)`);
 }
 
 main()
