@@ -4,12 +4,19 @@
 > for everything here are in `docs/design/ui-spec-phases-2-6.md` (its §2 shared foundation is already
 > built). House rules + verify recipe: `docs/CONVENTIONS.md`. Build with the Agents-repo pipeline
 > (dev-lead → builders → verifier → code-reviewer, bounded fix loop max 2), commit + push after each
-> phase on branch `claude/investiq-ai-review-xclpmy`. Demo login: `owner@example.com` / `investiq-demo`.
+> phase on branch `claude/investiq-next-phases-oulgfj`. Demo login: `owner@example.com` with the
+> password from `SEED_DEMO_PASSWORD` in `.env` (the old fixed demo password is refused by the seed).
 
-## STATUS (as of 2026-07-13, session halted at usage limit)
+## STATUS (as of 2026-07-19)
 
 - **Phase 1 — DONE, pushed** (commit `b7d6f02`): foundation, schema, auth, dashboard, data layer, portfolio math, seed, tests.
-- **Phase 2 — Wave 1 DONE and verified (lint/typecheck/build green, 90/90 unit tests), pushed in the WIP commit that added this file. Wave 2 (screens) NOT built.**
+- **Phase 2 — DONE (Waves 1 + 2), verified and reviewed.** All three screen chunks are built: the
+  `/portfolio` page (holdings + transactions with filters, Add/Edit Transaction dialog, delete
+  confirm, Update Price dialog, inline new-instrument with FMP prefill, sell-analysis link), the
+  `/portfolio/import` 4-step CSV wizard + `/settings` page, and the dashboard additions (return
+  cards, three allocation donuts, dividend module). Full verify recipe green (lint, typecheck,
+  build, 90 unit tests, 4 e2e tests), code-reviewed (dry-run import action gained the same rate
+  limit + row cap as the real import).
   - Built — shared UI foundation: `SourceBadge` variant `derived` + fixed `badgePropsForValueSource(s)` precedence (sample > manual(oldest asOf) > live > derived); new dependency-free primitives `dialog.tsx`, `select.tsx`, `tabs.tsx`, `textarea.tsx`, `dropdown-menu.tsx`; `Alert` variant `success`; `EmptyState` `action?` prop; `format.ts` gained `formatPercent`, `formatIsoWeek`.
   - Built — server/lib layer: `src/lib/action-result.ts` (`ActionResult<T>`); `src/lib/transaction-schema.ts` (zod v4 discriminated union; BUY/SELL never accept a client amount — server derives `amount = qty×price`, fee stays in its own column); server actions `src/app/actions/{transactions,instruments,prices,import-transactions,settings}.ts` (all session-scoped, revalidate /portfolio + /dashboard); CSV parser `src/lib/csv.ts` + row validation `src/lib/import-rows.ts` + `public/sample-transactions.csv`; portfolio math `computeReturns`, `computeAllocation`, `computeMonthlyDividends`, `computeDividendsByHolding`; data-layer FX `getFxRate`/`refreshFxRates` (daily TTL, honest badges); sign-up gating via `ALLOW_SIGNUPS` (docs in README/.env.example); seed gained JNJ + a WatchlistItem; `src/lib/user-portfolio.ts` (find-or-create portfolio helper). `src/components/portfolio/types.ts` exists (a Wave-2 builder's first file — harmless, typechecks).
   - **NOT built (next session starts here)** — the three Wave-2 screen chunks, per ui-spec-phases-2-6.md: (a) `/portfolio` page: holdings + transactions tables with filters, Add/Edit Transaction dialog (type-dependent fields), delete confirm, Update Price dialog (manual GCC pricing), inline new-instrument with FMP prefill, sell-analysis link to `/committee?instrument=<id>&mode=sell`, plus an e2e test (add transaction → dashboard total changes); (b) `/portfolio/import` 4-step CSV wizard + `/settings` page (base currency, FX rates table + add + gated Refresh-from-FMP) + mark Phase 2 in ROADMAP; (c) dashboard additions: return cards (with/without dividends), three allocation donuts (spec palette, Unknown last), dividend module (T12M bar chart, income by holding, upcoming dividends with honest unavailable states). Then verifier (full recipe incl. e2e) + code-reviewer + fix loop, commit, push.
