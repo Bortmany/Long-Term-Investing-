@@ -28,6 +28,9 @@ model User {
   accounts       Account[]
   portfolios     Portfolio[]
   watchlistItems WatchlistItem[]
+  theses         Thesis[]
+  aiAnalyses     AiAnalysis[]
+  weeklyReviews  WeeklyReview[]
 
   @@unique([email])
   @@map("user")
@@ -256,6 +259,8 @@ model FxRate {
 
 model Thesis {
   id           String       @id @default(cuid())
+  userId       String
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   instrumentId String
   instrument   Instrument   @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
   statement    String
@@ -266,6 +271,7 @@ model Thesis {
   checks ThesisCheck[]
 
   @@index([instrumentId, status])
+  @@index([userId, status])
 }
 
 model ThesisCheck {
@@ -287,6 +293,8 @@ model ThesisCheck {
 
 model AiAnalysis {
   id          String         @id @default(cuid())
+  userId      String
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   type        AiAnalysisType
   // What the analysis is about, e.g. subjectType "instrument" + subjectId.
   subjectType String
@@ -301,6 +309,7 @@ model AiAnalysis {
 
   @@index([type, subjectType, subjectId, createdAt(sort: Desc)])
   @@index([inputHash])
+  @@index([userId, createdAt(sort: Desc)])
 }
 
 model WatchlistItem {
@@ -317,10 +326,12 @@ model WatchlistItem {
 
 model WeeklyReview {
   id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   // ISO week label, e.g. "2026-W28".
   period    String
   output    Json
   createdAt DateTime @default(now())
 
-  @@unique([period])
+  @@unique([userId, period])
 }

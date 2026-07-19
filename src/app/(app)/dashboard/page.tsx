@@ -28,6 +28,10 @@ import {
   type SourceBadgeProps,
 } from "@/components/source-badge";
 import { EmptyState } from "@/components/empty-state";
+import {
+  HealthScorePanel,
+  parseHealthScoreAnalysis,
+} from "@/components/health/health-score-panel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -104,6 +108,9 @@ export default async function DashboardPage() {
   // Every query is scoped to the signed-in user's id (from the server session).
   const portfolio = await prisma.portfolio.findFirst({
     where: { userId: session.user.id },
+    // Oldest portfolio, matching getOrCreatePortfolio — so every page and the
+    // health score all agree on which portfolio is "the" portfolio.
+    orderBy: { createdAt: "asc" },
   });
 
   if (!portfolio) {
@@ -264,6 +271,21 @@ export default async function DashboardPage() {
     !returns.complete ||
     !monthlyDividends.complete ||
     !dividendsByHolding.complete;
+
+  // Health Score: read whatever is already stored — this page never
+  // generates one itself (THE AI RULE, docs/CONVENTIONS.md). The key itself
+  // never leaves this file, only whether one is configured.
+  const healthScoreRow = await prisma.aiAnalysis.findFirst({
+    where: {
+      userId: session.user.id,
+      type: "HEALTH_SCORE",
+      subjectType: "portfolio",
+      subjectId: portfolio.id,
+    },
+    orderBy: { createdAt: "desc" },
+  });
+  const healthScoreAnalysis = parseHealthScoreAnalysis(healthScoreRow);
+  const hasAnthropicKey = Boolean(process.env.ANTHROPIC_API_KEY);
 
   return (
     <>
@@ -511,6 +533,13 @@ export default async function DashboardPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Portfolio Health Score (AI) */}
+      <HealthScorePanel
+        analysis={healthScoreAnalysis}
+        hasKey={hasAnthropicKey}
+        className="mt-6"
+      />
     </>
   );
 }

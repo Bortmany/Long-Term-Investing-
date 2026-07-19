@@ -20,6 +20,10 @@ import type {
   InstrumentOptionData,
   TransactionRowData,
 } from "@/components/portfolio/types";
+import {
+  HealthScorePanel,
+  parseHealthScoreAnalysis,
+} from "@/components/health/health-score-panel";
 
 export const metadata = { title: "Portfolio — InvestIQ AI" };
 
@@ -208,17 +212,38 @@ export default async function PortfolioPage() {
     note: t.note,
   }));
 
+  // Health Score: read whatever is already stored — this page never
+  // generates one itself (THE AI RULE, docs/CONVENTIONS.md).
+  const healthScoreRow = await prisma.aiAnalysis.findFirst({
+    where: {
+      userId: session.user.id,
+      type: "HEALTH_SCORE",
+      subjectType: "portfolio",
+      subjectId: portfolio.id,
+    },
+    orderBy: { createdAt: "desc" },
+  });
+  const healthScoreAnalysis = parseHealthScoreAnalysis(healthScoreRow);
+  const hasAnthropicKey = Boolean(process.env.ANTHROPIC_API_KEY);
+
   return (
-    <PortfolioView
-      baseCurrency={base}
-      holdings={holdings}
-      holdingsBadge={badgePropsForValueSources(portfolioValue.sources)}
-      transactions={transactionData}
-      instruments={instruments}
-      currencies={currencies}
-      markets={markets}
-      instrumentTypes={instrumentTypes}
-      transactionTypes={transactionTypes}
-    />
+    <>
+      <PortfolioView
+        baseCurrency={base}
+        holdings={holdings}
+        holdingsBadge={badgePropsForValueSources(portfolioValue.sources)}
+        transactions={transactionData}
+        instruments={instruments}
+        currencies={currencies}
+        markets={markets}
+        instrumentTypes={instrumentTypes}
+        transactionTypes={transactionTypes}
+      />
+      <HealthScorePanel
+        analysis={healthScoreAnalysis}
+        hasKey={hasAnthropicKey}
+        className="mt-6"
+      />
+    </>
   );
 }
