@@ -147,3 +147,8 @@ export const AI_GENERATION_RATE_LIMIT: RateLimitOptions = {
   limit: 5,
   windowMs: 60_000,
 };
+// "Download my data" builds a full JSON export of everything the app stores
+// about one user — a heavier read than any other endpoint. 5/hour is
+// generous for a person checking their own data, tight enough to stop a
+// scripted loop from hammering the database with full-account reads.
+export const EXPORT_RATE_LIMIT: RateLimitOptions = { limit: 5, windowMs: 60 * 60_000 };

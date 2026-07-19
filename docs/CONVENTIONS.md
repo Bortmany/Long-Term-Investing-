@@ -91,6 +91,17 @@ Naming: files kebab-case (`market-data.ts`), types/components PascalCase, functi
   sit forever saying "not checked," which is honest but not a useful demo
   state.
 
+## Privacy page stays in sync (Phase 8)
+
+- **Any diff that stores a NEW personal field updates `/privacy` in the same
+  diff.** `src/app/privacy/page.tsx` is written against exactly what
+  `prisma/schema.prisma` stores — a schema change that adds a personal field
+  without touching that page is an incomplete diff, not a follow-up.
+- Data rights live in Settings: "Your data" (download everything, one JSON
+  file, `src/lib/account-export.ts`) and "Danger" (delete my account,
+  password-confirmed, rate-limited like sign-in, wipes everything via the
+  database's `ON DELETE CASCADE`).
+
 ## VERIFY RECIPE
 
 Run these in order from the repo root; all must pass before reporting work as done:

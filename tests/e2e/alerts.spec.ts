@@ -11,13 +11,8 @@ try {
 const DEMO_PASSWORD = process.env.SEED_DEMO_PASSWORD;
 const CRON_SECRET = process.env.CRON_SECRET;
 
-async function signIn(page: import("@playwright/test").Page) {
-  await page.goto("/sign-in");
-  await page.getByLabel("Email").fill("owner@example.com");
-  await page.getByLabel("Password").fill(DEMO_PASSWORD!);
-  await page.getByRole("button", { name: /^sign in$/i }).click();
-  await expect(page).toHaveURL(/\/dashboard/);
-}
+// Every test starts already signed in as the demo user — see
+// tests/e2e/global-setup.ts. No per-file sign-in helper anymore.
 
 /**
  * Delete every alert row whose accessible name matches `pattern` — used to
@@ -63,7 +58,6 @@ test("a PRICE_ABOVE alert fires once crossed with a manual price, checked via th
     !DEMO_PASSWORD || !CRON_SECRET,
     "Set SEED_DEMO_PASSWORD and CRON_SECRET in .env to run this test",
   );
-  await signIn(page);
 
   // Defensive pre-cleanup (see the two helpers above): start this run from a
   // known-clean slate regardless of how the previous run of this test ended.

@@ -19,11 +19,9 @@ test("adding a Buy transaction changes the dashboard's Total Portfolio Value", a
     "Set SEED_DEMO_PASSWORD in .env (the one used when seeding) to run this test",
   );
 
-  await page.goto("/sign-in");
-  await page.getByLabel("Email").fill("owner@example.com");
-  await page.getByLabel("Password").fill(DEMO_PASSWORD!);
-  await page.getByRole("button", { name: /^sign in$/i }).click();
-  await expect(page).toHaveURL(/\/dashboard/);
+  // Every test starts already signed in as the demo user — see
+  // tests/e2e/global-setup.ts.
+  await page.goto("/dashboard");
 
   // Read the Total Portfolio Value card before adding anything.
   const totalValueCard = page.getByText("Total Portfolio Value").locator("..");

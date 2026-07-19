@@ -72,7 +72,17 @@
   committee, reviews, settings and the alert dialog (dialog-on-click at every breakpoint —
   deliberate deviation from a hover tooltip, which cannot hold multi-sentence text).
   388 unit + 12 e2e green.
-- **Keys:** the owner will supply `FMP_API_KEY` and `ANTHROPIC_API_KEY` **at the end** — build everything against injectable mocks + honest "connect your key" states (the `DataResult.unavailable` pattern), then run the finale's live smoke.
+- **Phase 8 — DONE, verified and reviewed clean (zero findings).** Public-launch readiness:
+  honest `/privacy` + `/terms` pages (written against what the schema actually stores, session
+  IP/user-agent included; third parties conditional on their keys; Oman PDPL referenced; linked
+  from the shell footer and sign-in/up), download-my-data (complete JSON, credential fields
+  runtime-whitelisted out with a test pinning it, 5/hour limit), delete-my-account
+  (password-verified server-side, rate-limited on user AND ip, every user-owned table cascades at
+  the DB level — traced in review), production startup refuses a weak `BETTER_AUTH_SECRET`,
+  `/api/health` shows the signups switch, GO-LIVE/README refreshed (incl. the backups §8 steps).
+  391 unit + 15 e2e green. The per-user daily AI cap (25 analyses) was built in Phase 3 and is
+  enforced inside the engine.
+- **Keys:** the owner will supply `FMP_API_KEY` and `ANTHROPIC_API_KEY` **at the end** — build everything against injectable mocks + honest "connect your key" states (the `DataResult.unavailable` pattern), then run the finale's live smoke. (Owner decision this session: keys connect LATER — the finale's live-smoke checklist below stays pending for that day; everything else is done.)
 
 ## Cross-cutting decisions (owner-approved)
 

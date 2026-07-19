@@ -9,10 +9,12 @@ import { fromPrismaFxRate } from "@/lib/portfolio";
 import { formatShortDate } from "@/lib/format";
 import { badgePropsForValueSource } from "@/components/source-badge";
 import { BaseCurrencyCard } from "@/components/settings/base-currency-card";
+import { DangerCard } from "@/components/settings/danger-card";
 import {
   FxRatesCard,
   type FxRateDisplayRow,
 } from "@/components/settings/fx-rates-card";
+import { YourDataCard } from "@/components/settings/your-data-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export const metadata = { title: "Settings — InvestIQ AI" };
@@ -107,6 +109,10 @@ export default async function SettingsPage() {
             )}
           </CardContent>
         </Card>
+
+        <YourDataCard />
+
+        <DangerCard />
       </div>
     </>
   );

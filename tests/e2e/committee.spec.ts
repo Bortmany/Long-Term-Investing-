@@ -10,13 +10,8 @@ try {
 
 const DEMO_PASSWORD = process.env.SEED_DEMO_PASSWORD;
 
-async function signIn(page: import("@playwright/test").Page) {
-  await page.goto("/sign-in");
-  await page.getByLabel("Email").fill("owner@example.com");
-  await page.getByLabel("Password").fill(DEMO_PASSWORD!);
-  await page.getByRole("button", { name: /^sign in$/i }).click();
-  await expect(page).toHaveURL(/\/dashboard/);
-}
+// Every test starts already signed in as the demo user — see
+// tests/e2e/global-setup.ts. No per-file sign-in helper anymore.
 
 test("the picker is honest about no API key, and a mode+instrument URL pre-selects both", async ({
   page,
@@ -25,7 +20,6 @@ test("the picker is honest about no API key, and a mode+instrument URL pre-selec
     !DEMO_PASSWORD,
     "Set SEED_DEMO_PASSWORD in .env (the one used when seeding) to run this test",
   );
-  await signIn(page);
 
   await page.goto("/committee");
   await expect(page.getByRole("heading", { name: "Investment Committee", level: 1 })).toBeVisible();

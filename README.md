@@ -70,12 +70,20 @@ the top) — any session resuming the build starts there.
 > it) while running `npx prisma db seed` on a fresh database — and never set
 > it on a public deployment.
 
+## Privacy & data controls
+
+`/privacy` and `/terms` are public pages (no sign-in needed) describing exactly
+what the app stores and how it may be used — linked from the sign-in/sign-up
+pages and the footer of every screen. Every signed-in user can download a
+complete copy of their own data or permanently delete their account from the
+Settings page ("Your data" and "Danger" cards).
+
 ## API keys (optional — get these later)
 
 The app works fully with sample data without any keys.
 
 - **FMP_API_KEY** — a free-tier key from [Financial Modeling Prep](https://financialmodelingprep.com/). With it, US stock prices and fundamentals come in live. Without it, US instruments use manually entered / sample prices, clearly badged.
-- **ANTHROPIC_API_KEY** — an [Anthropic](https://www.anthropic.com/) key for the AI features arriving in Phase 3+. Not used yet.
+- **ANTHROPIC_API_KEY** — an [Anthropic](https://www.anthropic.com/) key for the AI features (health scores, committee, thesis checks, weekly reviews). Without it, every AI surface shows an honest "AI features are turned off" notice instead of a made-up analysis.
 
 Put either into `.env` when you have them.
 
