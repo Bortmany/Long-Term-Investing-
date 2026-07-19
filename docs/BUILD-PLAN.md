@@ -34,7 +34,20 @@
   check history, close/reopen), "Check thesis now" via the shared AI engine with honest data-gap
   reporting, seeded MSFT thesis, 164 unit + 7 e2e tests green. Review caught and fixed a
   cross-user leak in the page title lookup (now session-scoped like the page body).
-- **Phases 5–6 — NOT started.** Full specs below.
+- **Phase 5 — DONE, verified and reviewed.** The Investment Committee: pure consensus
+  math (`src/lib/ai/consensus.ts`, start-at-50 vote×confidence scoring, 0-34/35-64/65-100 verdict
+  bands), the committee engine (`src/lib/ai/committee.ts`, six parallel persona calls + one
+  synthesis call, ONE persisted `AiAnalysis(COMMITTEE)` row, fails the whole run rather than
+  seating a persona short), `BUY_ANALYSIS`/`SELL_ANALYSIS` via the existing `runAnalysis` engine
+  (Sell reads the holding's `ThesisCheck` history), new schemas in `schemas.ts`, server actions
+  `src/app/actions/committee.ts`, and the `/committee` page (instrument picker + position context +
+  auto-attached active thesis + mode Tabs, one AiPanel per mode, Past Runs table, read-only
+  `/committee/history/[id]`). Full recipe green (182 unit tests, all e2e including the new
+  committee spec — the verifier's first run caught a flaky test using a reused dev database,
+  fixed). Code review: clean on every priority, one accepted-minor note (the sell mode is
+  reachable by URL for a non-held stock; the server answers honestly with a "not currently
+  held" data gap).
+- **Phase 6 — NOT started.** Full spec below.
 - **Keys:** the owner will supply `FMP_API_KEY` and `ANTHROPIC_API_KEY` **at the end** — build everything against injectable mocks + honest "connect your key" states (the `DataResult.unavailable` pattern), then run the finale's live smoke.
 
 ## Cross-cutting decisions (owner-approved)

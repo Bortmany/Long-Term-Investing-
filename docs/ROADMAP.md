@@ -19,9 +19,13 @@ Later phases add screens and AI — the schema already supports all of them.
 - Write an investment thesis per holding (`Thesis`).
 - Periodic AI thesis checks (`ThesisCheck`): integrity score, recommendation (intact / weakening / broken), evidence.
 
-## Phase 5 — AI committee + buy/sell analysis
-- Multi-perspective AI "committee" reviews (type `COMMITTEE`).
-- On-demand buy and sell analyses (`BUY_ANALYSIS`, `SELL_ANALYSIS`).
+## Phase 5 — AI committee + buy/sell analysis (done)
+- Multi-perspective AI "committee" reviews (type `COMMITTEE`): six personas (value, growth,
+  dividend, quality, macro, contrarian) vote in parallel, a pure function turns their votes into
+  a 0-100 consensus score and BUY/HOLD/SELL verdict, then one synthesis call writes up the
+  disagreements and what would change the verdict.
+- On-demand buy and sell analyses (`BUY_ANALYSIS`, `SELL_ANALYSIS`), the latter reading the
+  holding's own thesis-check history when one exists.
 
 ## Phase 6 — Weekly review + news
 - Automated weekly portfolio review (`WeeklyReview`), generated via the Anthropic Batch API.

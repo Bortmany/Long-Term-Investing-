@@ -45,7 +45,14 @@ test("shows the seeded thesis, creates a new one, and the check panel is honest 
     );
   await page.getByRole("button", { name: "Create" }).click();
 
-  const aaplRow = page.getByRole("row", { name: /AAPL/ });
+  // The dev DB persists across test runs (webServer reuses it, and this
+  // test — unlike committee.spec.ts's read-only picker — creates a row), so
+  // an AAPL thesis from an earlier run can still be sitting there. Rows are
+  // listed newest-first (src/app/(app)/theses/page.tsx orderBy createdAt
+  // desc), so the one just created is always the FIRST AAPL match — .first()
+  // keeps this deterministic instead of a strict-mode violation when more
+  // than one AAPL row exists.
+  const aaplRow = page.getByRole("row", { name: /AAPL/ }).first();
   await expect(aaplRow).toBeVisible();
   await expect(aaplRow.getByText("Active")).toBeVisible();
 
@@ -55,4 +62,14 @@ test("shows the seeded thesis, creates a new one, and the check panel is honest 
   await aaplRow.getByRole("link").click();
   await expect(page).toHaveURL(/\/theses\//);
   await expect(page.getByText("AI features are turned off")).toBeVisible();
+
+  // Clean up after itself: close the thesis this run just created so it
+  // drops out of the default Active filter and can't pile up as duplicate
+  // AAPL rows for the next run (the accumulation that caused the strict-mode
+  // violation above in the first place).
+  await page.getByRole("button", { name: "Close Thesis" }).click();
+  const confirmDialog = page.getByRole("dialog", { name: "Close this thesis?" });
+  await expect(confirmDialog).toBeVisible();
+  await confirmDialog.getByRole("button", { name: "Close Thesis" }).click();
+  await expect(confirmDialog).toBeHidden();
 });

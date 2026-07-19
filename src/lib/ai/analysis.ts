@@ -76,7 +76,10 @@ export type AiAnalysisStore = {
   }) => Promise<AiAnalysis>;
 };
 
-const defaultStore: AiAnalysisStore = {
+// Exported so src/lib/ai/committee.ts (which persists its own AiAnalysis(COMMITTEE)
+// row through a hand-rolled flow rather than this file's generic runAnalysis)
+// can reuse the exact same default persistence — import, never duplicate.
+export const defaultStore: AiAnalysisStore = {
   findFirst: ({ userId, type, subjectType, subjectId, inputHash }) =>
     prisma.aiAnalysis.findFirst({
       where: { userId, type, subjectType, subjectId, inputHash },
