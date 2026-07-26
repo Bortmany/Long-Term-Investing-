@@ -16,6 +16,13 @@ const PUBLIC_PATHS = [
 ];
 
 function isPublic(pathname: string): boolean {
+  // The landing page at "/" is public (exact match only — it can't go in
+  // PUBLIC_PATHS or the prefix check would make every route public).
+  // Signed-in visitors still end up on /dashboard: src/app/page.tsx checks
+  // the session server-side and redirects them.
+  if (pathname === "/") {
+    return true;
+  }
   return PUBLIC_PATHS.some(
     (path) => pathname === path || pathname.startsWith(`${path}/`),
   );

@@ -60,7 +60,10 @@ export default function SignInPage() {
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-slate-50 p-4 dark:bg-slate-950">
-      <p className="mb-6 text-xl font-semibold">InvestIQ AI</p>
+      {/* Wordmark links back to the landing page. */}
+      <Link href="/" className="mb-6 text-xl font-semibold tracking-tight">
+        InvestIQ AI
+      </Link>
       <Card className="w-full max-w-sm">
         <CardHeader>
           <CardTitle>Sign in</CardTitle>
