@@ -351,7 +351,7 @@ export default async function StockDetailPage({
         <div className="sm:text-right">
           {quoteResult.ok ? (
             <div className="flex items-baseline gap-2 sm:justify-end">
-              <span className="text-3xl font-semibold tabular-nums">
+              <span className="text-2xl font-semibold tabular-nums">
                 {formatMoney(quoteResult.data.price, quoteResult.data.currency)}
               </span>
               {changeResult.ok ? (

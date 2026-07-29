@@ -30,15 +30,24 @@ export default function SignInPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [fieldError, setFieldError] = useState<"email" | "password" | null>(
+    null,
+  );
   const [pending, setPending] = useState(false);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
+    setFieldError(null);
 
     const parsed = schema.safeParse({ email, password });
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? "Invalid input.");
+      // Point at the field that failed so the user knows which box to fix.
+      const failedField = parsed.error.issues[0]?.path[0];
+      if (failedField === "email" || failedField === "password") {
+        setFieldError(failedField);
+      }
       return;
     }
 
@@ -83,6 +92,12 @@ export default function SignInPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+                aria-invalid={fieldError === "email" || undefined}
+                className={
+                  fieldError === "email"
+                    ? "border-red-500 focus-visible:border-red-500 focus-visible:ring-red-500"
+                    : undefined
+                }
               />
             </div>
             <div className="space-y-2">
@@ -95,6 +110,12 @@ export default function SignInPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                aria-invalid={fieldError === "password" || undefined}
+                className={
+                  fieldError === "password"
+                    ? "border-red-500 focus-visible:border-red-500 focus-visible:ring-red-500"
+                    : undefined
+                }
               />
             </div>
           </CardContent>
@@ -122,11 +143,17 @@ export default function SignInPage() {
         </form>
       </Card>
       <p className="mt-6 text-center text-xs text-slate-400 dark:text-slate-500">
-        <Link href="/privacy" className="hover:underline">
+        <Link
+          href="/privacy"
+          className="text-blue-600 hover:underline dark:text-blue-400"
+        >
           Privacy
         </Link>
         {" · "}
-        <Link href="/terms" className="hover:underline">
+        <Link
+          href="/terms"
+          className="text-blue-600 hover:underline dark:text-blue-400"
+        >
           Terms
         </Link>
       </p>
