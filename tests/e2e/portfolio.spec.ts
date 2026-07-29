@@ -27,9 +27,9 @@ test("adding a Buy transaction changes the dashboard's Total Portfolio Value", a
   const totalValueCard = page.getByText("Total Portfolio Value").locator("..");
   const totalBefore = await totalValueCard.getByText(/^OMR /).innerText();
 
-  // Open the Add Transaction dialog from /portfolio (two "Add Transaction"
-  // buttons exist on a populated portfolio — page header and Transactions
-  // card header — either opens the same dialog).
+  // Open the Add Transaction dialog from /portfolio (the page header has the
+  // one primary "Add Transaction" button; the Transactions card offers a
+  // ghost "+ Add" — either opens the same dialog).
   await page.goto("/portfolio");
   await page.getByRole("button", { name: "Add Transaction" }).first().click();
 

@@ -47,9 +47,9 @@ export function RunWeeklyReviewButton() {
           "Run weekly review"
         )}
       </Button>
-      {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
+      {error ? <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
       {successId ? (
-        <p className="inline-flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-300">
+        <p role="status" className="inline-flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-300">
           <Check className="size-4" aria-hidden="true" />
           Review generated —{" "}
           <Link

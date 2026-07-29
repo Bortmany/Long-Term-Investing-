@@ -95,7 +95,7 @@ export default function SignInPage() {
                 aria-invalid={fieldError === "email" || undefined}
                 className={
                   fieldError === "email"
-                    ? "border-red-500 focus-visible:ring-red-500"
+                    ? "border-red-500 focus-visible:border-red-500 focus-visible:ring-red-500"
                     : undefined
                 }
               />
@@ -113,7 +113,7 @@ export default function SignInPage() {
                 aria-invalid={fieldError === "password" || undefined}
                 className={
                   fieldError === "password"
-                    ? "border-red-500 focus-visible:ring-red-500"
+                    ? "border-red-500 focus-visible:border-red-500 focus-visible:ring-red-500"
                     : undefined
                 }
               />

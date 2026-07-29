@@ -31,11 +31,11 @@ export function VerdictChip({
       variant="outline"
       className={cn(
         "gap-1.5 font-normal text-slate-900 dark:text-slate-50",
-        size === "lg" && "px-4 py-1.5 text-2xl font-semibold",
+        size === "lg" && "px-4 py-1.5 text-2xl font-semibold [&>svg]:size-6",
         className,
       )}
     >
-      <Icon className={size === "lg" ? "size-6" : "size-3.5"} aria-hidden="true" />
+      <Icon className={size === "lg" ? undefined : "size-3.5"} aria-hidden="true" />
       {verdict}
     </Badge>
   );
