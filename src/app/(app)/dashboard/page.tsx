@@ -603,7 +603,7 @@ function SummaryCard({
         <div className="text-sm text-slate-500 dark:text-slate-400">{label}</div>
         <div
           className={cn(
-            "mt-1 text-2xl font-semibold tabular-nums sm:text-3xl",
+            "mt-1 text-2xl font-semibold tabular-nums",
             valueClassName,
           )}
         >

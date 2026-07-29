@@ -268,11 +268,17 @@ export function AppShell({
           <p className="text-center text-xs text-slate-500 dark:text-slate-400">
             Analysis to support your own decisions — not financial advice.
             {" · "}
-            <Link href="/privacy" className="hover:underline">
+            <Link
+              href="/privacy"
+              className="text-blue-600 hover:underline dark:text-blue-400"
+            >
               Privacy
             </Link>
             {" · "}
-            <Link href="/terms" className="hover:underline">
+            <Link
+              href="/terms"
+              className="text-blue-600 hover:underline dark:text-blue-400"
+            >
               Terms
             </Link>
           </p>
