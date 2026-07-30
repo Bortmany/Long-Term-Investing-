@@ -126,7 +126,11 @@ export function CommitteeInstrumentPicker({
           </>
         ) : null}
 
-        {!hasAiKey ? (
+        {/* The mode tabs are navigation, not generation — they stay usable
+            without an API key so already-saved Committee / Buy / Sell results
+            can still be opened. The notice only takes over when there is no
+            stock selected, since then there is no panel below to carry it. */}
+        {!hasAiKey && !selectedInstrumentId ? (
           <ConnectKeyNotice />
         ) : selectedInstrumentId ? (
           <Tabs

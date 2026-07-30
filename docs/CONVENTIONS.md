@@ -66,10 +66,15 @@ Naming: files kebab-case (`market-data.ts`), types/components PascalCase, functi
   several API calls but persists one row). Reusing a stored analysis by input hash never counts
   against the cap. A refusal is a typed result with a plain-English message: what happened, when
   it resets, and that existing analyses are still available — never a silent failure.
-- **No key → `ConnectKeyNotice`, honest and first-class.** When `ANTHROPIC_API_KEY` is unset,
-  every AI trigger and every AI output is replaced by the `ConnectKeyNotice` component (or, on an
-  AI-only page, the page's whole trigger button is hidden and its content area shows the notice).
-  This is never rendered as an error — it's a normal, first-class state.
+- **No key → `ConnectKeyNotice`, honest and first-class — but stored results still show.**
+  When `ANTHROPIC_API_KEY` is unset, every AI *trigger* is switched off: the button renders
+  disabled (or is hidden where there is nothing stored to act on), and the `ConnectKeyNotice`
+  component explains why. An analysis that is already saved in the database keeps rendering
+  in full, with its usual caption ("Analysis from … · model · data as of …") and
+  `AiDisclaimer` — hiding real saved results behind the notice would be the opposite of the
+  golden rule. Only when a surface has **no stored result and no key** does the notice take
+  over the content area on its own (that is also the whole-page pattern for an AI-only page
+  with nothing stored). This is never rendered as an error — it's a normal, first-class state.
 - **The key is never logged or returned.** `ANTHROPIC_API_KEY` is read once in
   `src/lib/ai/client.ts` and handed to the SDK; it is never written to a log line, an error
   message, or a response body. The shared logger (`src/lib/logger.ts`) also redacts any context
