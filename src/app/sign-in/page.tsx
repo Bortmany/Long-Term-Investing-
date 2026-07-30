@@ -4,9 +4,9 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { LoaderCircle } from "lucide-react";
-import { z } from "zod";
 
 import { signIn } from "@/lib/auth-client";
+import { errorFieldClass, signInSchema } from "@/lib/auth-schema";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,11 +19,6 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-
-const schema = z.object({
-  email: z.string().email("Please enter a valid email address."),
-  password: z.string().min(8, "Password must be at least 8 characters."),
-});
 
 export default function SignInPage() {
   const router = useRouter();
@@ -40,7 +35,7 @@ export default function SignInPage() {
     setError(null);
     setFieldError(null);
 
-    const parsed = schema.safeParse({ email, password });
+    const parsed = signInSchema.safeParse({ email, password });
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? "Invalid input.");
       // Point at the field that failed so the user knows which box to fix.
@@ -75,7 +70,9 @@ export default function SignInPage() {
           <CardTitle>Sign in</CardTitle>
           <CardDescription>Access your portfolio dashboard.</CardDescription>
         </CardHeader>
-        <form onSubmit={handleSubmit}>
+        {/* noValidate: our own zod messages (plain English, shown on the
+            field) do the talking instead of the browser's built-in tooltip. */}
+        <form onSubmit={handleSubmit} noValidate>
           <CardContent className="space-y-4">
             {error ? (
               <Alert variant="destructive">
@@ -87,16 +84,14 @@ export default function SignInPage() {
               <Input
                 id="email"
                 type="email"
-                placeholder="you@example.com"
+                placeholder="Ahmed@gmail.com"
                 autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 aria-invalid={fieldError === "email" || undefined}
                 className={
-                  fieldError === "email"
-                    ? "border-red-500 focus-visible:border-red-500 focus-visible:ring-red-500"
-                    : undefined
+                  fieldError === "email" ? errorFieldClass : undefined
                 }
               />
             </div>
@@ -112,9 +107,7 @@ export default function SignInPage() {
                 required
                 aria-invalid={fieldError === "password" || undefined}
                 className={
-                  fieldError === "password"
-                    ? "border-red-500 focus-visible:border-red-500 focus-visible:ring-red-500"
-                    : undefined
+                  fieldError === "password" ? errorFieldClass : undefined
                 }
               />
             </div>
