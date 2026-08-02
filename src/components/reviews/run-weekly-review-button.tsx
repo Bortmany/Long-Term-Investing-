@@ -12,7 +12,15 @@ import { Check, LoaderCircle } from "lucide-react";
 import { runWeeklyReview } from "@/app/actions/reviews";
 import { Button } from "@/components/ui/button";
 
-export function RunWeeklyReviewButton() {
+export function RunWeeklyReviewButton({
+  hasKey,
+}: {
+  /** Whether ANTHROPIC_API_KEY is set server-side. Required on purpose (no
+   *  default): a caller that forgets it should fail the type check rather
+   *  than quietly ship an enabled button with no key behind it. False leaves
+   *  the button visibly disabled — the page's ConnectKeyNotice says why. */
+  hasKey: boolean;
+}) {
   const [error, setError] = React.useState<string | null>(null);
   // Id of the review just generated — drives the inline success confirmation
   // (kept neutral slate, NOT green: green is reserved for financial gains).
@@ -20,6 +28,7 @@ export function RunWeeklyReviewButton() {
   const [isPending, startTransition] = React.useTransition();
 
   function handleClick() {
+    if (!hasKey) return;
     setError(null);
     setSuccessId(null);
     startTransition(async () => {
@@ -37,7 +46,7 @@ export function RunWeeklyReviewButton() {
 
   return (
     <div className="flex flex-col items-end gap-1.5">
-      <Button type="button" disabled={isPending} onClick={handleClick}>
+      <Button type="button" disabled={isPending || !hasKey} onClick={handleClick}>
         {isPending ? (
           <>
             <LoaderCircle className="animate-spin" aria-hidden="true" />
