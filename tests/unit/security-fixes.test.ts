@@ -4,7 +4,21 @@ import { computeHoldings } from "@/lib/portfolio/holdings";
 import type { TxnInput } from "@/lib/portfolio/types";
 import { transactionInputSchema, MONEY_MAX } from "@/lib/transaction-schema";
 import { alertInputSchema } from "@/lib/alert-schema";
-import { emailKey, getClientIp } from "@/lib/rate-limit";
+import {
+  AUTH_RATE_LIMIT,
+  emailKey,
+  getClientIp,
+  ipKey,
+  mintAnonId,
+  rateLimit,
+  signAnonId,
+  tokenKey,
+  verifyAnonId,
+  type RateLimitResult,
+} from "@/lib/rate-limit";
+import { findImportOversell, type ImportRowResult } from "@/lib/import-rows";
+import type { TransactionInput } from "@/lib/transaction-schema";
+import { isSameOrigin } from "@/lib/request-origin";
 
 // ---------------------------------------------------------------------------
 // Finding 3 — holdings computation is deterministic on same-day ties, so the
@@ -108,5 +122,169 @@ describe("rate-limit IP trust + per-account key (finding 6)", () => {
 
   it("builds a normalized per-account key (case/space-insensitive)", () => {
     expect(emailKey("auth", "  Ada@Example.com ")).toBe("auth:email:ada@example.com");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Finding 1 (CSV import oversell) — importing a SELL of shares never owned, or
+// selling more than the buys earlier in the same file, must be rejected so the
+// import can't invent cash.
+// ---------------------------------------------------------------------------
+describe("CSV import oversell guard (finding 1)", () => {
+  // Build an "ok" import result row carrying a BUY/SELL for instrument `x`.
+  function tradeRow(
+    row: number,
+    type: "BUY" | "SELL",
+    quantity: number,
+    instrumentId = "x",
+  ): ImportRowResult {
+    const parsed = {
+      type,
+      instrumentId,
+      quantity,
+      pricePerUnit: 10,
+      fee: 0,
+      currency: "USD",
+      tradeDate: new Date("2026-01-10"),
+    } as unknown as TransactionInput;
+    return { row, ok: true, parsed };
+  }
+
+  it("rejects a SELL of shares that were never owned", () => {
+    const result = findImportOversell([tradeRow(1, "SELL", 5)], new Map());
+    expect(result?.row).toBe(1);
+    expect(result?.message).toContain("no shares are held");
+  });
+
+  it("rejects a SELL that exceeds buys earlier in the same file", () => {
+    const rows = [tradeRow(1, "BUY", 4), tradeRow(2, "SELL", 5)];
+    const result = findImportOversell(rows, new Map());
+    expect(result?.row).toBe(2);
+  });
+
+  it("allows a SELL covered by earlier buys in the same file", () => {
+    const rows = [tradeRow(1, "BUY", 10), tradeRow(2, "SELL", 6)];
+    expect(findImportOversell(rows, new Map())).toBeNull();
+  });
+
+  it("counts shares already held before the import", () => {
+    const starting = new Map([["x", 8]]);
+    expect(findImportOversell([tradeRow(1, "SELL", 8)], starting)).toBeNull();
+    expect(findImportOversell([tradeRow(1, "SELL", 9)], starting)?.row).toBe(1);
+  });
+
+  it("keeps positions separate per instrument", () => {
+    // Buying `x` does nothing for a SELL of `y`.
+    const rows = [tradeRow(1, "BUY", 10, "x"), tradeRow(2, "SELL", 1, "y")];
+    expect(findImportOversell(rows, new Map())?.row).toBe(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Finding 3 (spoofed Origin) — the same-origin check used by the proxy to turn
+// a mismatched Origin into a clean 400 instead of an unhandled 500.
+// ---------------------------------------------------------------------------
+describe("same-origin request check (finding 3)", () => {
+  it("allows a request with no Origin header (server-to-server)", () => {
+    expect(isSameOrigin(new Headers({ host: "app.example.com" }))).toBe(true);
+  });
+
+  it("allows an Origin whose host matches the request host", () => {
+    const headers = new Headers({
+      host: "app.example.com",
+      origin: "https://app.example.com",
+    });
+    expect(isSameOrigin(headers)).toBe(true);
+  });
+
+  it("rejects a spoofed Origin from another site", () => {
+    const headers = new Headers({
+      host: "app.example.com",
+      origin: "https://evil.example.net",
+    });
+    expect(isSameOrigin(headers)).toBe(false);
+  });
+
+  it("prefers x-forwarded-host when present (behind a proxy)", () => {
+    const headers = new Headers({
+      host: "internal:3000",
+      "x-forwarded-host": "app.example.com",
+      origin: "https://app.example.com",
+    });
+    expect(isSameOrigin(headers)).toBe(true);
+  });
+
+  it("rejects a malformed Origin header", () => {
+    const headers = new Headers({ host: "app.example.com", origin: "not-a-url" });
+    expect(isSameOrigin(headers)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Finding 4 (per-browser anonymous id) — a signed cookie value the client
+// can't forge, so anonymous rate-limit buckets aren't shared by everyone.
+// ---------------------------------------------------------------------------
+describe("signed per-browser anon id (finding 4)", () => {
+  it("round-trips a minted id through sign/verify", () => {
+    const id = mintAnonId();
+    expect(verifyAnonId(signAnonId(id))).toBe(id);
+  });
+
+  it("mints a fresh, unique id each time", () => {
+    expect(mintAnonId()).not.toBe(mintAnonId());
+  });
+
+  it("rejects a tampered id (signature no longer matches)", () => {
+    const signed = signAnonId("abc123");
+    const tampered = signed.replace("abc123", "abc124");
+    expect(verifyAnonId(tampered)).toBeNull();
+  });
+
+  it("rejects missing or malformed cookie values", () => {
+    expect(verifyAnonId(undefined)).toBeNull();
+    expect(verifyAnonId("")).toBeNull();
+    expect(verifyAnonId("no-signature")).toBeNull();
+    expect(verifyAnonId("id.")).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Finding 4 (shared-bucket DoS, one layer down) — with Better Auth's IP-keyed
+// limiter disabled, OUR limiter keys on a per-browser id, so one browser
+// exhausting its bucket must NOT lock out a different browser. A single
+// account/token stays bounded via the per-target key no matter the browser.
+// ---------------------------------------------------------------------------
+describe("per-browser buckets stay independent (finding 4 — better-auth limiter off)", () => {
+  /** Flood a key past the limit and return whether the last call was denied. */
+  function floodPastLimit(key: string): RateLimitResult {
+    let last: RateLimitResult = { ok: true, remaining: 0 };
+    for (let i = 0; i < AUTH_RATE_LIMIT.limit + 2; i += 1) {
+      last = rateLimit(key, AUTH_RATE_LIMIT);
+    }
+    return last;
+  }
+
+  it("browser A's exhausted bucket does not block browser B", () => {
+    const suffix = Math.random().toString(36).slice(2);
+    const browserA = ipKey("auth", `anonA-${suffix}`);
+    const browserB = ipKey("auth", `anonB-${suffix}`);
+
+    // Browser A signs in over and over until it's locked out.
+    expect(floodPastLimit(browserA).ok).toBe(false);
+
+    // A brand-new browser (fresh cookie jar) is completely unaffected.
+    expect(rateLimit(browserB, AUTH_RATE_LIMIT).ok).toBe(true);
+  });
+
+  it("a single account stays bounded across rotating browsers (per-email key)", () => {
+    const email = `victim-${Math.random().toString(36).slice(2)}@example.com`;
+    // Same target email, hit from many different browsers — the per-email
+    // bucket still fills up and denies.
+    expect(floodPastLimit(emailKey("auth", email)).ok).toBe(false);
+  });
+
+  it("a single reset token stays bounded (per-token key)", () => {
+    const token = `reset-${Math.random().toString(36).slice(2)}`;
+    expect(floodPastLimit(tokenKey("auth", token)).ok).toBe(false);
   });
 });

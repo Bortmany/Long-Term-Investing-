@@ -10,6 +10,8 @@
 // store behind the same `RateLimitStore` interface below; no caller changes.
 // We deliberately add NO redis dependency until that day.
 
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+
 export type RateLimitOptions = { limit: number; windowMs: number };
 
 export type RateLimitResult =
@@ -135,6 +137,64 @@ export function ipKey(scope: string, ip: string): string {
   return `${scope}:ip:${ip}`;
 }
 
+// ---------------------------------------------------------------------------
+// Per-browser anonymous id (used when the proxy headers are NOT trusted).
+//
+// With TRUST_PROXY_HEADERS off (the default) we can't read a real client IP,
+// so without this every anonymous visitor would share one "unknown" bucket and
+// a handful of requests would lock sign-in for the whole app. Instead each
+// browser gets a random id kept in a signed, httpOnly cookie: the signature
+// (HMAC with BETTER_AUTH_SECRET) means the client can't forge or reuse someone
+// else's id to raid their bucket, and it carries NO personal data (just a
+// random token). The cookie plumbing lives in src/lib/anon-rate-id.ts; the
+// pure sign/verify/mint helpers live here so they're unit-testable.
+// ---------------------------------------------------------------------------
+
+/** The httpOnly cookie name that stores the signed per-browser anon id. */
+export const ANON_ID_COOKIE = "iq_anon";
+
+/**
+ * The key HMAC-signing uses. BETTER_AUTH_SECRET is required in production (the
+ * app refuses to start without it — see src/instrumentation.ts); the
+ * dev-only fallback just keeps `npm run dev`/tests working without one and is
+ * never used to protect anything real.
+ */
+function anonSigningSecret(): string {
+  return process.env.BETTER_AUTH_SECRET || "dev-only-insecure-anon-id-secret";
+}
+
+/** A fresh, unguessable per-browser id (never derived from anything personal). */
+export function mintAnonId(): string {
+  return randomBytes(16).toString("hex");
+}
+
+/** Sign an anon id as `<id>.<hmac>` for storing in the cookie. */
+export function signAnonId(id: string): string {
+  const sig = createHmac("sha256", anonSigningSecret()).update(id).digest("hex");
+  return `${id}.${sig}`;
+}
+
+/**
+ * Verify a signed cookie value and return the id inside it, or null when the
+ * value is missing, malformed, or the signature doesn't match (tampered).
+ */
+export function verifyAnonId(value: string | undefined | null): string | null {
+  if (!value) return null;
+  const dot = value.lastIndexOf(".");
+  if (dot <= 0 || dot === value.length - 1) return null;
+
+  const id = value.slice(0, dot);
+  const providedSig = value.slice(dot + 1);
+  const expectedSig = createHmac("sha256", anonSigningSecret())
+    .update(id)
+    .digest("hex");
+
+  const provided = Buffer.from(providedSig);
+  const expected = Buffer.from(expectedSig);
+  if (provided.length !== expected.length) return null;
+  return timingSafeEqual(provided, expected) ? id : null;
+}
+
 export function userKey(scope: string, userId: string): string {
   return `${scope}:user:${userId}`;
 }
@@ -147,6 +207,16 @@ export function userKey(scope: string, userId: string): string {
  */
 export function emailKey(scope: string, email: string): string {
   return `${scope}:email:${email.trim().toLowerCase()}`;
+}
+
+/**
+ * A per-token rate-limit key (e.g. password-reset attempts against ONE reset
+ * token). Case-sensitive (tokens are). Bounds guessing/replay against a single
+ * reset link no matter how many browsers or IPs the attempts come from — the
+ * token equivalent of `emailKey`.
+ */
+export function tokenKey(scope: string, token: string): string {
+  return `${scope}:token:${token.trim()}`;
 }
 
 /** Plain-English message for a denied request (owner is not a developer). */

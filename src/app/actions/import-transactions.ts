@@ -16,7 +16,13 @@ import {
   NOT_SIGNED_IN_ERROR,
   type ActionResult,
 } from "@/lib/action-result";
-import { toTransactionRecord, validateMappedRows } from "@/lib/import-rows";
+import {
+  findImportOversell,
+  toTransactionRecord,
+  validateMappedRows,
+} from "@/lib/import-rows";
+import { computeHoldings, fromPrismaTransaction } from "@/lib/portfolio";
+import { lockPortfolioForWrite } from "@/lib/portfolio-lock";
 // TYPE-ONLY import (import type), so these symbols are ERASED from the compiled
 // server bundle. In a "use server" file a value-level import/re-export of a
 // type is a runtime landmine: the server-action transform can emit a real
@@ -145,12 +151,42 @@ export async function importTransactions(
     result.ok ? [toTransactionRecord(result.parsed)] : [],
   );
 
-  // One transaction: either every row lands or none do.
-  await prisma.$transaction(async (tx) => {
+  // One transaction that does BOTH the oversell check and the write while
+  // holding a lock on this portfolio — so it's atomic:
+  //   1. Lock the portfolio row (concurrent imports/sells wait their turn).
+  //   2. Re-read the existing holdings INSIDE the lock (never a stale read).
+  //   3. Walk the batch in order and reject any SELL that exceeds what's held
+  //      at that point (existing shares + earlier BUYs in this same file) —
+  //      the same guard the single-transaction path runs. A missed SELL here
+  //      would invent cash the account never earned (golden rule).
+  //   4. Only if every row is within its position, write them all — one
+  //      failure imports nothing.
+  const outcome = await prisma.$transaction(async (tx) => {
+    await lockPortfolioForWrite(tx, portfolio.id);
+
+    const existing = await tx.transaction.findMany({
+      where: { portfolioId: portfolio.id },
+    });
+    const startingQuantities = new Map<string, number>();
+    for (const holding of computeHoldings(existing.map(fromPrismaTransaction))) {
+      startingQuantities.set(holding.instrumentId, holding.quantity);
+    }
+
+    const oversell = findImportOversell(report.results, startingQuantities);
+    if (oversell) {
+      return {
+        ok: false as const,
+        error: `Nothing was imported: ${oversell.message}`,
+      };
+    }
+
     await tx.transaction.createMany({
       data: records.map((record) => ({ ...record, portfolioId: portfolio.id })),
     });
+    return { ok: true as const };
   });
+
+  if (!outcome.ok) return actionError(outcome.error);
 
   revalidatePath("/portfolio");
   revalidatePath("/dashboard");
