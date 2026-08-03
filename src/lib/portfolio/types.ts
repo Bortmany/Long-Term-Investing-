@@ -23,6 +23,14 @@ export type TxnInput = {
   currency: Currency;
   fee: number;
   tradeDate: Date;
+  /**
+   * Stable identity used ONLY as a deterministic tie-break when two
+   * transactions share a tradeDate (see computeHoldings). Optional so pure
+   * unit tests can build fixtures without them; the Prisma adapter always
+   * fills them, which is what makes the real pages agree.
+   */
+  id?: string;
+  createdAt?: Date;
 };
 
 export type PriceInput = {
@@ -64,6 +72,8 @@ export function fromPrismaTransaction(t: Transaction): TxnInput {
     currency: t.currency,
     fee: t.fee.toNumber(),
     tradeDate: t.tradeDate,
+    id: t.id,
+    createdAt: t.createdAt,
   };
 }
 

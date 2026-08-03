@@ -95,11 +95,34 @@ export function rateLimit(
 }
 
 /**
- * The visitor's IP for anonymous rate limiting. Behind a proxy (Railway) the
- * real client is the FIRST hop of `x-forwarded-for`; fall back to `x-real-ip`,
- * then a constant so header-less traffic still shares one bucket.
+ * Whether to trust the `x-forwarded-for` / `x-real-ip` headers for the client
+ * IP. These headers are trivially spoofable by the caller, so an attacker
+ * could set a fresh value per request and get a fresh rate-limit bucket every
+ * time — defeating an IP-based limit. Only trust them when the app is actually
+ * behind a proxy you control that overwrites them (Railway, a load balancer),
+ * which the operator signals by setting TRUST_PROXY_HEADERS="true".
+ * Default: DON'T trust — safer, and combined with the per-account limiter it
+ * still stops brute force.
  */
-export function getClientIp(headers: Headers): string {
+export function shouldTrustProxyHeaders(): boolean {
+  return process.env.TRUST_PROXY_HEADERS === "true";
+}
+
+/**
+ * The visitor's IP for anonymous rate limiting. Only reads the forwarding
+ * headers when the operator has declared the proxy trusted (see above);
+ * otherwise every header-only visitor shares the "unknown" bucket, so a
+ * spoofed `x-forwarded-for` can't win a fresh bucket. Real client-address
+ * routing would require the platform's connection info (not available from a
+ * Web `Request`); until then the per-account key below is the real defense.
+ */
+export function getClientIp(
+  headers: Headers,
+  options?: { trustProxyHeaders?: boolean },
+): string {
+  const trust = options?.trustProxyHeaders ?? shouldTrustProxyHeaders();
+  if (!trust) return "unknown";
+
   const forwarded = headers.get("x-forwarded-for");
   if (forwarded) {
     const first = forwarded.split(",")[0]?.trim();
@@ -114,6 +137,16 @@ export function ipKey(scope: string, ip: string): string {
 
 export function userKey(scope: string, userId: string): string {
   return `${scope}:user:${userId}`;
+}
+
+/**
+ * A per-account rate-limit key (e.g. sign-in attempts against ONE email).
+ * Lower-cased so casing can't split the bucket. This limits brute force
+ * against a single account regardless of how many IPs (real or spoofed) the
+ * attacker rotates through.
+ */
+export function emailKey(scope: string, email: string): string {
+  return `${scope}:email:${email.trim().toLowerCase()}`;
 }
 
 /** Plain-English message for a denied request (owner is not a developer). */

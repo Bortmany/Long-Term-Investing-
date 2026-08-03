@@ -63,6 +63,13 @@ export default function PrivacyPage() {
               amounts, dates, and the stock/ETF/REIT involved.
             </li>
             <li>
+              <strong>Prices and exchange rates you enter by hand</strong> —
+              when you record a manual price for a stock, or a currency
+              exchange rate, we store it against your account. These are yours
+              alone: they are only ever used to value your own portfolio, never
+              shown to or mixed with anyone else&apos;s.
+            </li>
+            <li>
               <strong>Your watchlist</strong> — the stocks you&apos;re tracking
               and any notes you add.
             </li>

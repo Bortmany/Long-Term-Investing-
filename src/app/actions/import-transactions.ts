@@ -16,13 +16,18 @@ import {
   NOT_SIGNED_IN_ERROR,
   type ActionResult,
 } from "@/lib/action-result";
-import {
-  toTransactionRecord,
-  validateMappedRows,
-  type ImportRowResult,
-  type ImportValidationReport,
-  type KnownInstrument,
-  type MappedImportRow,
+import { toTransactionRecord, validateMappedRows } from "@/lib/import-rows";
+// TYPE-ONLY import (import type), so these symbols are ERASED from the compiled
+// server bundle. In a "use server" file a value-level import/re-export of a
+// type is a runtime landmine: the server-action transform can emit a real
+// `export { ImportValidationReport }`, and because the type doesn't exist at
+// runtime that throws `ReferenceError: ... is not defined` the moment the
+// action is called (it broke the whole CSV "Validate" step). Types therefore
+// live only in @/lib/import-rows; UI code imports them straight from there.
+import type {
+  ImportValidationReport,
+  KnownInstrument,
+  MappedImportRow,
 } from "@/lib/import-rows";
 import { getOrCreatePortfolio, getSessionUserId } from "@/lib/user-portfolio";
 import {
@@ -31,8 +36,6 @@ import {
   rateLimitMessage,
   userKey,
 } from "@/lib/rate-limit";
-
-export type { ImportRowResult, ImportValidationReport, MappedImportRow };
 
 // Outer shape guard for the action's OWN arguments — the client sends an array
 // of mapped rows and we never trust its structure. Deep per-row validation

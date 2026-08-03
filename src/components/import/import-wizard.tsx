@@ -25,9 +25,14 @@ import {
 import {
   importTransactions,
   validateImportRows,
-  type ImportValidationReport,
-  type MappedImportRow,
 } from "@/app/actions/import-transactions";
+// Types come straight from the pure module, never re-exported through the
+// "use server" file (that re-export was the runtime landmine — see
+// import-transactions.ts).
+import type {
+  ImportValidationReport,
+  MappedImportRow,
+} from "@/lib/import-rows";
 import { parseCsv, type CsvData } from "@/lib/csv";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
