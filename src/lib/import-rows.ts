@@ -206,6 +206,58 @@ export function validateMappedRow(
   return { row: rowNumber, ok: true, parsed: parsed.data };
 }
 
+// A hair of tolerance so floating-point noise on a legitimate "sell
+// everything" row can't trip the guard (mirrors the single-transaction path).
+const IMPORT_QUANTITY_EPSILON = 1e-6;
+
+/**
+ * Walk the already-validated import rows IN ORDER and reject the first SELL
+ * that would sell more shares than are held at that point in the file. Shares
+ * held = whatever the account already owned before the import
+ * (`startingQuantities`, keyed by instrumentId) PLUS every BUY earlier in the
+ * same file. Without this guard an imported SELL of shares the account never
+ * owned would credit cash it never earned — a fabricated number (golden rule).
+ * Pure: no database, so it is unit-tested directly.
+ */
+export function findImportOversell(
+  results: ImportRowResult[],
+  startingQuantities: Map<string, number>,
+): { row: number; message: string } | null {
+  // Copy so we never mutate the caller's map.
+  const held = new Map(startingQuantities);
+
+  for (const result of results) {
+    if (!result.ok) continue;
+    const input = result.parsed;
+    if (input.type !== "BUY" && input.type !== "SELL") continue;
+    if (!("instrumentId" in input) || !input.instrumentId) continue;
+
+    const current = held.get(input.instrumentId) ?? 0;
+    if (input.type === "BUY") {
+      held.set(input.instrumentId, current + input.quantity);
+      continue;
+    }
+
+    // SELL — must not exceed what is held after the earlier rows.
+    if (input.quantity > current + IMPORT_QUANTITY_EPSILON) {
+      const heldLabel = current > 0 ? current : "no";
+      return {
+        row: result.row,
+        message:
+          `Row ${result.row} sells ${input.quantity} share${
+            input.quantity === 1 ? "" : "s"
+          }, but only ${heldLabel} share${current === 1 ? "" : "s"} ${
+            current === 1 ? "is" : "are"
+          } held at that point (counting the buys earlier in this file). ` +
+          `Add the matching buys first, or sell fewer.`,
+      };
+    }
+    held.set(input.instrumentId, current - input.quantity);
+  }
+
+  return null;
+}
+
 /** Validate every mapped row — a pure dry run, nothing is written anywhere. */
 export function validateMappedRows(
   rows: MappedImportRow[],

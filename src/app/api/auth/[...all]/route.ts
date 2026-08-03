@@ -4,11 +4,13 @@ import { auth } from "@/lib/auth";
 import {
   AUTH_RATE_LIMIT,
   emailKey,
-  getClientIp,
   ipKey,
   rateLimit,
   rateLimitMessage,
+  tokenKey,
+  type RateLimitResult,
 } from "@/lib/rate-limit";
+import { anonymousRateLimitId } from "@/lib/anon-rate-id";
 import { logger } from "@/lib/logger";
 
 const handlers = toNextJsHandler(auth);
@@ -25,11 +27,38 @@ function emailFromBody(body: unknown): string | null {
   return null;
 }
 
-// Rate-limit auth POSTs (sign-in / sign-up) so one source can't brute-force
-// passwords or spam new accounts. Two keys are checked: the visitor IP AND the
-// target email — so an attacker can't dodge the limit by spoofing
-// x-forwarded-for (a fresh IP per request), because the per-email bucket still
-// fills up. Denials return 429 with a plain-English message and Retry-After.
+/**
+ * Pull a reset/verification token out of the request, if present — from the
+ * JSON body (reset-password sends `{ newPassword, token }`) or the URL query
+ * (some flows put `?token=…`). Lets us bound guesses against ONE token.
+ */
+function tokenFromRequest(body: unknown, url: string): string | null {
+  if (body && typeof body === "object" && "token" in body) {
+    const value = (body as { token?: unknown }).token;
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  try {
+    const fromQuery = new URL(url).searchParams.get("token");
+    if (fromQuery && fromQuery.trim()) return fromQuery.trim();
+  } catch {
+    // A malformed URL can't yield a token — fall through.
+  }
+  return null;
+}
+
+// Rate-limit EVERY sensitive auth POST — sign-in, sign-up, forget-password and
+// reset-password — so one source can't brute-force passwords, spam accounts,
+// or hammer the password-reset flow. This is now the ONLY auth limiter: Better
+// Auth's built-in one (which keyed on the raw IP and collapsed to a single
+// shared bucket when unproxied) is disabled in src/lib/auth.ts.
+//
+// Two kinds of key are checked on every POST:
+//   1. the CALLER key — a stable signed per-browser id (or the real IP behind
+//      a trusted proxy), so separate browsers never share one bucket; and
+//   2. a per-TARGET key — the email when the body has one, and/or the reset
+//      token — so an attack on one account or one reset link stays bounded no
+//      matter how many browsers (cookie jars) or spoofed IPs it rotates through.
+// Denials return 429 with a plain-English message and Retry-After.
 export async function POST(request: Request): Promise<Response> {
   // --- Malformed body → a clean 400, never a 500 -------------------------
   // Read a CLONE so Better Auth still gets the untouched original stream.
@@ -53,23 +82,33 @@ export async function POST(request: Request): Promise<Response> {
     }
   }
 
-  // --- Rate limit by IP and by target email ------------------------------
-  const ip = getClientIp(request.headers);
+  // --- Rate limit by caller AND by any target the request identifies -----
+  // "Caller" is the real IP when a trusted proxy is configured, otherwise a
+  // stable signed per-browser id (so anonymous visitors don't all share one
+  // bucket and lock each other out). The per-target keys below still bound an
+  // attack on a single account/token regardless of caller.
+  const ip = await anonymousRateLimitId(request.headers);
   const ipResult = rateLimit(ipKey("auth", ip), AUTH_RATE_LIMIT);
 
+  const targetResults: RateLimitResult[] = [];
   const email = emailFromBody(parsedBody);
-  const emailResult = email
-    ? rateLimit(emailKey("auth", email), AUTH_RATE_LIMIT)
-    : { ok: true as const, remaining: AUTH_RATE_LIMIT.limit };
+  if (email) targetResults.push(rateLimit(emailKey("auth", email), AUTH_RATE_LIMIT));
+  const token = tokenFromRequest(parsedBody, request.url);
+  if (token) targetResults.push(rateLimit(tokenKey("auth", token), AUTH_RATE_LIMIT));
 
-  if (!ipResult.ok || !emailResult.ok) {
+  const deniedTarget = targetResults.find(
+    (r): r is { ok: false; retryAfterSeconds: number } => !r.ok,
+  );
+
+  if (!ipResult.ok || deniedTarget) {
     const retryAfterSeconds = !ipResult.ok
       ? ipResult.retryAfterSeconds
-      : (emailResult as { ok: false; retryAfterSeconds: number }).retryAfterSeconds;
-    // Log the reason (per-IP vs per-account) but never the email itself.
+      : deniedTarget!.retryAfterSeconds;
+    // Log which kind of limit tripped (caller vs a specific account/token) but
+    // never the email or token value itself.
     logger.warn("Auth request rate-limited", {
       ip,
-      by: !ipResult.ok ? "ip" : "email",
+      by: !ipResult.ok ? "caller" : "target",
     });
     return NextResponse.json(
       { message: rateLimitMessage(retryAfterSeconds), code: "RATE_LIMITED" },
