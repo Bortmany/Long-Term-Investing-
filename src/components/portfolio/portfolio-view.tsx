@@ -28,6 +28,7 @@ export function PortfolioView({
   baseCurrency,
   holdings,
   holdingsBadge,
+  weightsNote,
   transactions,
   instruments,
   currencies,
@@ -38,6 +39,8 @@ export function PortfolioView({
   baseCurrency: Currency;
   holdings: HoldingRowData[];
   holdingsBadge: Pick<SourceBadgeProps, "variant" | "date">;
+  /** Honest caption for the Weight column when it can exceed 100% (negative cash). */
+  weightsNote?: string;
   transactions: TransactionRowData[];
   instruments: InstrumentOptionData[];
   /** Enum option lists, passed from the server so they can't drift from the schema. */
@@ -130,6 +133,7 @@ export function PortfolioView({
         rows={holdings}
         baseCurrency={baseCurrency}
         badge={holdingsBadge}
+        weightsNote={weightsNote}
         onUpdatePrice={setPriceTarget}
       />
 

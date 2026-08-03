@@ -18,6 +18,7 @@ import {
   transactionInputSchema,
   type TransactionInput,
 } from "@/lib/transaction-schema";
+import { computeHoldings, fromPrismaTransaction } from "@/lib/portfolio";
 import { getOrCreatePortfolio, getSessionUserId } from "@/lib/user-portfolio";
 import {
   rateLimit,
@@ -55,6 +56,50 @@ async function instrumentExists(input: TransactionInput): Promise<boolean> {
   return count > 0;
 }
 
+// A hair of tolerance so floating-point noise on a legitimate "sell
+// everything" can't trip the guard.
+const QUANTITY_EPSILON = 1e-6;
+
+/**
+ * Reject a SELL that would sell more shares than are actually held — otherwise
+ * the sell would credit cash the account never earned (fabricated money).
+ * `excludeTransactionId` leaves the row being edited out of the tally, so an
+ * edit is checked against the OTHER transactions, not itself.
+ *
+ * Returns an action error, or null when the sell is within the position (or the
+ * input isn't a sell).
+ */
+async function sellExceedsPositionError(
+  portfolioId: string,
+  input: TransactionInput,
+  excludeTransactionId?: string,
+): Promise<{ ok: false; error: string } | null> {
+  if (input.type !== "SELL" || !input.instrumentId) return null;
+
+  const rows = await prisma.transaction.findMany({
+    where: {
+      portfolioId,
+      ...(excludeTransactionId ? { id: { not: excludeTransactionId } } : {}),
+    },
+  });
+  const holding = computeHoldings(rows.map(fromPrismaTransaction)).find(
+    (h) => h.instrumentId === input.instrumentId,
+  );
+  const held = holding?.quantity ?? 0;
+
+  if (input.quantity > held + QUANTITY_EPSILON) {
+    const heldLabel = held > 0 ? held : "no";
+    return actionError(
+      `You're trying to sell ${input.quantity} share${
+        input.quantity === 1 ? "" : "s"
+      }, but this account holds ${heldLabel} share${
+        held === 1 ? "" : "s"
+      } of it. Record the matching buys first, or sell fewer.`,
+    );
+  }
+  return null;
+}
+
 /**
  * Add one transaction to the signed-in user's portfolio (the portfolio is
  * created on first use). Returns the new transaction's id.
@@ -78,6 +123,11 @@ export async function createTransaction(
   }
 
   const portfolio = await getOrCreatePortfolio(userId);
+
+  // Can't sell more than is held — that would mint cash out of nothing.
+  const oversell = await sellExceedsPositionError(portfolio.id, parsed.data);
+  if (oversell) return oversell;
+
   const record = toTransactionRecord(parsed.data);
   const created = await prisma.transaction.create({
     data: { ...record, portfolioId: portfolio.id },
@@ -121,6 +171,15 @@ export async function updateTransaction(
       "That instrument isn't tracked yet — track it first, then update the transaction.",
     );
   }
+
+  // Check the edited values against the OTHER transactions (exclude this row,
+  // which is being replaced) so an edit can't oversell either.
+  const oversell = await sellExceedsPositionError(
+    existing.portfolioId,
+    parsed.data,
+    existing.id,
+  );
+  if (oversell) return oversell;
 
   const record = toTransactionRecord(parsed.data);
   await prisma.transaction.update({

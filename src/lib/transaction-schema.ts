@@ -11,6 +11,13 @@ import { z } from "zod";
 
 // Shared field pieces -------------------------------------------------------
 
+// Upper bound for money/quantity fields. The database columns are
+// Decimal(20, 8) — 12 digits before the point — so a value at/over 10^12
+// throws an unhandled Postgres numeric-overflow (22003 → a 500). Capping the
+// input at 100 billion (comfortably under that limit, and far larger than any
+// real trade) turns "1e30" into a clean, plain-English 400 instead.
+export const MONEY_MAX = 100_000_000_000; // 1e11
+
 const currencySchema = z.enum(Currency, {
   error: "Pick a valid currency (OMR, USD, SAR or AED).",
 });
@@ -32,19 +39,23 @@ const instrumentIdSchema = z
 
 const quantitySchema = z.coerce
   .number({ error: "Enter a quantity as a number." })
-  .positive("Quantity must be greater than zero.");
+  .positive("Quantity must be greater than zero.")
+  .max(MONEY_MAX, "That quantity is too large — check the number.");
 
 const priceSchema = z.coerce
   .number({ error: "Enter a price as a number." })
-  .positive("Price per unit must be greater than zero.");
+  .positive("Price per unit must be greater than zero.")
+  .max(MONEY_MAX, "That price is too large — check the number.");
 
 const amountSchema = z.coerce
   .number({ error: "Enter an amount as a number." })
-  .positive("Amount must be greater than zero.");
+  .positive("Amount must be greater than zero.")
+  .max(MONEY_MAX, "That amount is too large — check the number.");
 
 const feeSchema = z.coerce
   .number({ error: "Enter the fee as a number." })
   .nonnegative("Fee cannot be negative.")
+  .max(MONEY_MAX, "That fee is too large — check the number.")
   .default(0);
 
 const common = {

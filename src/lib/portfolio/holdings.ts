@@ -30,9 +30,24 @@ export function computeHoldings(transactions: TxnInput[]): Holding[] {
     { quantity: number; costBasis: number; currency: Currency }
   >();
 
-  const sorted = [...transactions].sort(
-    (a, b) => a.tradeDate.getTime() - b.tradeDate.getTime(),
-  );
+  // Deterministic order: by trade date, then a STABLE tie-break so two
+  // transactions on the same day always process in the same sequence no
+  // matter what order the database handed them to us. Without this, the
+  // Dashboard and Portfolio pages (which queried in different orders) could
+  // compute different average costs and show different totals — a silent
+  // golden-rule violation. Real rows always have createdAt + id (filled by
+  // fromPrismaTransaction); pure-fixture rows without them fall back to the
+  // input order, which is deterministic within a single test.
+  const sorted = [...transactions].sort((a, b) => {
+    const byDate = a.tradeDate.getTime() - b.tradeDate.getTime();
+    if (byDate !== 0) return byDate;
+    if (a.createdAt && b.createdAt) {
+      const byCreated = a.createdAt.getTime() - b.createdAt.getTime();
+      if (byCreated !== 0) return byCreated;
+    }
+    if (a.id && b.id) return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+    return 0;
+  });
 
   for (const txn of sorted) {
     if (!txn.instrumentId) continue;

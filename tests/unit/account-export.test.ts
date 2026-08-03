@@ -102,6 +102,26 @@ function fullRows(): AccountExportRows {
         createdAt: now,
       },
     ],
+    manualPrices: [
+      {
+        id: "mp-1",
+        price: new Prisma.Decimal("0.375"),
+        currency: "OMR",
+        asOf: now,
+        createdAt: now,
+        instrument: { ticker: "BKMB" },
+      },
+    ],
+    manualFxRates: [
+      {
+        id: "mfx-1",
+        base: "USD",
+        quote: "OMR",
+        rate: new Prisma.Decimal("0.385"),
+        asOf: now,
+        createdAt: now,
+      },
+    ],
   };
 }
 
@@ -121,6 +141,8 @@ describe("buildAccountExport", () => {
     expect(result.weeklyReviews).toHaveLength(1);
     expect(result.alerts).toHaveLength(1);
     expect(result.notifications).toHaveLength(1);
+    expect(result.manualPrices).toHaveLength(1);
+    expect(result.manualFxRates).toHaveLength(1);
   });
 
   it("converts every Decimal field to a plain number", () => {
@@ -137,6 +159,13 @@ describe("buildAccountExport", () => {
     expect(result.alerts[0].threshold).toBe(0.4);
     expect(typeof result.notifications[0].priceAtTrigger).toBe("number");
     expect(result.notifications[0].priceAtTrigger).toBe(0.41);
+
+    // The user's own manual overrides also come back as plain numbers.
+    expect(typeof result.manualPrices[0].price).toBe("number");
+    expect(result.manualPrices[0].price).toBe(0.375);
+    expect(result.manualPrices[0].instrumentTicker).toBe("BKMB");
+    expect(typeof result.manualFxRates[0].rate).toBe("number");
+    expect(result.manualFxRates[0].rate).toBe(0.385);
   });
 
   // THE PRIVACY TEST: a credential or token riding along on a row (e.g. a

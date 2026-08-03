@@ -7,18 +7,15 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import {
   computeAllocation,
-  computePortfolioValue,
   computeDividendsByHolding,
   computeMonthlyDividends,
   computeReturns,
   computeTrailingDividendIncome,
-  fromPrismaFxRate,
-  fromPrismaPriceCache,
-  fromPrismaTransaction,
   type AllocatableHolding,
   type Allocation,
   type ReturnFigure,
 } from "@/lib/portfolio";
+import { loadPortfolioComputation } from "@/lib/portfolio-market-data";
 import { getUpcomingDividends, type UpcomingDividend } from "@/lib/data";
 import { formatMoney, formatPercent, formatQuantity, formatShortDate } from "@/lib/format";
 import {
@@ -107,15 +104,13 @@ export default async function DashboardPage() {
     redirect("/sign-in");
   }
 
-  // Every query is scoped to the signed-in user's id (from the server session).
-  const portfolio = await prisma.portfolio.findFirst({
-    where: { userId: session.user.id },
-    // Oldest portfolio, matching getOrCreatePortfolio — so every page and the
-    // health score all agree on which portfolio is "the" portfolio.
-    orderBy: { createdAt: "asc" },
-  });
+  // ONE shared computation — the Dashboard and Portfolio pages load the same
+  // transactions in the same order and run the same valuation, so their
+  // headline totals can never disagree (this includes the user's own manual
+  // price/FX overrides, never anyone else's). See loadPortfolioComputation.
+  const computation = await loadPortfolioComputation(session.user.id);
 
-  if (!portfolio) {
+  if (!computation) {
     return (
       <>
         <h1 className="mb-6 text-2xl font-semibold">Dashboard</h1>
@@ -128,32 +123,11 @@ export default async function DashboardPage() {
     );
   }
 
-  const transactionRows = await prisma.transaction.findMany({
-    where: { portfolioId: portfolio.id },
-  });
+  const { portfolio, transactions, instrumentIds, fxRates, portfolioValue } =
+    computation;
 
-  const instrumentIds = [
-    ...new Set(
-      transactionRows
-        .map((t) => t.instrumentId)
-        .filter((id): id is string => id !== null),
-    ),
-  ];
-
-  const [priceRows, fxRows, instrumentRows] = await Promise.all([
-    prisma.priceCache.findMany({ where: { instrumentId: { in: instrumentIds } } }),
-    prisma.fxRate.findMany(),
-    prisma.instrument.findMany({ where: { id: { in: instrumentIds } } }),
-  ]);
-
-  const transactions = transactionRows.map(fromPrismaTransaction);
-  const fxRates = fxRows.map(fromPrismaFxRate);
-
-  const portfolioValue = computePortfolioValue({
-    transactions,
-    prices: priceRows.map(fromPrismaPriceCache),
-    fxRates,
-    baseCurrency: portfolio.baseCurrency,
+  const instrumentRows = await prisma.instrument.findMany({
+    where: { id: { in: instrumentIds } },
   });
 
   const dividendIncome = computeTrailingDividendIncome(transactions, {
