@@ -17,6 +17,7 @@ import {
   type ActionResult,
 } from "@/lib/action-result";
 import {
+  applyOversellProjection,
   findImportOversell,
   toTransactionRecord,
   validateMappedRows,
@@ -73,6 +74,29 @@ async function loadKnownInstruments(): Promise<KnownInstrument[]> {
 }
 
 /**
+ * The signed-in user's current per-instrument share counts, keyed the same
+ * way findImportOversell expects. Reads only — never creates a portfolio, so
+ * a dry run on a brand-new account (no portfolio yet) just sees "nothing
+ * held" rather than side-effecting one into existence.
+ */
+async function loadStartingQuantities(userId: string): Promise<Map<string, number>> {
+  const portfolio = await prisma.portfolio.findFirst({
+    where: { userId },
+    orderBy: { createdAt: "asc" },
+  });
+  if (!portfolio) return new Map();
+
+  const existing = await prisma.transaction.findMany({
+    where: { portfolioId: portfolio.id },
+  });
+  const startingQuantities = new Map<string, number>();
+  for (const holding of computeHoldings(existing.map(fromPrismaTransaction))) {
+    startingQuantities.set(holding.instrumentId, holding.quantity);
+  }
+  return startingQuantities;
+}
+
+/**
  * Dry-run validation of mapped CSV rows — NOTHING is written. Each row comes
  * back with ok/issues so the import screen can show exactly what to fix.
  * Tickers are resolved against the instruments already tracked in the app.
@@ -102,7 +126,15 @@ export async function validateImportRows(
   }
 
   const instruments = await loadKnownInstruments();
-  return actionOk(validateMappedRows(rows, instruments));
+  const report = validateMappedRows(rows, instruments);
+
+  // Golden-rule honesty: the commit step's oversell guard is the real
+  // enforcement, but the dry run must not tell someone "all rows look good"
+  // when a SELL in the batch would actually be rejected at commit time.
+  const startingQuantities = await loadStartingQuantities(userId);
+  applyOversellProjection(report, startingQuantities);
+
+  return actionOk(report);
 }
 
 /**

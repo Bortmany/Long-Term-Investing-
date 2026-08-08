@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getSessionCookie } from "better-auth/cookies";
 import { isSameOrigin } from "@/lib/request-origin";
+import { isActionBodyDecodable, NEXT_ACTION_HEADER } from "@/lib/action-body";
 
 // Routes anyone may visit without being signed in.
 // /api/cron is public here because it does its OWN auth (a bearer secret
@@ -25,7 +26,7 @@ function isPublic(pathname: string): boolean {
 // Next.js 16 renamed Middleware to Proxy — same behavior, new file name.
 // This is an optimistic redirect based on the presence of the session
 // cookie; real session validation happens server-side via auth.api.
-export function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // State-changing requests with a MISMATCHED Origin get a clean 400 here,
@@ -41,6 +42,23 @@ export function proxy(request: NextRequest) {
         message:
           "That request was blocked because it looked like it came from another site. Please reload the page and try again.",
         code: "BAD_ORIGIN",
+      },
+      { status: 400 },
+    );
+  }
+
+  // Server Action POST with an undecodable body → the same clean 400 shape,
+  // never Next's internal decoder crashing into an unhandled 500.
+  if (
+    method === "POST" &&
+    request.headers.has(NEXT_ACTION_HEADER) &&
+    !(await isActionBodyDecodable(request))
+  ) {
+    return NextResponse.json(
+      {
+        message:
+          "That request could not be read (its data was invalid). Please reload the page and try again.",
+        code: "INVALID_BODY",
       },
       { status: 400 },
     );

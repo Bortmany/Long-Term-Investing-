@@ -25,10 +25,15 @@ const ANON_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365;
  * - TRUST_PROXY_HEADERS on  → the real client IP (existing behaviour, used
  *   when the app sits behind a proxy that overwrites the forwarding headers).
  * - TRUST_PROXY_HEADERS off (default) → the signed per-browser id from the
- *   cookie. On FIRST contact (no valid cookie yet) we mint one and set it for
- *   next time, and this single request keys on the shared "unknown" bucket;
- *   every later request from that browser then keys on its own id, so returning
- *   visitors never share ONE global bucket and can't lock each other out.
+ *   cookie. On FIRST contact (no valid cookie yet) we mint one, set it for
+ *   next time, AND key this very first request on that same fresh id — never
+ *   on a shared "unknown" bucket. Every request from that browser (this one
+ *   included) then keys on its own id, so no two browsers — and no browser's
+ *   very first request — ever share one global bucket or can lock each other
+ *   out. A truly cookie-less caller (script that drops Set-Cookie, e.g. curl)
+ *   still gets a fresh id per request, which is the correct outcome: it's
+ *   indistinguishable from many different first-time visitors, not one
+ *   attacker who should be bucketed together.
  *
  * Regardless of what this returns, the per-account (email) key in the auth
  * route still bounds brute force against any single account.
@@ -42,8 +47,9 @@ export async function anonymousRateLimitId(headers: Headers): Promise<string> {
   const existing = verifyAnonId(cookieStore.get(ANON_ID_COOKIE)?.value);
   if (existing) return existing;
 
-  // First contact from this browser: mint an id and set the signed cookie so
-  // the NEXT request gets its own bucket. This request keys on "unknown".
+  // First contact from this browser: mint an id, set the signed cookie so the
+  // NEXT request reuses it, and key THIS request on it too — first contact
+  // must never collapse into a shared "unknown" bucket.
   const fresh = mintAnonId();
   cookieStore.set(ANON_ID_COOKIE, signAnonId(fresh), {
     httpOnly: true,
@@ -52,5 +58,5 @@ export async function anonymousRateLimitId(headers: Headers): Promise<string> {
     path: "/",
     maxAge: ANON_COOKIE_MAX_AGE_SECONDS,
   });
-  return "unknown";
+  return fresh;
 }

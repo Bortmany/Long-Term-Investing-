@@ -258,6 +258,29 @@ export function findImportOversell(
   return null;
 }
 
+/**
+ * Run the same oversell projection the commit step enforces
+ * (findImportOversell) against a validation report, IN PLACE — so a dry run
+ * that reports "all rows look good" is telling the truth rather than
+ * skipping the one check that can still fail at commit time. Mutates the
+ * offending row to `ok: false` with a plain-English issue and updates the
+ * report's counts to match. Pure: no database, so it is unit-tested directly.
+ */
+export function applyOversellProjection(
+  report: ImportValidationReport,
+  startingQuantities: Map<string, number>,
+): void {
+  const oversell = findImportOversell(report.results, startingQuantities);
+  if (!oversell) return;
+
+  const index = report.results.findIndex((r) => r.row === oversell.row);
+  if (index === -1) return;
+
+  report.results[index] = { row: oversell.row, ok: false, issues: [oversell.message] };
+  report.validCount -= 1;
+  report.errorCount += 1;
+}
+
 /** Validate every mapped row — a pure dry run, nothing is written anywhere. */
 export function validateMappedRows(
   rows: MappedImportRow[],
