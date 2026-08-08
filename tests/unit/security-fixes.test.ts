@@ -16,9 +16,15 @@ import {
   verifyAnonId,
   type RateLimitResult,
 } from "@/lib/rate-limit";
-import { findImportOversell, type ImportRowResult } from "@/lib/import-rows";
+import {
+  applyOversellProjection,
+  findImportOversell,
+  type ImportRowResult,
+  type ImportValidationReport,
+} from "@/lib/import-rows";
 import type { TransactionInput } from "@/lib/transaction-schema";
 import { isSameOrigin } from "@/lib/request-origin";
+import { isActionBodyDecodable } from "@/lib/action-body";
 
 // ---------------------------------------------------------------------------
 // Finding 3 — holdings computation is deterministic on same-day ties, so the
@@ -181,6 +187,71 @@ describe("CSV import oversell guard (finding 1)", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Finding 3 (CSV import dry-run over-promised) — the dry-run report must not
+// say "all rows look good" when the same oversell check the commit step runs
+// would actually reject one of them.
+// ---------------------------------------------------------------------------
+describe("import dry-run oversell projection (finding 3)", () => {
+  function tradeRow(
+    row: number,
+    type: "BUY" | "SELL",
+    quantity: number,
+    instrumentId = "x",
+  ): ImportRowResult {
+    const parsed = {
+      type,
+      instrumentId,
+      quantity,
+      pricePerUnit: 10,
+      fee: 0,
+      currency: "USD",
+      tradeDate: new Date("2026-01-10"),
+    } as unknown as TransactionInput;
+    return { row, ok: true, parsed };
+  }
+
+  it("leaves an honestly-clean report untouched", () => {
+    const report: ImportValidationReport = {
+      total: 1,
+      validCount: 1,
+      errorCount: 0,
+      results: [tradeRow(1, "BUY", 5)],
+    };
+    applyOversellProjection(report, new Map());
+    expect(report.validCount).toBe(1);
+    expect(report.errorCount).toBe(0);
+    expect(report.results[0].ok).toBe(true);
+  });
+
+  it("downgrades the oversell row to a failure instead of over-promising", () => {
+    const report: ImportValidationReport = {
+      total: 1,
+      validCount: 1,
+      errorCount: 0,
+      results: [tradeRow(1, "SELL", 5)], // no shares held anywhere
+    };
+    applyOversellProjection(report, new Map());
+    expect(report.validCount).toBe(0);
+    expect(report.errorCount).toBe(1);
+    const result = report.results[0];
+    expect(result.ok).toBe(false);
+    expect(result.ok ? "" : result.issues[0]).toContain("no shares are held");
+  });
+
+  it("accounts for shares already held before the import", () => {
+    const report: ImportValidationReport = {
+      total: 1,
+      validCount: 1,
+      errorCount: 0,
+      results: [tradeRow(1, "SELL", 8)],
+    };
+    applyOversellProjection(report, new Map([["x", 8]]));
+    expect(report.validCount).toBe(1);
+    expect(report.results[0].ok).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Finding 3 (spoofed Origin) — the same-origin check used by the proxy to turn
 // a mismatched Origin into a clean 400 instead of an unhandled 500.
 // ---------------------------------------------------------------------------
@@ -245,6 +316,42 @@ describe("signed per-browser anon id (finding 4)", () => {
     expect(verifyAnonId("")).toBeNull();
     expect(verifyAnonId("no-signature")).toBeNull();
     expect(verifyAnonId("id.")).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Finding 2 (malformed Server Action body) — the proxy's pre-check that stops
+// a broken request body from reaching Next.js's internal decoder (which would
+// otherwise crash with an unhandled 500 before createTransaction/
+// importTransactions' own Zod validation ever runs).
+// ---------------------------------------------------------------------------
+describe("Server Action body decode guard (finding 2)", () => {
+  it("accepts a well-formed multipart body", async () => {
+    const form = new FormData();
+    form.set("0", "hello");
+    const request = new Request("https://app.example.com/portfolio", {
+      method: "POST",
+      body: form,
+    });
+    expect(await isActionBodyDecodable(request)).toBe(true);
+  });
+
+  it("rejects a multipart body with a broken boundary", async () => {
+    const request = new Request("https://app.example.com/portfolio", {
+      method: "POST",
+      headers: { "content-type": "multipart/form-data; boundary=----broken" },
+      body: "this is not valid multipart data at all",
+    });
+    expect(await isActionBodyDecodable(request)).toBe(false);
+  });
+
+  it("accepts a plain-text (non-multipart) fetch-action body", async () => {
+    const request = new Request("https://app.example.com/portfolio", {
+      method: "POST",
+      headers: { "content-type": "text/plain;charset=UTF-8" },
+      body: '["$1"]',
+    });
+    expect(await isActionBodyDecodable(request)).toBe(true);
   });
 });
 
