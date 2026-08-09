@@ -10,6 +10,7 @@ import { cookies } from "next/headers";
 import {
   ANON_ID_COOKIE,
   getClientIp,
+  getSocketIp,
   mintAnonId,
   shouldTrustProxyHeaders,
   signAnonId,
@@ -24,16 +25,24 @@ const ANON_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365;
  *
  * - TRUST_PROXY_HEADERS on  → the real client IP (existing behaviour, used
  *   when the app sits behind a proxy that overwrites the forwarding headers).
- * - TRUST_PROXY_HEADERS off (default) → the signed per-browser id from the
- *   cookie. On FIRST contact (no valid cookie yet) we mint one, set it for
- *   next time, AND key this very first request on that same fresh id — never
- *   on a shared "unknown" bucket. Every request from that browser (this one
- *   included) then keys on its own id, so no two browsers — and no browser's
- *   very first request — ever share one global bucket or can lock each other
- *   out. A truly cookie-less caller (script that drops Set-Cookie, e.g. curl)
- *   still gets a fresh id per request, which is the correct outcome: it's
- *   indistinguishable from many different first-time visitors, not one
- *   attacker who should be bucketed together.
+ * - TRUST_PROXY_HEADERS off (default), cookie present → the signed
+ *   per-browser id from the cookie.
+ * - TRUST_PROXY_HEADERS off (default), NO cookie yet → the real TCP socket
+ *   IP (see SOCKET_IP_HEADER / getSocketIp in rate-limit.ts), which is
+ *   stamped onto the request by src/instrumentation.ts and can't be spoofed
+ *   by the caller. We ALSO mint an id and set the cookie here so every
+ *   later request from this same browser moves onto its own per-browser
+ *   bucket — the socket IP is only ever the fallback for the (possibly many)
+ *   requests before a cookie lands, or for a client that never keeps
+ *   cookies at all (curl, a bot). That matters: a cookie-less caller is one
+ *   real, stable TCP source and must be bounded like one — minting a fresh
+ *   id on every single request (the previous behaviour) left it effectively
+ *   unthrottled. Two different real sources still land in two different
+ *   buckets; the same source repeating requests shares one, bounded bucket.
+ *   If the socket-IP signal is unavailable for some reason (e.g. a test
+ *   harness building a bare Request, bypassing the real HTTP server), we
+ *   fall back to the freshly minted id so first contact still never
+ *   collapses into one shared "unknown" bucket.
  *
  * Regardless of what this returns, the per-account (email) key in the auth
  * route still bounds brute force against any single account.
@@ -47,9 +56,11 @@ export async function anonymousRateLimitId(headers: Headers): Promise<string> {
   const existing = verifyAnonId(cookieStore.get(ANON_ID_COOKIE)?.value);
   if (existing) return existing;
 
-  // First contact from this browser: mint an id, set the signed cookie so the
-  // NEXT request reuses it, and key THIS request on it too — first contact
-  // must never collapse into a shared "unknown" bucket.
+  // First contact (or a caller that never keeps cookies): mint an id and set
+  // the signed cookie so the NEXT request from a real browser reuses it —
+  // but key THIS request on the real socket IP when we have one, so a
+  // cookie-dropping source is bounded by who it really is, not handed a
+  // fresh bucket every time.
   const fresh = mintAnonId();
   cookieStore.set(ANON_ID_COOKIE, signAnonId(fresh), {
     httpOnly: true,
@@ -58,5 +69,7 @@ export async function anonymousRateLimitId(headers: Headers): Promise<string> {
     path: "/",
     maxAge: ANON_COOKIE_MAX_AGE_SECONDS,
   });
-  return fresh;
+
+  const socketIp = getSocketIp(headers);
+  return socketIp ? `socket:${socketIp}` : fresh;
 }

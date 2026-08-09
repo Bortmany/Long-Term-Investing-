@@ -138,6 +138,34 @@ export function ipKey(scope: string, ip: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// Real socket IP (server-trusted, never client-set) — the fallback for a
+// cookie-less anonymous caller when TRUST_PROXY_HEADERS is off.
+//
+// src/instrumentation.ts subscribes to Node's `diagnostics_channel` on every
+// incoming request and stamps the TRUE TCP peer address onto this header
+// BEFORE Next.js (or any client-controlled code) reads the request — the
+// assignment there unconditionally OVERWRITES whatever a caller sent under
+// this name, so it can never be spoofed the way `x-forwarded-for` can.
+// getSocketIp() below just reads it back. This is a server-to-server signal,
+// not something callers are meant to set — never trust it in a context that
+// didn't go through that subscriber (see the null fallback below).
+// ---------------------------------------------------------------------------
+
+export const SOCKET_IP_HEADER = "x-investiq-internal-socket-ip";
+
+/**
+ * The real socket-level source address for this request, or null when the
+ * instrumentation subscriber never ran (e.g. a `Request` built directly in a
+ * unit test, bypassing the real HTTP server). Trusted precisely because
+ * src/instrumentation.ts always overwrites this header with the genuine TCP
+ * peer address before any handler sees the request.
+ */
+export function getSocketIp(headers: Headers): string | null {
+  const value = headers.get(SOCKET_IP_HEADER);
+  return value && value.trim() ? value.trim() : null;
+}
+
+// ---------------------------------------------------------------------------
 // Per-browser anonymous id (used when the proxy headers are NOT trusted).
 //
 // With TRUST_PROXY_HEADERS off (the default) we can't read a real client IP,
