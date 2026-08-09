@@ -23,6 +23,10 @@ type Bucket = { count: number; resetAt: number };
 /** The seam a future Redis store implements — swap it in without caller edits. */
 interface RateLimitStore {
   hit(key: string, windowMs: number): Bucket;
+  /** Read a bucket WITHOUT counting a hit — see `peekRateLimit` below. */
+  peek(key: string): Bucket | undefined;
+  /** Forget a key entirely — see `resetRateLimit` below. */
+  reset(key: string): void;
 }
 
 // In-memory fixed-window store. Guarded on globalThis so Next.js dev
@@ -59,6 +63,14 @@ class MemoryRateLimitStore implements RateLimitStore {
     }
     return existing;
   }
+
+  peek(key: string): Bucket | undefined {
+    return this.buckets.get(key);
+  }
+
+  reset(key: string): void {
+    this.buckets.delete(key);
+  }
 }
 
 if (process.env.REDIS_URL) {
@@ -94,6 +106,37 @@ export function rateLimit(
     return { ok: false, retryAfterSeconds };
   }
   return { ok: true, remaining: Math.max(0, options.limit - bucket.count) };
+}
+
+/**
+ * Check whether `key` is ALREADY at/over its limit — WITHOUT counting this
+ * check as a hit. Pairs with `resetRateLimit` for OUTCOME-BASED limiting
+ * (e.g. the sign-in per-account guard in the auth route): only a call to
+ * `rateLimit` should ever move the count, so code that needs to know "is this
+ * key already blocked" first (to decide whether to register the hit at all)
+ * can ask without itself contributing to the bucket. Mirrors Bean & Brew's
+ * `rateLimitedNow()` (see `Bean-Brew/server.js`).
+ */
+export function peekRateLimit(key: string, options: RateLimitOptions): RateLimitResult {
+  const bucket = store.peek(key);
+  const now = Date.now();
+  if (!bucket || bucket.resetAt <= now) {
+    return { ok: true, remaining: options.limit };
+  }
+  if (bucket.count >= options.limit) {
+    const retryAfterSeconds = Math.max(1, Math.ceil((bucket.resetAt - now) / 1000));
+    return { ok: false, retryAfterSeconds };
+  }
+  return { ok: true, remaining: options.limit - bucket.count };
+}
+
+/**
+ * Forget a key's bucket entirely. Used when a sign-in SUCCEEDS, so a run of
+ * recent wrong guesses against an account never lingers (and can't block a
+ * later correct password) once the right one has gotten in.
+ */
+export function resetRateLimit(key: string): void {
+  store.reset(key);
 }
 
 /**

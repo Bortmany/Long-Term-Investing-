@@ -10,7 +10,9 @@ import {
   getClientIp,
   ipKey,
   mintAnonId,
+  peekRateLimit,
   rateLimit,
+  resetRateLimit,
   signAnonId,
   tokenKey,
   verifyAnonId,
@@ -393,5 +395,57 @@ describe("per-browser buckets stay independent (finding 4 — better-auth limite
   it("a single reset token stays bounded (per-token key)", () => {
     const token = `reset-${Math.random().toString(36).slice(2)}`;
     expect(floodPastLimit(tokenKey("auth", token)).ok).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// MEDIUM fix — sign-in's per-account lockout used to block a CORRECT password
+// once tripped (a single-account lockout DoS by anyone who knows the email).
+// The auth route now applies the per-email key OUTCOME-based: `peekRateLimit`
+// never itself counts as a hit, only `rateLimit` (called after a FAILED
+// sign-in) does, and `resetRateLimit` (called after a SUCCESSFUL sign-in)
+// clears it — mirrors Bean & Brew's admin-login limiter.
+// ---------------------------------------------------------------------------
+describe("outcome-based per-account limiter (sign-in lockout fix)", () => {
+  it("peeking never itself counts as a hit", () => {
+    const key = `peek-test-${Math.random().toString(36).slice(2)}`;
+    expect(peekRateLimit(key, AUTH_RATE_LIMIT).ok).toBe(true);
+    for (let i = 0; i < AUTH_RATE_LIMIT.limit - 1; i += 1) rateLimit(key, AUTH_RATE_LIMIT);
+    // One hit short of the limit: still ok, and repeated peeks don't change that
+    // (only a real `rateLimit` call moves the count).
+    expect(peekRateLimit(key, AUTH_RATE_LIMIT).ok).toBe(true);
+    expect(peekRateLimit(key, AUTH_RATE_LIMIT).ok).toBe(true);
+    // The real (limit)th hit is still allowed...
+    expect(rateLimit(key, AUTH_RATE_LIMIT).ok).toBe(true);
+    // ...and now the bucket is full: peek correctly predicts a further hit
+    // would be denied, without registering one itself.
+    expect(peekRateLimit(key, AUTH_RATE_LIMIT).ok).toBe(false);
+    expect(peekRateLimit(key, AUTH_RATE_LIMIT).ok).toBe(false);
+  });
+
+  it("resetRateLimit clears a bucket entirely", () => {
+    const key = `reset-test-${Math.random().toString(36).slice(2)}`;
+    for (let i = 0; i < AUTH_RATE_LIMIT.limit + 2; i += 1) rateLimit(key, AUTH_RATE_LIMIT);
+    expect(rateLimit(key, AUTH_RATE_LIMIT).ok).toBe(false);
+    resetRateLimit(key);
+    expect(rateLimit(key, AUTH_RATE_LIMIT).ok).toBe(true);
+  });
+
+  it("a correct sign-in always passes even after the account is locked for wrong guesses", () => {
+    const email = `victim-lockout-${Math.random().toString(36).slice(2)}@example.com`;
+    const key = emailKey("auth", email);
+
+    // Simulate a pile of WRONG guesses the way the route now handles them:
+    // peek first, and only register (rateLimit) when not already denied.
+    for (let i = 0; i < AUTH_RATE_LIMIT.limit + 5; i += 1) {
+      if (peekRateLimit(key, AUTH_RATE_LIMIT).ok) rateLimit(key, AUTH_RATE_LIMIT);
+    }
+    // Further wrong guesses are now denied.
+    expect(peekRateLimit(key, AUTH_RATE_LIMIT).ok).toBe(false);
+
+    // A CORRECT password is never gated on this key at all in the route (it
+    // only reads it to reset) — simulate the success branch directly.
+    resetRateLimit(key);
+    expect(peekRateLimit(key, AUTH_RATE_LIMIT).ok).toBe(true);
   });
 });
