@@ -18,7 +18,7 @@ vi.mock("next/headers", () => ({
 }));
 
 import { anonymousRateLimitId } from "@/lib/anon-rate-id";
-import { verifyAnonId } from "@/lib/rate-limit";
+import { SOCKET_IP_HEADER, verifyAnonId } from "@/lib/rate-limit";
 
 describe("anonymousRateLimitId — first-contact bucket (rate-limit finding)", () => {
   beforeEach(() => {
@@ -57,5 +57,67 @@ describe("anonymousRateLimitId — first-contact bucket (rate-limit finding)", (
     expect(second).toBe(first);
     // No new cookie needed to be set on the second call.
     expect(setSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+// R4 follow-up finding: a client that never persists the iq_anon cookie
+// (curl, a bot dropping Set-Cookie) used to get a FRESH id — and therefore a
+// fresh rate-limit bucket — on every single request, making anonymous
+// sign-in/sign-up/reset effectively unthrottled. The fix: a cookie-less
+// caller is now keyed on the real socket IP (src/instrumentation.ts stamps
+// SOCKET_IP_HEADER onto every request — see instrumentation-socket-ip.test.ts
+// for proof that header can't be spoofed by the caller), which is stable per
+// real source, so repeated requests from the SAME source share one bounded
+// bucket while two different sources still get separate ones.
+describe("anonymousRateLimitId — cookie-less callers are bounded by real socket IP", () => {
+  beforeEach(() => {
+    cookieJar.clear();
+    setSpy.mockClear();
+    delete process.env.TRUST_PROXY_HEADERS;
+  });
+
+  function headersFromSource(ip: string): Headers {
+    const headers = new Headers();
+    headers.set(SOCKET_IP_HEADER, ip);
+    return headers;
+  }
+
+  it("bounds a cookie-less flood from ONE real source to a single stable bucket", async () => {
+    // Simulate a client that never keeps the cookie (like curl): the cookie
+    // jar is cleared before every request, exactly like a fresh, cookie-less
+    // request would look on the wire — but the socket IP stays the same.
+    const first = await anonymousRateLimitId(headersFromSource("203.0.113.9"));
+    cookieJar.clear();
+    const second = await anonymousRateLimitId(headersFromSource("203.0.113.9"));
+    cookieJar.clear();
+    const third = await anonymousRateLimitId(headersFromSource("203.0.113.9"));
+
+    expect(first).toBe("socket:203.0.113.9");
+    expect(second).toBe(first);
+    expect(third).toBe(first);
+  });
+
+  it("gives two different real sources two different buckets", async () => {
+    const a = await anonymousRateLimitId(headersFromSource("203.0.113.9"));
+    cookieJar.clear();
+    const b = await anonymousRateLimitId(headersFromSource("198.51.100.4"));
+
+    expect(a).toBe("socket:203.0.113.9");
+    expect(b).toBe("socket:198.51.100.4");
+    expect(a).not.toBe(b);
+  });
+
+  it("still prefers a valid cookie over the socket IP once one is set", async () => {
+    const first = await anonymousRateLimitId(headersFromSource("203.0.113.9"));
+    expect(first).toBe("socket:203.0.113.9");
+
+    // Same headers (same source) — but the cookie jar now holds the cookie
+    // that first call set, so this real browser moves onto its own
+    // per-browser bucket instead of falling back to the socket IP again.
+    const second = await anonymousRateLimitId(headersFromSource("203.0.113.9"));
+    expect(second).not.toBe("socket:203.0.113.9");
+
+    const [, cookieValue] = setSpy.mock.calls[0] as [string, string];
+    expect(second).toBe(verifyAnonId(cookieValue));
   });
 });

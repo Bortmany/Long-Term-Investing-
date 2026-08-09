@@ -62,6 +62,13 @@ function checkStartupSecrets(): void {
 export async function register(): Promise<void> {
   checkStartupSecrets();
 
+  // Node.js-only: see instrumentation-node.ts for why this is a dynamic
+  // import guarded by NEXT_RUNTIME rather than a top-level import here.
+  if (process.env.NEXT_RUNTIME === "nodejs") {
+    const { subscribeSocketIpDiagnostics } = await import("./instrumentation-node");
+    await subscribeSocketIpDiagnostics();
+  }
+
   if (!process.env.SENTRY_DSN) return;
   try {
     const Sentry = await import("@sentry/nextjs");
