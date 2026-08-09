@@ -5,8 +5,10 @@ import {
   AUTH_RATE_LIMIT,
   emailKey,
   ipKey,
+  peekRateLimit,
   rateLimit,
   rateLimitMessage,
+  resetRateLimit,
   tokenKey,
   type RateLimitResult,
 } from "@/lib/rate-limit";
@@ -90,9 +92,21 @@ export async function POST(request: Request): Promise<Response> {
   const ip = await anonymousRateLimitId(request.headers);
   const ipResult = rateLimit(ipKey("auth", ip), AUTH_RATE_LIMIT);
 
+  // Sign-in's per-account (email) key is handled OUTCOME-BASED, after Better
+  // Auth has verified the password (see below) — pre-checking/incrementing it
+  // here, like every other target key, is exactly what let a pile of WRONG
+  // guesses against one email lock out that account's own CORRECT password
+  // for the rest of the window (a single-account lockout DoS by anyone who
+  // knows the email). Sign-up and forget-password keep the pre-check: they
+  // don't have a "correct password" outcome to protect.
+  const pathname = new URL(request.url).pathname;
+  const isSignInEmail = pathname.endsWith("/sign-in/email");
+
   const targetResults: RateLimitResult[] = [];
   const email = emailFromBody(parsedBody);
-  if (email) targetResults.push(rateLimit(emailKey("auth", email), AUTH_RATE_LIMIT));
+  if (email && !isSignInEmail) {
+    targetResults.push(rateLimit(emailKey("auth", email), AUTH_RATE_LIMIT));
+  }
   const token = tokenFromRequest(parsedBody, request.url);
   if (token) targetResults.push(rateLimit(tokenKey("auth", token), AUTH_RATE_LIMIT));
 
@@ -121,11 +135,42 @@ export async function POST(request: Request): Promise<Response> {
 
   const response = await handlers.POST(request);
 
+  // --- Sign-in per-account guard: OUTCOME-based ---------------------------
+  // Better Auth has just verified the password. Mirrors Bean & Brew's
+  // admin-login limiter (Bean-Brew/server.js, rateLimitedNow/registerAttempt):
+  // only a WRONG password ever counts against the per-email bucket, and a
+  // RIGHT password always gets in — even while this email has a pile of
+  // recent wrong guesses — and clears the bucket. This is what makes the
+  // brute-force protection safe: it can never be turned into a lockout
+  // weapon against the account's real owner, only against further guessing.
+  if (isSignInEmail && email) {
+    const key = emailKey("auth", email);
+    if (response.ok) {
+      resetRateLimit(key);
+    } else {
+      // Already over the limit from previous wrong guesses? Reject THIS
+      // attempt too, without registering another hit (peek doesn't count).
+      const peeked = peekRateLimit(key, AUTH_RATE_LIMIT);
+      if (!peeked.ok) {
+        logger.warn("Auth request rate-limited", { ip, by: "target" });
+        return NextResponse.json(
+          { message: rateLimitMessage(peeked.retryAfterSeconds), code: "RATE_LIMITED" },
+          {
+            status: 429,
+            headers: { "Retry-After": String(peeked.retryAfterSeconds) },
+          },
+        );
+      }
+      // Register this wrong guess so enough of them (still) trip the guard.
+      rateLimit(key, AUTH_RATE_LIMIT);
+    }
+  }
+
   // --- Don't leak whether an email is already registered -----------------
   // On the sign-up endpoint, Better Auth returns a distinct "user already
   // exists" error, which lets anyone probe which emails have accounts. Replace
   // it with a neutral message that reveals nothing either way.
-  if (new URL(request.url).pathname.includes("/sign-up") && !response.ok) {
+  if (pathname.includes("/sign-up") && !response.ok) {
     const masked = await maskExistenceLeak(response);
     if (masked) return masked;
   }

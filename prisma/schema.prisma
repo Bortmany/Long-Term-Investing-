@@ -184,7 +184,13 @@ model Portfolio {
 
   transactions Transaction[]
 
-  @@index([userId])
+  // One portfolio per user (the app is single-portfolio for now — see
+  // getOrCreatePortfolio). A DB-level unique constraint, not just an index,
+  // closes a double-submit/two-tab race: without it, two concurrent
+  // "create my portfolio" calls could both pass the find-then-create check
+  // and insert two rows, silently splitting a user's transactions across
+  // both (and understating totals) instead of erroring.
+  @@unique([userId])
 }
 
 model Instrument {
