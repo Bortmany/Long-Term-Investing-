@@ -6,6 +6,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { AppShell } from "@/components/app-shell";
 import { NotificationBell, type NotificationBellItem } from "@/components/notification-bell";
+import { describeAlertTrigger } from "@/lib/alerts/describe";
 import { sweepAlertsForUserThrottled } from "@/lib/alerts/engine";
 
 // Latest notifications shown in the bell's panel (BUILD-PLAN.md Phase 7).
@@ -42,6 +43,19 @@ export default async function AuthenticatedLayout({
       where: { userId },
       orderBy: { createdAt: "desc" },
       take: NOTIFICATION_BELL_ITEM_LIMIT,
+      // The alert behind each notification, so the bell can say what the
+      // owner had asked for next to what actually happened. It may be null:
+      // deleting an alert leaves its past notifications in place.
+      include: {
+        alert: {
+          select: {
+            kind: true,
+            threshold: true,
+            intervalDays: true,
+            instrument: { select: { currency: true } },
+          },
+        },
+      },
     }),
   ]);
 
@@ -55,6 +69,15 @@ export default async function AuthenticatedLayout({
     priceCurrency: row.priceCurrency,
     priceSource: row.priceSource,
     priceAsOf: row.priceAsOf,
+    explanation: row.alert
+      ? describeAlertTrigger({
+          kind: row.alert.kind,
+          threshold:
+            row.alert.threshold === null ? null : row.alert.threshold.toNumber(),
+          currency: row.alert.instrument?.currency ?? row.priceCurrency ?? null,
+          intervalDays: row.alert.intervalDays,
+        })
+      : null,
   }));
 
   return (

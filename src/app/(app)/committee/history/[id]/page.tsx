@@ -16,10 +16,18 @@ import { badgePropsForValueSource } from "@/components/source-badge";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import { CommitteeResultPanel } from "@/components/committee/committee-result-panel";
+import { DecisionRecordHeader } from "@/components/committee/decision-record-header";
 import { BuyAnalysisPanel, type CurrentPriceInfo } from "@/components/committee/buy-analysis-panel";
 import { SellAnalysisPanel } from "@/components/committee/sell-analysis-panel";
 
 const HISTORY_TYPES = ["COMMITTEE", "BUY_ANALYSIS", "SELL_ANALYSIS"] as const;
+
+/** Plain-English name for each kind of saved run, used in the record header. */
+const KIND_LABELS: Record<(typeof HISTORY_TYPES)[number], string> = {
+  COMMITTEE: "Investment Committee decision",
+  BUY_ANALYSIS: "Buy analysis",
+  SELL_ANALYSIS: "Sell analysis",
+};
 
 export async function generateMetadata({
   params,
@@ -86,6 +94,26 @@ export default async function CommitteeHistoryPage({
   const hasAiKey = getAiClient().ok;
   const analysis = { createdAt: row.createdAt, model: row.model, dataAsOf: row.dataAsOf };
 
+  // Two plain record facts for the cover sheet: which thesis this stock has
+  // open, and whether a later run of the same kind has replaced this one.
+  const [openThesis, newerRun] = await Promise.all([
+    prisma.thesis.findFirst({
+      where: { userId, instrumentId: instrument.id, status: "ACTIVE" },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.aiAnalysis.findFirst({
+      where: {
+        userId,
+        type: row.type,
+        subjectType: row.subjectType,
+        subjectId: row.subjectId,
+        createdAt: { gt: row.createdAt },
+      },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, createdAt: true },
+    }),
+  ]);
+
   const backLink = (
     <Link
       href="/committee"
@@ -96,10 +124,16 @@ export default async function CommitteeHistoryPage({
   );
 
   const heading = (
-    <div className="mt-1 flex flex-wrap items-center gap-3">
-      <h1 className="font-mono text-2xl font-semibold">{instrument.ticker}</h1>
-      <span className="text-lg text-slate-600 dark:text-slate-400">{instrument.name}</span>
-    </div>
+    <DecisionRecordHeader
+      kindLabel={KIND_LABELS[row.type as (typeof HISTORY_TYPES)[number]]}
+      instrumentId={instrument.id}
+      ticker={instrument.ticker}
+      name={instrument.name}
+      recordedAt={row.createdAt}
+      dataAsOf={row.dataAsOf}
+      thesisId={openThesis?.id ?? null}
+      supersededBy={newerRun}
+    />
   );
 
   if (row.type === "COMMITTEE") {

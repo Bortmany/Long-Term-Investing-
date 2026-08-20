@@ -37,7 +37,9 @@ import { WatchToggleButton } from "@/components/stocks/watch-toggle-button";
 import { FinancialStatementsCard } from "@/components/stocks/financial-statements-card";
 import { NewsSummaryCard } from "@/components/stocks/news-summary-card";
 import { RatioStrip } from "@/components/stocks/ratio-strip";
+import { StockSectionNav, type SectionNavItem } from "@/components/stocks/section-nav";
 import { StockScorePanel } from "@/components/stocks/stock-score-panel";
+import { NewThesisDialog } from "@/components/theses/new-thesis-dialog";
 import type {
   DividendHistoryRow,
   RatioTile,
@@ -104,6 +106,24 @@ function upcomingUnavailableMessage(result: Unavailable): string {
   return result.message ?? "Upcoming dividends are unavailable right now.";
 }
 
+/**
+ * The sticky subnav's links, in the order the sections actually appear on
+ * the page (Financials sits above Ratios), so "which section am I in"
+ * highlighting matches what the owner is scrolling past.
+ */
+const SECTIONS: SectionNavItem[] = [
+  { id: "overview", label: "Overview" },
+  { id: "price", label: "Price" },
+  { id: "financials", label: "Financials" },
+  { id: "ratios", label: "Ratios" },
+  { id: "dividends", label: "Dividends" },
+  { id: "score", label: "Score" },
+  { id: "news", label: "News" },
+];
+
+/** Every section gets the same scroll offset so the sticky subnav never covers its heading. */
+const SECTION_CLASS = "scroll-mt-28 md:scroll-mt-24";
+
 /** Green for gains, red for losses — a genuine return figure (ui-spec §2.6). */
 function changeColor(percent: number): string {
   if (percent > 0) return "text-green-600 dark:text-green-400";
@@ -162,6 +182,7 @@ export default async function StockDetailPage({
     upcomingResult,
     storedAnalysis,
     storedNewsAnalysis,
+    activeThesis,
   ] = await Promise.all([
     prisma.watchlistItem.findUnique({
       where: { userId_instrumentId: { userId, instrumentId: instrument.id } },
@@ -189,6 +210,12 @@ export default async function StockDetailPage({
         subjectType: "instrument",
         subjectId: instrument.id,
       },
+      orderBy: { createdAt: "desc" },
+    }),
+    // Only to decide which thesis button to show below: start a new one, or
+    // open the one this stock already has.
+    prisma.thesis.findFirst({
+      where: { userId, instrumentId: instrument.id, status: "ACTIVE" },
       orderBy: { createdAt: "desc" },
     }),
   ]);
@@ -329,8 +356,14 @@ export default async function StockDetailPage({
 
   return (
     <div className="space-y-6">
+      {/* Jump links — the page is long, so the sections are reachable in one tap. */}
+      <StockSectionNav sections={SECTIONS} />
+
       {/* Profile header */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+      <section
+        id="overview"
+        className={`${SECTION_CLASS} flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between`}
+      >
         <div>
           <h1 className="font-mono text-2xl font-semibold">
             {instrument.ticker}
@@ -378,17 +411,35 @@ export default async function StockDetailPage({
             ) : null}
           </div>
         </div>
+      </section>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <WatchToggleButton
+          instrumentId={instrument.id}
+          initialWatched={Boolean(watchlistItem)}
+          ticker={instrument.ticker}
+          size="sm"
+        />
+        {/* Write down why you'd own this, without leaving the research page.
+            If this stock already has an open thesis, go to it instead of
+            quietly starting a second one. */}
+        {activeThesis ? (
+          <Button asChild variant="outline" size="sm">
+            <Link href={`/theses/${activeThesis.id}`}>View thesis</Link>
+          </Button>
+        ) : (
+          <NewThesisDialog
+            instruments={[
+              { id: instrument.id, ticker: instrument.ticker, name: instrument.name },
+            ]}
+            defaultInstrumentId={instrument.id}
+            size="sm"
+          />
+        )}
       </div>
 
-      <WatchToggleButton
-        instrumentId={instrument.id}
-        initialWatched={Boolean(watchlistItem)}
-        ticker={instrument.ticker}
-        size="sm"
-      />
-
       {/* Price history */}
-      <Card className="gap-4">
+      <Card id="price" className={`${SECTION_CLASS} gap-4`}>
         <CardHeader className="flex-row items-center gap-3">
           <CardTitle>Price History</CardTitle>
           {historyResult.ok && latestPoint ? (
@@ -415,17 +466,21 @@ export default async function StockDetailPage({
       </Card>
 
       {/* Financial statements */}
-      <FinancialStatementsCard
-        income={statementBlocks.income}
-        balance={statementBlocks.balance}
-        cashFlow={statementBlocks.cashFlow}
-      />
+      <section id="financials" className={SECTION_CLASS}>
+        <FinancialStatementsCard
+          income={statementBlocks.income}
+          balance={statementBlocks.balance}
+          cashFlow={statementBlocks.cashFlow}
+        />
+      </section>
 
       {/* Ratio strip */}
-      <RatioStrip tiles={ratioTiles} />
+      <section id="ratios" className={SECTION_CLASS}>
+        <RatioStrip tiles={ratioTiles} />
+      </section>
 
       {/* Dividends */}
-      <Card className="gap-4">
+      <Card id="dividends" className={`${SECTION_CLASS} gap-4`}>
         <CardHeader>
           <CardTitle>Dividends</CardTitle>
         </CardHeader>
@@ -503,20 +558,24 @@ export default async function StockDetailPage({
       </Card>
 
       {/* Health Score */}
-      <StockScorePanel
-        instrumentId={instrument.id}
-        hasKey={hasAiKey}
-        analysis={stockScoreAnalysis}
-        output={stockScoreOutput}
-      />
+      <section id="score" className={SECTION_CLASS}>
+        <StockScorePanel
+          instrumentId={instrument.id}
+          hasKey={hasAiKey}
+          analysis={stockScoreAnalysis}
+          output={stockScoreOutput}
+        />
+      </section>
 
       {/* Recent News */}
-      <NewsSummaryCard
-        instrumentId={instrument.id}
-        hasKey={hasAiKey}
-        analysis={newsSummaryAnalysis}
-        output={newsSummaryOutput}
-      />
+      <section id="news" className={SECTION_CLASS}>
+        <NewsSummaryCard
+          instrumentId={instrument.id}
+          hasKey={hasAiKey}
+          analysis={newsSummaryAnalysis}
+          output={newsSummaryOutput}
+        />
+      </section>
     </div>
   );
 }

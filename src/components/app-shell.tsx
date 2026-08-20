@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 
 import { signOutAction } from "@/app/actions/sign-out";
+import { SourceBadgeLegend } from "@/components/source-badge-legend";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -234,7 +235,7 @@ export function AppShell({
         <span className="text-lg font-semibold">InvestIQ AI</span>
         <div className="ml-auto flex items-center gap-1">
           {notificationBellMobile}
-          <ThemeToggle />
+          <ThemeToggle placement="topbar" />
         </div>
       </header>
 
@@ -281,6 +282,10 @@ export function AppShell({
             >
               Terms
             </Link>
+          </p>
+          {/* The key to the source badges that sit next to every number. */}
+          <p className="mt-1 text-center">
+            <SourceBadgeLegend />
           </p>
         </footer>
       </main>

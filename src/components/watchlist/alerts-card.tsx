@@ -7,7 +7,7 @@ import * as React from "react";
 import { Bell, EllipsisVertical, LoaderCircle, TriangleAlert } from "lucide-react";
 
 import { deleteAlert, setAlertStatus } from "@/app/actions/alerts";
-import { describeAlertRule } from "@/lib/alerts/describe";
+import { describeAlertRule, describeAlertTrigger } from "@/lib/alerts/describe";
 import { formatShortDate } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -238,6 +238,20 @@ export function AlertsCard({
                     <div className="text-xs text-slate-500 dark:text-slate-400">
                       {alert.instrumentTicker ?? alert.thesisTicker}
                     </div>
+                    {/* A triggered alert says what happened next to what was
+                        asked for, in the row itself — not only on hover,
+                        which a touch screen can't do. */}
+                    {alert.status === "TRIGGERED" ? (
+                      <div className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+                        {describeAlertTrigger({
+                          kind: alert.kind,
+                          threshold: alert.threshold,
+                          currency: alert.instrumentCurrency,
+                          intervalDays: alert.intervalDays,
+                          happened: alert.lastOutcome,
+                        })}
+                      </div>
+                    ) : null}
                   </TableCell>
                   <TableCell>
                     <AlertStatusBadge status={alert.status} />
