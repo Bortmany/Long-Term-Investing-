@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    env:
+      # Placeholders only — `npx prisma generate` needs DATABASE_URL present
+      # but never connects, and the unit suite injects its own placeholder
+      # DATABASE_URL anyway (see vitest.config.ts). No Postgres service is
+      # needed: unit tests never touch a real database.
+      DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
+      BETTER_AUTH_SECRET: ci-only-dummy-secret-32-characters!!
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      # Unit tests only (vitest.config.ts -> tests/unit/**). Playwright e2e
+      # (`npm run test:e2e`, tests/e2e) is deliberately excluded from CI here
+      # — it's heavy (spins up a browser + a real running app) and stays a
+      # local/manual check for now.
+      - name: Run unit tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
