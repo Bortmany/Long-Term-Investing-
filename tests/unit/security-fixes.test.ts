@@ -404,7 +404,7 @@ describe("per-browser buckets stay independent (finding 4 — better-auth limite
 // The auth route now applies the per-email key OUTCOME-based: `peekRateLimit`
 // never itself counts as a hit, only `rateLimit` (called after a FAILED
 // sign-in) does, and `resetRateLimit` (called after a SUCCESSFUL sign-in)
-// clears it — mirrors Bean & Brew's admin-login limiter.
+// clears it — mirrors the admin-login limiter used in the owner's other apps.
 // ---------------------------------------------------------------------------
 describe("outcome-based per-account limiter (sign-in lockout fix)", () => {
   it("peeking never itself counts as a hit", () => {
