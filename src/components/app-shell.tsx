@@ -260,8 +260,20 @@ export function AppShell({
         </SheetContent>
       </Sheet>
 
-      {/* Page content */}
-      <main className="min-h-screen md:pl-16 lg:pl-60">
+      {/* Page content.
+          overflow-x-clip: floating decorations that hang off a page element —
+          a SourceBadge tooltip centred on an icon at the right edge of a card,
+          for example — must never widen the page and give the whole document a
+          sideways scrollbar. This is the same idea as the shared Table's
+          "overflow-x-auto" wrapper (src/components/ui/table.tsx): the container
+          keeps its own overflow to itself. "clip" (not "hidden") is deliberate —
+          it adds no scrollbar, creates no scroll container, and leaves the
+          mobile top bar's sticky positioning and normal page scrolling alone.
+          Because <main> reaches the right edge of the window, nothing that is
+          visible on screen today gets cut; only the part that was already
+          off-screen stops being scrollable to. Full-screen overlays (Dialog,
+          Sheet) are position: fixed, so they are unaffected. */}
+      <main className="min-h-screen overflow-x-clip md:pl-16 lg:pl-60">
         <div className="mx-auto w-full max-w-6xl p-4 sm:p-6 lg:p-8">{children}</div>
         {/* Persistent disclaimer shown under every authenticated page. */}
         <footer className="mx-auto w-full max-w-6xl px-4 pb-4 sm:px-6 lg:px-8">
