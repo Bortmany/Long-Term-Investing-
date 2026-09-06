@@ -58,7 +58,7 @@ the top) — any session resuming the build starts there.
    ```
 
    Open http://localhost:3000 and sign in with the demo account:
-   **owner@example.com** / **investiq-demo**. The seed gives it a year of
+   **owner@example.com** / the password you set in `SEED_DEMO_PASSWORD`. The seed gives it a year of
    realistic sample transactions across six stocks in three currencies.
 
 > **Security note:** sign-ups are CLOSED by default — the `/sign-up` page

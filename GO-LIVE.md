@@ -3,7 +3,8 @@
 Plain-English list of what to set up before this goes public. Full context lives in the central `Agents/docs/go-live-and-security-audit.md`.
 
 ## Must do before launch
-- [ ] **Pick a host** — there is no deploy config committed yet (no Railway/Vercel file). Decide where it runs.
+- [ ] **Host: Railway** — `railway.json` is committed and covers the build, runs `prisma migrate deploy` before each deploy, and points the health check at `/api/health`. Create the Railway project and connect this repo.
+- [ ] **Set `TRUST_PROXY_HEADERS="true"`** on Railway — the app sits behind Railway's proxy, so without this it would see the proxy's address instead of the real visitor's and rate limits would lump every user together.
 - [ ] **Postgres database** → set `DATABASE_URL`.
 - [ ] **Generate `BETTER_AUTH_SECRET`** (the `.env.example` shows the command) — at least 32 characters. Do not leave it blank or short: in production the app now refuses to start without one (`src/instrumentation.ts`), so this is caught automatically rather than discovered later.
 - [ ] **Set `BETTER_AUTH_URL`** to the real public web address.
