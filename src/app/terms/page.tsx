@@ -1,11 +1,16 @@
 // Public terms of use — no sign-in required (src/proxy.ts PUBLIC_PATHS).
 import Link from "next/link";
 
+import { getLegalContactEmail } from "@/lib/legal-contact";
+
 export const metadata = { title: "Terms of Use — InvestIQ AI" };
 
 const LAST_UPDATED = "July 19, 2026";
 
 export default function TermsPage() {
+  // Server component: read the contact address from the environment here.
+  const contactEmail = getLegalContactEmail();
+
   return (
     <main className="mx-auto min-h-screen max-w-2xl px-4 py-10 sm:px-6">
       <Link href="/sign-in" className="text-sm text-blue-600 hover:underline dark:text-blue-400">
@@ -100,8 +105,14 @@ export default function TermsPage() {
           </h2>
           <p className="mt-2">
             This app is currently a personal tool with a single operator. If
-            you have questions about these terms, contact the person who
-            invited you to use it. See also the{" "}
+            you have questions about these terms, email{" "}
+            <a
+              href={`mailto:${contactEmail}`}
+              className="text-blue-600 hover:underline dark:text-blue-400"
+            >
+              {contactEmail}
+            </a>
+            . See also the{" "}
             <Link href="/privacy" className="text-blue-600 hover:underline dark:text-blue-400">
               Privacy Policy
             </Link>

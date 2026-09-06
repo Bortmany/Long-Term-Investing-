@@ -102,6 +102,10 @@ Naming: files kebab-case (`market-data.ts`), types/components PascalCase, functi
   diff.** `src/app/privacy/page.tsx` is written against exactly what
   `prisma/schema.prisma` stores — a schema change that adds a personal field
   without touching that page is an incomplete diff, not a follow-up.
+- Both `/privacy` and `/terms` show a contact address as a mailto link, read
+  server-side by `getLegalContactEmail` in `src/lib/legal-contact.ts` from the
+  optional env var `PRIVACY_CONTACT_EMAIL` (default: the owner's address,
+  `naeljam@hotmail.com`). Never hardcode a contact address in a page.
 - Data rights live in Settings: "Your data" (download everything, one JSON
   file, `src/lib/account-export.ts`) and "Danger" (delete my account,
   password-confirmed, rate-limited like sign-in, wipes everything via the
