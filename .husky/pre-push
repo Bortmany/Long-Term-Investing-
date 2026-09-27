@@ -1,3 +1,22 @@
+# Safety first: this check changes the database it is pointed at (migrations,
+# test data), so it only ever runs against a database on this Mac. If any
+# database address in the environment or in .env / .env.local points somewhere
+# else (for example the live Railway database), the push stops here.
+for url in "$DATABASE_URL" "$TEST_DATABASE_URL" $(sed -n 's/^\(TEST_\)\{0,1\}DATABASE_URL=//p' .env .env.local 2>/dev/null | tr -d "\"'"); do
+  host=$(printf '%s' "$url" | sed -E 's#^[a-zA-Z+]+://([^@/]*@)?(\[[^]]*\]|[^:/?]*).*#\2#')
+  case "$url" in *host=*|*hostaddr=*) host="(set by a host= option)";; esac
+  case "$host" in
+    ""|localhost|127.0.0.1|"[::1]") ;;
+    *)
+      echo ""
+      echo "Push stopped: a database address points at \"$host\", not this Mac."
+      echo "This check changes the database it runs against, so it only runs on a local one."
+      echo "Point DATABASE_URL at your local Postgres and push again."
+      echo ""
+      exit 1 ;;
+  esac
+done
+
 if command -v pg_isready >/dev/null 2>&1 && ! pg_isready -q; then
   echo ""
   echo "InvestIQ: the local Postgres database isn't running, so the check can't run."
