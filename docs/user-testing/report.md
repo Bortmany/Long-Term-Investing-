@@ -1,5 +1,7 @@
 # InvestIQ AI — user-testing report (2026-09-07)
 
+> The screenshots referenced below are not stored in this repo (app screenshots stay out of git). They can be viewed on the original pull request, #14, on GitHub.
+
 **Verdict: Not ready** — the ladder was applied mechanically. There is no P0. There are three confirmed P1 code bugs, and one of them (the phone tables) makes the core loop unusable on a phone, which is a "Not ready" trigger on its own. On a laptop the app is in much better shape than that word suggests.
 
 A first-time user can sign in, see their whole portfolio in rials, check their dividend income for the last twelve months, filter their transactions, import a CSV of trades, and read their written investment thesis — all on a laptop, with every number reconciling to the last decimal. They cannot review that portfolio on a phone (the money columns are off the edge of the screen), cannot see a correct total if they switch the base currency away from rials, and cannot get a stock back onto their watchlist once they un-watch it.
