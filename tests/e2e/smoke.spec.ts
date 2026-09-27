@@ -18,16 +18,25 @@ test("health endpoint answers ok with a live database", async ({ request }) => {
   expect(typeof body.db).toBe("boolean");
 });
 
-// These two tests specifically need to start signed OUT — one checks the
-// logged-out redirect, the other exercises the real sign-in/sign-out flow —
+// These tests specifically need to start signed OUT — they check the public
+// welcome page, the logged-out redirect, and the real sign-in/sign-out flow —
 // so they override the project's default (signed-in) storage state. Every
 // other test in this file starts already authenticated as the demo user —
 // see tests/e2e/global-setup.ts.
 test.describe("no session", () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
-  test("unauthenticated visitors are redirected to sign-in", async ({ page }) => {
+  test("signed-out visitors see the welcome page at /", async ({ page }) => {
     await page.goto("/");
+    await expect(page).not.toHaveURL(/\/sign-in/);
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Long-term investing, minus the noise." }),
+    ).toBeVisible();
+    await expect(page.getByRole("link", { name: "Sign in" }).first()).toBeVisible();
+  });
+
+  test("signed-out visitors to a protected page are redirected to sign-in", async ({ page }) => {
+    await page.goto("/dashboard");
     await expect(page).toHaveURL(/\/sign-in/);
     await expect(page.getByRole("heading", { name: /sign in/i })).toBeVisible();
   });
