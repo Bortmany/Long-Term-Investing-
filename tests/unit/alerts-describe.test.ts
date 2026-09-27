@@ -5,6 +5,8 @@ import { describe, expect, it } from "vitest";
 import {
   describeAlertThreshold,
   describeAlertTrigger,
+  describeFiredAlert,
+  savedAlertRule,
 } from "@/lib/alerts/describe";
 import { formatMoney } from "@/lib/format";
 
@@ -132,5 +134,33 @@ describe("describeAlertTrigger", () => {
         happened: null,
       }),
     ).toBeNull();
+  });
+});
+
+describe("describeFiredAlert — only ever from the settings saved when it fired", () => {
+  it("states the saved threshold, with the recorded outcome", () => {
+    const saved = savedAlertRule({
+      alertKind: "DAY_DROP",
+      alertThreshold: 10,
+      alertIntervalDays: null,
+      priceCurrency: "USD",
+    });
+    expect(describeFiredAlert(saved, "AAPL dropped 12.3% today")).toBe(
+      "AAPL dropped 12.3% today — your alert was set at 10% or more in one day.",
+    );
+  });
+
+  it("an older notification with no saved settings gets no 'set at' line", () => {
+    const saved = savedAlertRule({
+      alertKind: null,
+      alertThreshold: null,
+      alertIntervalDays: null,
+      priceCurrency: "OMR",
+    });
+    expect(saved).toBeNull();
+    expect(describeFiredAlert(saved)).toBeNull();
+    const withOutcome = describeFiredAlert(saved, "BKMB fell below the level you set");
+    expect(withOutcome).toBe("BKMB fell below the level you set.");
+    expect(withOutcome).not.toContain("set at");
   });
 });

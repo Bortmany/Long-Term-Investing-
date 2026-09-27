@@ -7,7 +7,7 @@ import * as React from "react";
 import { Bell, EllipsisVertical, LoaderCircle, TriangleAlert } from "lucide-react";
 
 import { deleteAlert, setAlertStatus } from "@/app/actions/alerts";
-import { describeAlertRule, describeAlertTrigger } from "@/lib/alerts/describe";
+import { describeAlertRule, describeFiredAlert } from "@/lib/alerts/describe";
 import { formatShortDate } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -243,13 +243,7 @@ export function AlertsCard({
                         which a touch screen can't do. */}
                     {alert.status === "TRIGGERED" ? (
                       <div className="mt-1 text-xs text-amber-700 dark:text-amber-400">
-                        {describeAlertTrigger({
-                          kind: alert.kind,
-                          threshold: alert.threshold,
-                          currency: alert.instrumentCurrency,
-                          intervalDays: alert.intervalDays,
-                          happened: alert.lastOutcome,
-                        })}
+                        {describeFiredAlert(alert.firedRule, alert.lastOutcome)}
                       </div>
                     ) : null}
                   </TableCell>

@@ -134,6 +134,9 @@ export type ExportNotificationRow = {
   priceCurrency: Currency | null;
   priceSource: PriceSource | null;
   priceAsOf: Date | null;
+  alertKind: AlertKind | null;
+  alertThreshold: Prisma.Decimal | null;
+  alertIntervalDays: number | null;
   readAt: Date | null;
   createdAt: Date;
 };
@@ -211,6 +214,9 @@ export type ExportedNotification = {
   priceCurrency: Currency | null;
   priceSource: PriceSource | null;
   priceAsOf: Date | null;
+  alertKind: AlertKind | null;
+  alertThreshold: number | null;
+  alertIntervalDays: number | null;
   readAt: Date | null;
   createdAt: Date;
 };
@@ -297,6 +303,9 @@ function toExportedNotification(n: ExportNotificationRow): ExportedNotification 
     priceCurrency: n.priceCurrency,
     priceSource: n.priceSource,
     priceAsOf: n.priceAsOf,
+    alertKind: n.alertKind,
+    alertThreshold: n.alertThreshold === null ? null : n.alertThreshold.toNumber(),
+    alertIntervalDays: n.alertIntervalDays,
     readAt: n.readAt,
     createdAt: n.createdAt,
   };

@@ -4,6 +4,7 @@
 // and src/components/stocks/types.ts.
 import type { AlertKind, AlertStatus, Currency, Market } from "@prisma/client";
 import type { SourceBadgeProps } from "@/components/source-badge";
+import type { AlertRule } from "@/lib/alerts/describe";
 
 /** One row of the watched/held instruments table. */
 export type WatchlistInstrumentRow = {
@@ -34,6 +35,12 @@ export type AlertRowData = {
   intervalDays: number | null;
   lastEvaluatedAt: Date | null;
   lastOutcome: string | null;
+  /**
+   * The settings this alert had when it last fired (saved on its newest
+   * notification), or null if none were recorded. A triggered row's
+   * "your alert was set at" line comes only from this.
+   */
+  firedRule: AlertRule | null;
 };
 
 /** Instrument option for the alert dialog's price-kind picker (held or watched). */

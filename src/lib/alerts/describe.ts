@@ -23,7 +23,7 @@ export function describeAlertRule(alert: {
 }
 
 /** The alert shape both helpers below read. */
-type AlertRule = {
+export type AlertRule = {
   kind: AlertKind;
   threshold: number | null;
   currency: string | null;
@@ -80,4 +80,43 @@ export function describeAlertTrigger(
   if (happened) return happened.endsWith(".") ? happened : `${happened}.`;
   if (threshold) return `${capitalizeFirst(threshold)}.`;
   return null;
+}
+
+/**
+ * The alert settings saved ON a notification at the moment the alert fired
+ * (Notification.alertKind / alertThreshold / alertIntervalDays, with the
+ * threshold in the notification's priceCurrency). Returns null for older
+ * notifications recorded before these were saved — the caller then shows no
+ * "your alert was set at" line at all, and never falls back to the alert's
+ * CURRENT settings (the owner may have edited them since it fired).
+ */
+export function savedAlertRule(notification: {
+  alertKind: AlertKind | null;
+  alertThreshold: number | null;
+  alertIntervalDays: number | null;
+  priceCurrency: string | null;
+}): AlertRule | null {
+  if (notification.alertKind === null) return null;
+  return {
+    kind: notification.alertKind,
+    threshold: notification.alertThreshold,
+    currency: notification.priceCurrency,
+    intervalDays: notification.alertIntervalDays,
+  };
+}
+
+/**
+ * Explanation line for a fired alert, built only from what was recorded when
+ * it fired: the saved settings (see savedAlertRule) and the recorded
+ * "what happened" sentence. With no saved settings, only the recorded
+ * sentence is repeated; with neither, nothing is shown.
+ */
+export function describeFiredAlert(
+  saved: AlertRule | null,
+  happened?: string | null,
+): string | null {
+  if (saved) return describeAlertTrigger({ ...saved, happened });
+  const cleaned = happened?.trim() ? happened.trim() : null;
+  if (!cleaned) return null;
+  return cleaned.endsWith(".") ? cleaned : `${cleaned}.`;
 }

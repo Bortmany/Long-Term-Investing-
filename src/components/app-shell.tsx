@@ -296,9 +296,9 @@ export function AppShell({
             </Link>
           </p>
           {/* The key to the source badges that sit next to every number. */}
-          <p className="mt-1 text-center">
+          <div className="mt-1 text-center">
             <SourceBadgeLegend />
-          </p>
+          </div>
         </footer>
       </main>
     </div>
