@@ -1,0 +1,84 @@
+# InvestIQ — automatic check on GitHub.
+#
+# Every pull request, and every push to main, gets the same checks as
+# `npm run verify` (the pre-push hook runs that on the Mac, and
+# docs/CONVENTIONS.md describes it): install, apply the database migrations
+# to a throwaway database, then lint, type check, build and the tests.
+# A red cross on GitHub means one of those steps failed.
+#
+# Everything here is a throwaway, CI-only value: the database lives only for
+# the length of the run, and the sign-in secret is generated fresh each time.
+# No real key is ever used or needed — market data, AI, email and error
+# tracking all stay switched off, which is a normal state for this app.
+#
+# Left out on purpose: the Playwright browser tests (`npm run test:e2e`).
+# They are not part of `npm run verify`, the pre-push hook does not run them
+# either, and they need a browser download plus several extra minutes.
+
+name: Verify
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A newer push to the same branch cancels the older, now-pointless run.
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: investiq
+          POSTGRES_PASSWORD: investiq
+          POSTGRES_DB: investiq
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U investiq"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://investiq:investiq@localhost:5432/investiq
+      BETTER_AUTH_URL: http://localhost:3000
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Make a CI-only sign-in secret
+        run: echo "BETTER_AUTH_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+
+      - name: Install
+        run: npm ci
+
+      - name: Apply migrations to the throwaway database
+        run: npx prisma migrate deploy
+
+      - name: Generate the database client
+        run: npx prisma generate
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: Tests
+        run: npm test
