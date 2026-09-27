@@ -15,7 +15,7 @@
     "test:e2e": "playwright test",
     "format": "prettier --write .",
     "verify": "prisma migrate deploy && prisma generate && npm run lint && npm run typecheck && npm run build && npm test",
-    "prepare": "husky"
+    "prepare": "husky || true"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
