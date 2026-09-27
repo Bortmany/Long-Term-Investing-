@@ -6,6 +6,7 @@
 // derived on the server from quantity × price (see transaction-schema.ts).
 
 import { revalidatePath } from "next/cache";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
   actionError,
@@ -18,6 +19,8 @@ import {
   transactionInputSchema,
   type TransactionInput,
 } from "@/lib/transaction-schema";
+import { computeHoldings, fromPrismaTransaction } from "@/lib/portfolio";
+import { lockPortfolioForWrite } from "@/lib/portfolio-lock";
 import { getOrCreatePortfolio, getSessionUserId } from "@/lib/user-portfolio";
 import {
   rateLimit,
@@ -55,6 +58,51 @@ async function instrumentExists(input: TransactionInput): Promise<boolean> {
   return count > 0;
 }
 
+// A hair of tolerance so floating-point noise on a legitimate "sell
+// everything" can't trip the guard.
+const QUANTITY_EPSILON = 1e-6;
+
+/**
+ * Reject a SELL that would sell more shares than are actually held — otherwise
+ * the sell would credit cash the account never earned (fabricated money).
+ * `excludeTransactionId` leaves the row being edited out of the tally, so an
+ * edit is checked against the OTHER transactions, not itself.
+ *
+ * Returns an action error, or null when the sell is within the position (or the
+ * input isn't a sell).
+ */
+async function sellExceedsPositionError(
+  db: Prisma.TransactionClient,
+  portfolioId: string,
+  input: TransactionInput,
+  excludeTransactionId?: string,
+): Promise<{ ok: false; error: string } | null> {
+  if (input.type !== "SELL" || !input.instrumentId) return null;
+
+  const rows = await db.transaction.findMany({
+    where: {
+      portfolioId,
+      ...(excludeTransactionId ? { id: { not: excludeTransactionId } } : {}),
+    },
+  });
+  const holding = computeHoldings(rows.map(fromPrismaTransaction)).find(
+    (h) => h.instrumentId === input.instrumentId,
+  );
+  const held = holding?.quantity ?? 0;
+
+  if (input.quantity > held + QUANTITY_EPSILON) {
+    const heldLabel = held > 0 ? held : "no";
+    return actionError(
+      `You're trying to sell ${input.quantity} share${
+        input.quantity === 1 ? "" : "s"
+      }, but this account holds ${heldLabel} share${
+        held === 1 ? "" : "s"
+      } of it. Record the matching buys first, or sell fewer.`,
+    );
+  }
+  return null;
+}
+
 /**
  * Add one transaction to the signed-in user's portfolio (the portfolio is
  * created on first use). Returns the new transaction's id.
@@ -79,12 +127,24 @@ export async function createTransaction(
 
   const portfolio = await getOrCreatePortfolio(userId);
   const record = toTransactionRecord(parsed.data);
-  const created = await prisma.transaction.create({
-    data: { ...record, portfolioId: portfolio.id },
+
+  // Atomic check-then-write: lock this portfolio's row, RE-CHECK the position
+  // inside the same database transaction, then insert. Without the lock five
+  // concurrent SELLs could all read the same stale holdings, all pass the
+  // "can't sell more than you hold" check, and all write — minting cash the
+  // account never earned. The lock makes them run one at a time.
+  const outcome = await prisma.$transaction(async (tx) => {
+    await lockPortfolioForWrite(tx, portfolio.id);
+    const oversell = await sellExceedsPositionError(tx, portfolio.id, parsed.data);
+    if (oversell) return oversell;
+    const created = await tx.transaction.create({
+      data: { ...record, portfolioId: portfolio.id },
+    });
+    return actionOk({ id: created.id });
   });
 
-  revalidatePortfolioPages();
-  return actionOk({ id: created.id });
+  if (outcome.ok) revalidatePortfolioPages();
+  return outcome;
 }
 
 /**
@@ -123,13 +183,26 @@ export async function updateTransaction(
   }
 
   const record = toTransactionRecord(parsed.data);
-  await prisma.transaction.update({
-    where: { id: existing.id },
-    data: record,
+
+  // Same atomic check-then-write as createTransaction: lock the portfolio,
+  // re-check the edited values against the OTHER transactions (exclude this
+  // row, which is being replaced), then write — so an edit can't win a stale
+  // read and oversell either.
+  const outcome = await prisma.$transaction(async (tx) => {
+    await lockPortfolioForWrite(tx, existing.portfolioId);
+    const oversell = await sellExceedsPositionError(
+      tx,
+      existing.portfolioId,
+      parsed.data,
+      existing.id,
+    );
+    if (oversell) return oversell;
+    await tx.transaction.update({ where: { id: existing.id }, data: record });
+    return actionOk({ id: existing.id });
   });
 
-  revalidatePortfolioPages();
-  return actionOk({ id: existing.id });
+  if (outcome.ok) revalidatePortfolioPages();
+  return outcome;
 }
 
 /**
@@ -156,7 +229,23 @@ export async function deleteTransaction(
     return actionError("That transaction could not be found in your portfolio.");
   }
 
-  await prisma.transaction.delete({ where: { id: existing.id } });
+  try {
+    await prisma.transaction.delete({ where: { id: existing.id } });
+  } catch (error) {
+    // P2025 = "record to delete does not exist". This happens when the SAME
+    // transaction is deleted twice at once (two tabs, a double-click): the
+    // first delete wins, the second finds nothing. That's not a server error —
+    // the row is already gone, which is exactly what the caller wanted. Refresh
+    // the pages and answer cleanly instead of throwing an unhandled 500.
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2025"
+    ) {
+      revalidatePortfolioPages();
+      return actionError("That transaction was already removed.");
+    }
+    throw error;
+  }
 
   revalidatePortfolioPages();
   return actionOk({ id: existing.id });

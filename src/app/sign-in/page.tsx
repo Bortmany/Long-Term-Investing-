@@ -4,9 +4,9 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { LoaderCircle } from "lucide-react";
-import { z } from "zod";
 
 import { signIn } from "@/lib/auth-client";
+import { errorFieldClass, signInSchema } from "@/lib/auth-schema";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,25 +20,29 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-const schema = z.object({
-  email: z.string().email("Please enter a valid email address."),
-  password: z.string().min(8, "Password must be at least 8 characters."),
-});
-
 export default function SignInPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [fieldError, setFieldError] = useState<"email" | "password" | null>(
+    null,
+  );
   const [pending, setPending] = useState(false);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
+    setFieldError(null);
 
-    const parsed = schema.safeParse({ email, password });
+    const parsed = signInSchema.safeParse({ email, password });
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? "Invalid input.");
+      // Point at the field that failed so the user knows which box to fix.
+      const failedField = parsed.error.issues[0]?.path[0];
+      if (failedField === "email" || failedField === "password") {
+        setFieldError(failedField);
+      }
       return;
     }
 
@@ -69,7 +73,9 @@ export default function SignInPage() {
           <CardTitle>Sign in</CardTitle>
           <CardDescription>Access your portfolio dashboard.</CardDescription>
         </CardHeader>
-        <form onSubmit={handleSubmit}>
+        {/* noValidate: our own zod messages (plain English, shown on the
+            field) do the talking instead of the browser's built-in tooltip. */}
+        <form onSubmit={handleSubmit} noValidate>
           <CardContent className="space-y-4">
             {error ? (
               <Alert variant="destructive">
@@ -81,11 +87,15 @@ export default function SignInPage() {
               <Input
                 id="email"
                 type="email"
-                placeholder="you@example.com"
+                placeholder="Ahmed@gmail.com"
                 autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+                aria-invalid={fieldError === "email" || undefined}
+                className={
+                  fieldError === "email" ? errorFieldClass : undefined
+                }
               />
             </div>
             <div className="space-y-2">
@@ -98,6 +108,10 @@ export default function SignInPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                aria-invalid={fieldError === "password" || undefined}
+                className={
+                  fieldError === "password" ? errorFieldClass : undefined
+                }
               />
             </div>
           </CardContent>
@@ -125,11 +139,17 @@ export default function SignInPage() {
         </form>
       </Card>
       <p className="mt-6 text-center text-xs text-slate-400 dark:text-slate-500">
-        <Link href="/privacy" className="hover:underline">
+        <Link
+          href="/privacy"
+          className="text-blue-600 hover:underline dark:text-blue-400"
+        >
           Privacy
         </Link>
         {" · "}
-        <Link href="/terms" className="hover:underline">
+        <Link
+          href="/terms"
+          className="text-blue-600 hover:underline dark:text-blue-400"
+        >
           Terms
         </Link>
       </p>

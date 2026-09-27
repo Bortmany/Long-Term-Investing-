@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getSessionCookie } from "better-auth/cookies";
+import { isSameOrigin } from "@/lib/request-origin";
+import { isActionBodyDecodable, NEXT_ACTION_HEADER } from "@/lib/action-body";
 
 // Routes anyone may visit without being signed in.
 // /api/cron is public here because it does its OWN auth (a bearer secret
@@ -31,8 +33,43 @@ function isPublic(pathname: string): boolean {
 // Next.js 16 renamed Middleware to Proxy — same behavior, new file name.
 // This is an optimistic redirect based on the presence of the session
 // cookie; real session validation happens server-side via auth.api.
-export function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // State-changing requests with a MISMATCHED Origin get a clean 400 here,
+  // before the request reaches a server action or route handler that would
+  // otherwise throw an unhandled 500 (leaking a digest). A missing Origin is
+  // allowed (server-to-server calls, health checks); only a present-but-wrong
+  // Origin is rejected. Session cookies are SameSite=Lax, so this is
+  // defence-in-depth, not the only guard.
+  const method = request.method.toUpperCase();
+  if (method !== "GET" && method !== "HEAD" && !isSameOrigin(request.headers)) {
+    return NextResponse.json(
+      {
+        message:
+          "That request was blocked because it looked like it came from another site. Please reload the page and try again.",
+        code: "BAD_ORIGIN",
+      },
+      { status: 400 },
+    );
+  }
+
+  // Server Action POST with an undecodable body → the same clean 400 shape,
+  // never Next's internal decoder crashing into an unhandled 500.
+  if (
+    method === "POST" &&
+    request.headers.has(NEXT_ACTION_HEADER) &&
+    !(await isActionBodyDecodable(request))
+  ) {
+    return NextResponse.json(
+      {
+        message:
+          "That request could not be read (its data was invalid). Please reload the page and try again.",
+        code: "INVALID_BODY",
+      },
+      { status: 400 },
+    );
+  }
 
   if (isPublic(pathname)) {
     return NextResponse.next();

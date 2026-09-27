@@ -175,10 +175,21 @@ per-screen.
 **Standard no-key page pattern:** on any page whose whole purpose is one AI feature (Committee,
 Reviews), the header's primary AI-trigger button ("Convene Committee", "Run weekly review") is
 **hidden entirely** (nothing to click) and the main content area shows `ConnectKeyNotice` instead of
-the list/table it would otherwise show. On pages where AI is one panel among other real content
+the list/table it would otherwise show — **but only when that page has nothing stored to show**. If
+past results already exist (saved reviews, a saved committee run), the list/panel renders as normal,
+the trigger button renders **disabled**, and `ConnectKeyNotice` sits below the content explaining
+why it is off. Never hide real saved analysis behind the notice. On pages where AI is one panel
+among other real content
 (Stocks detail's Health Score panel, Theses detail's Latest Check, a stock's News section), only that
 panel's content area is replaced by `ConnectKeyNotice` — the rest of the page (price, statements,
 etc.) renders normally, since those don't need AI.
+
+**Committee, specifically (§6.1):** the instrument Select and the mode tabs are *navigation*, not
+generation — they stay fully usable with no key, so a saved Committee / Buy / Sell run can still be
+opened and read. In the picker card, `ConnectKeyNotice` appears **only while no stock is selected**
+(there is no panel below yet to carry it); as soon as a stock is selected the picker shows its tabs
+and the `AiPanel` below owns the no-key story — its own disabled button plus one notice, never two
+notices on the same screen.
 
 **`AiPanel`** (`src/components/ai-panel.tsx`) — the one container every persisted `AiAnalysis` result
 renders through. Props: `title` (CardTitle text), `actionLabel` (button text, e.g. "Convene
@@ -201,8 +212,12 @@ phase below defines its shape). `CardFooter` always ends with `AiDisclaimer` (om
 `ConnectKeyNotice` has replaced the content — nothing to disclaim about analysis that isn't shown).
 
 States, in order of precedence:
-1. **No key** (`!hasKey`): header shows the title only, no action button, no caption; `CardContent`
-   = `ConnectKeyNotice`; no footer.
+1a. **No key, nothing stored** (`!hasKey && analysis === null`): header shows the title only, no
+   action button, no caption; `CardContent` = `ConnectKeyNotice`; no footer.
+1b. **No key, stored analysis** (`!hasKey && analysis`): the panel renders exactly as it normally
+   would — caption, content, `AiDisclaimer` — with the action button visibly **disabled**
+   (`aria-describedby` pointing at the notice) and `ConnectKeyNotice` under the content. A
+   `readOnly` panel (a historical run) shows no notice, since it has no button to explain.
 2. **No analysis yet** (`hasKey && analysis === null && !isPending`): header shows title + action
    button as normal; `CardContent` shows a centered mini-placeholder — `Sparkles` icon,
    `text-sm text-slate-500` — **"No analysis yet. Click '{actionLabel}' to generate one."**

@@ -66,9 +66,10 @@ export function AiPanel({
 }) {
   const [error, setError] = React.useState<string | null>(null);
   const [isPending, startTransition] = React.useTransition();
+  const noticeId = React.useId();
 
   function handleAction() {
-    if (!onAction || isPending) return;
+    if (!onAction || isPending || !hasKey) return;
     setError(null);
     startTransition(async () => {
       const result = await onAction();
@@ -81,8 +82,11 @@ export function AiPanel({
     });
   }
 
-  // State 1: no key — title only, no button, no caption, no footer.
-  if (!hasKey) {
+  // State 1: no key AND nothing stored — title only, no button, no caption,
+  // no footer. When a stored analysis DOES exist it keeps rendering below
+  // (with its caption and disclaimer): hiding real, already-saved results
+  // would be the opposite of honest. Only the generate action goes away.
+  if (!hasKey && !analysis) {
     return (
       <Card className={className}>
         <CardHeader>
@@ -96,6 +100,10 @@ export function AiPanel({
   }
 
   const showButton = !readOnly;
+  // With no key the button stays visible but disabled, and the notice below
+  // the content says why. On a read-only historical view there's no button to
+  // explain, so no notice either.
+  const showKeyNotice = !hasKey && showButton;
 
   return (
     <Card className={className}>
@@ -106,7 +114,8 @@ export function AiPanel({
             type="button"
             variant="outline"
             size="sm"
-            disabled={isPending}
+            disabled={isPending || !hasKey}
+            aria-describedby={showKeyNotice ? noticeId : undefined}
             onClick={handleAction}
           >
             {isPending ? (
@@ -156,6 +165,12 @@ export function AiPanel({
             </p>
           </div>
         )}
+
+        {showKeyNotice ? (
+          <div id={noticeId} className="mt-4">
+            <ConnectKeyNotice />
+          </div>
+        ) : null}
       </CardContent>
 
       <CardFooter>

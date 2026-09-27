@@ -13,11 +13,10 @@ import {
   computePortfolioValue,
   computeReturns,
   computeTrailingDividendIncome,
-  fromPrismaFxRate,
-  fromPrismaPriceCache,
   fromPrismaTransaction,
   type AllocatableHolding,
 } from "@/lib/portfolio";
+import { loadUserMarketData } from "@/lib/portfolio-market-data";
 import { computeReviewDelta, type ReviewDelta, type ReviewSectorDelta, type ReviewSnapshot } from "./delta";
 
 const WEEKLY_REVIEW_INSTRUCTIONS =
@@ -66,19 +65,19 @@ export async function buildWeeklyReviewInput(params: {
     ),
   ];
 
-  const [priceRows, fxRows, instrumentRows] = await Promise.all([
-    prisma.priceCache.findMany({ where: { instrumentId: { in: instrumentIds } } }),
-    prisma.fxRate.findMany(),
+  // The user's own market data: shared FMP / SEED cache PLUS this user's own
+  // manual overrides (never another user's) — see loadUserMarketData.
+  const [{ prices, fxRates }, instrumentRows] = await Promise.all([
+    loadUserMarketData(portfolio.userId, instrumentIds),
     prisma.instrument.findMany({ where: { id: { in: instrumentIds } } }),
   ]);
 
   const transactions = transactionRows.map(fromPrismaTransaction);
-  const fxRates = fxRows.map(fromPrismaFxRate);
   const instrumentById = new Map(instrumentRows.map((i) => [i.id, i]));
 
   const portfolioValue = computePortfolioValue({
     transactions,
-    prices: priceRows.map(fromPrismaPriceCache),
+    prices,
     fxRates,
     baseCurrency: portfolio.baseCurrency,
   });

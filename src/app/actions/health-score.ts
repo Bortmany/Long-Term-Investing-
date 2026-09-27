@@ -27,11 +27,10 @@ import {
   buildHealthScoreInput,
   computePortfolioValue,
   computeTrailingDividendIncome,
-  fromPrismaFxRate,
-  fromPrismaPriceCache,
   fromPrismaTransaction,
   type HealthScoreHolding,
 } from "@/lib/portfolio";
+import { loadUserMarketData } from "@/lib/portfolio-market-data";
 import { ANALYSIS_MODEL } from "@/lib/ai/client";
 import { runAnalysis } from "@/lib/ai/analysis";
 import { healthScoreSchema } from "@/lib/ai/schemas";
@@ -77,19 +76,19 @@ export async function generateHealthScore(): Promise<ActionResult<{ id: string }
           ),
         ];
 
-        const [priceRows, fxRows, instrumentRows] = await Promise.all([
-          prisma.priceCache.findMany({ where: { instrumentId: { in: instrumentIds } } }),
-          prisma.fxRate.findMany(),
+        // This user's own market data: shared FMP / SEED cache PLUS their own
+        // manual overrides (never another user's) — see loadUserMarketData.
+        const [{ prices, fxRates }, instrumentRows] = await Promise.all([
+          loadUserMarketData(userId, instrumentIds),
           prisma.instrument.findMany({ where: { id: { in: instrumentIds } } }),
         ]);
 
         const transactions = transactionRows.map(fromPrismaTransaction);
-        const fxRates = fxRows.map(fromPrismaFxRate);
         const instrumentById = new Map(instrumentRows.map((i) => [i.id, i]));
 
         const portfolioValue = computePortfolioValue({
           transactions,
-          prices: priceRows.map(fromPrismaPriceCache),
+          prices,
           fxRates,
           baseCurrency: portfolio.baseCurrency,
         });

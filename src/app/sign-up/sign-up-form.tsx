@@ -4,9 +4,9 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { LoaderCircle } from "lucide-react";
-import { z } from "zod";
 
 import { signUp } from "@/lib/auth-client";
+import { errorFieldClass, signUpSchema } from "@/lib/auth-schema";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,11 +20,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-const schema = z.object({
-  name: z.string().min(1, "Please enter your name."),
-  email: z.string().email("Please enter a valid email address."),
-  password: z.string().min(8, "Password must be at least 8 characters."),
-});
+/** The red border + ring the failing box wears, same as the sign-in page. */
 
 export function SignUpForm() {
   const router = useRouter();
@@ -32,15 +28,28 @@ export function SignUpForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [fieldError, setFieldError] = useState<
+    "name" | "email" | "password" | null
+  >(null);
   const [pending, setPending] = useState(false);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
+    setFieldError(null);
 
-    const parsed = schema.safeParse({ name, email, password });
+    const parsed = signUpSchema.safeParse({ name, email, password });
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? "Invalid input.");
+      // Point at the field that failed so the user knows which box to fix.
+      const failedField = parsed.error.issues[0]?.path[0];
+      if (
+        failedField === "name" ||
+        failedField === "email" ||
+        failedField === "password"
+      ) {
+        setFieldError(failedField);
+      }
       return;
     }
 
@@ -53,6 +62,13 @@ export function SignUpForm() {
     setPending(false);
 
     if (signUpError) {
+      // Better Auth re-checks the email shape on the server. If that is what
+      // came back, mark the email box so the user sees where the problem is.
+      if (signUpError.code === "INVALID_EMAIL") {
+        setFieldError("email");
+        setError("Enter a real email address, like Ahmed@gmail.com.");
+        return;
+      }
       setError(signUpError.message ?? "Sign-up failed. Please try again.");
       return;
     }
@@ -69,7 +85,9 @@ export function SignUpForm() {
           <CardTitle>Create your account</CardTitle>
           <CardDescription>Set up InvestIQ AI.</CardDescription>
         </CardHeader>
-        <form onSubmit={handleSubmit}>
+        {/* noValidate: our own zod messages (plain English, shown on the
+            field) do the talking instead of the browser's built-in tooltip. */}
+        <form onSubmit={handleSubmit} noValidate>
           <CardContent className="space-y-4">
             {error ? (
               <Alert variant="destructive">
@@ -82,11 +100,13 @@ export function SignUpForm() {
               <Input
                 id="name"
                 type="text"
-                placeholder="Your name"
+                placeholder="Ahmed Al Balushi"
                 autoComplete="name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
+                aria-invalid={fieldError === "name" || undefined}
+                className={fieldError === "name" ? errorFieldClass : undefined}
               />
             </div>
             <div className="space-y-2">
@@ -94,11 +114,13 @@ export function SignUpForm() {
               <Input
                 id="email"
                 type="email"
-                placeholder="you@example.com"
+                placeholder="Ahmed@gmail.com"
                 autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+                aria-invalid={fieldError === "email" || undefined}
+                className={fieldError === "email" ? errorFieldClass : undefined}
               />
             </div>
             <div className="space-y-2">
@@ -111,6 +133,10 @@ export function SignUpForm() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                aria-invalid={fieldError === "password" || undefined}
+                className={
+                  fieldError === "password" ? errorFieldClass : undefined
+                }
               />
             </div>
           </CardContent>

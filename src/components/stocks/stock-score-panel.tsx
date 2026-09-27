@@ -76,7 +76,7 @@ export function StockScorePanel({
               Health Score
             </p>
             <div className="mt-1 flex items-baseline gap-3">
-              <span className="text-6xl font-semibold tabular-nums">
+              <span className="text-4xl font-semibold tracking-tight leading-tight tabular-nums">
                 {output.score}
               </span>
               <Badge variant="secondary">{scoreBand(output.score)}</Badge>

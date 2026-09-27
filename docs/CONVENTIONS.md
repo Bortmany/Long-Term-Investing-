@@ -22,7 +22,7 @@ In practice:
 - `src/lib/data/` — the market-data layer (see caching rule below).
 - `src/lib/portfolio/` — pure portfolio math functions (no I/O; testable without a database).
 - `src/proxy.ts` — route protection. Note: Next.js 16 renamed "middleware" to "proxy"; this file plays that role. Public routes: `/sign-in`, `/sign-up`, `/api/auth`, `/api/health`. Everything else requires a session cookie.
-- `/sign-up` allows public self-registration. Acceptable for local use only — it must be disabled or gated before any non-local deployment (Phase 2 item).
+- `/sign-up` is CLOSED by default: the page shows a "registration is closed" message and the server rejects sign-up attempts unless `ALLOW_SIGNUPS="true"` is set (needed briefly when seeding a fresh database — remove it afterwards). The app is invitation-only; a live deployment must never set it.
 - `tests/unit/` — Vitest unit tests (run by `npm run test`, no database needed).
 - `tests/e2e/` — Playwright smoke tests (run by `npm run test:e2e` only, never part of `npm run test`).
 - `prisma/` — schema, numbered migrations, seed script.
@@ -66,10 +66,15 @@ Naming: files kebab-case (`market-data.ts`), types/components PascalCase, functi
   several API calls but persists one row). Reusing a stored analysis by input hash never counts
   against the cap. A refusal is a typed result with a plain-English message: what happened, when
   it resets, and that existing analyses are still available — never a silent failure.
-- **No key → `ConnectKeyNotice`, honest and first-class.** When `ANTHROPIC_API_KEY` is unset,
-  every AI trigger and every AI output is replaced by the `ConnectKeyNotice` component (or, on an
-  AI-only page, the page's whole trigger button is hidden and its content area shows the notice).
-  This is never rendered as an error — it's a normal, first-class state.
+- **No key → `ConnectKeyNotice`, honest and first-class — but stored results still show.**
+  When `ANTHROPIC_API_KEY` is unset, every AI *trigger* is switched off: the button renders
+  disabled (or is hidden where there is nothing stored to act on), and the `ConnectKeyNotice`
+  component explains why. An analysis that is already saved in the database keeps rendering
+  in full, with its usual caption ("Analysis from … · model · data as of …") and
+  `AiDisclaimer` — hiding real saved results behind the notice would be the opposite of the
+  golden rule. Only when a surface has **no stored result and no key** does the notice take
+  over the content area on its own (that is also the whole-page pattern for an AI-only page
+  with nothing stored). This is never rendered as an error — it's a normal, first-class state.
 - **The key is never logged or returned.** `ANTHROPIC_API_KEY` is read once in
   `src/lib/ai/client.ts` and handed to the SDK; it is never written to a log line, an error
   message, or a response body. The shared logger (`src/lib/logger.ts`) also redacts any context
@@ -97,6 +102,10 @@ Naming: files kebab-case (`market-data.ts`), types/components PascalCase, functi
   diff.** `src/app/privacy/page.tsx` is written against exactly what
   `prisma/schema.prisma` stores — a schema change that adds a personal field
   without touching that page is an incomplete diff, not a follow-up.
+- Both `/privacy` and `/terms` show a contact address as a mailto link, read
+  server-side by `getLegalContactEmail` in `src/lib/legal-contact.ts` from the
+  optional env var `PRIVACY_CONTACT_EMAIL` (default: the owner's address,
+  `naeljam@hotmail.com`). Never hardcode a contact address in a page.
 - Data rights live in Settings: "Your data" (download everything, one JSON
   file, `src/lib/account-export.ts`) and "Danger" (delete my account,
   password-confirmed, rate-limited like sign-in, wipes everything via the

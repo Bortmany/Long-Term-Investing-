@@ -61,11 +61,14 @@ export function HoldingsTable({
   rows,
   baseCurrency,
   badge,
+  weightsNote,
   onUpdatePrice,
 }: {
   rows: HoldingRowData[];
   baseCurrency: Currency;
   badge: Pick<SourceBadgeProps, "variant" | "date">;
+  /** Shown under the table when Weight can add up to more than 100% (negative cash). */
+  weightsNote?: string;
   onUpdatePrice: (row: HoldingRowData) => void;
 }) {
   return (
@@ -244,6 +247,14 @@ export function HoldingsTable({
             </TableBody>
           </Table>
         )}
+        {/* Honest note: weights are a share of TOTAL value, so when cash is
+            negative the holdings alone can add up to more than 100%. Say why
+            rather than let the numbers look wrong (golden rule). */}
+        {weightsNote && rows.length > 0 ? (
+          <p className="mt-3 text-sm text-amber-700 dark:text-amber-400">
+            {weightsNote}
+          </p>
+        ) : null}
       </CardContent>
     </Card>
   );

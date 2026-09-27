@@ -55,7 +55,7 @@ export function HealthScoreContent({
           {heroLabel} <ExplainerTip term="health-score" />
         </p>
         <div className="mt-1 flex items-baseline gap-3">
-          <span className="text-6xl font-semibold tabular-nums">{output.score}</span>
+          <span className="text-4xl font-semibold tracking-tight leading-tight tabular-nums">{output.score}</span>
           <Badge variant="secondary">{scoreBandLabel(output.score)}</Badge>
         </div>
       </div>

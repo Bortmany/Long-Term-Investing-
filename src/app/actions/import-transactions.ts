@@ -17,12 +17,24 @@ import {
   type ActionResult,
 } from "@/lib/action-result";
 import {
+  applyOversellProjection,
+  findImportOversell,
   toTransactionRecord,
   validateMappedRows,
-  type ImportRowResult,
-  type ImportValidationReport,
-  type KnownInstrument,
-  type MappedImportRow,
+} from "@/lib/import-rows";
+import { computeHoldings, fromPrismaTransaction } from "@/lib/portfolio";
+import { lockPortfolioForWrite } from "@/lib/portfolio-lock";
+// TYPE-ONLY import (import type), so these symbols are ERASED from the compiled
+// server bundle. In a "use server" file a value-level import/re-export of a
+// type is a runtime landmine: the server-action transform can emit a real
+// `export { ImportValidationReport }`, and because the type doesn't exist at
+// runtime that throws `ReferenceError: ... is not defined` the moment the
+// action is called (it broke the whole CSV "Validate" step). Types therefore
+// live only in @/lib/import-rows; UI code imports them straight from there.
+import type {
+  ImportValidationReport,
+  KnownInstrument,
+  MappedImportRow,
 } from "@/lib/import-rows";
 import { getOrCreatePortfolio, getSessionUserId } from "@/lib/user-portfolio";
 import {
@@ -31,8 +43,6 @@ import {
   rateLimitMessage,
   userKey,
 } from "@/lib/rate-limit";
-
-export type { ImportRowResult, ImportValidationReport, MappedImportRow };
 
 // Outer shape guard for the action's OWN arguments — the client sends an array
 // of mapped rows and we never trust its structure. Deep per-row validation
@@ -61,6 +71,29 @@ async function loadKnownInstruments(): Promise<KnownInstrument[]> {
     select: { id: true, ticker: true, market: true, currency: true },
   });
   return rows;
+}
+
+/**
+ * The signed-in user's current per-instrument share counts, keyed the same
+ * way findImportOversell expects. Reads only — never creates a portfolio, so
+ * a dry run on a brand-new account (no portfolio yet) just sees "nothing
+ * held" rather than side-effecting one into existence.
+ */
+async function loadStartingQuantities(userId: string): Promise<Map<string, number>> {
+  const portfolio = await prisma.portfolio.findFirst({
+    where: { userId },
+    orderBy: { createdAt: "asc" },
+  });
+  if (!portfolio) return new Map();
+
+  const existing = await prisma.transaction.findMany({
+    where: { portfolioId: portfolio.id },
+  });
+  const startingQuantities = new Map<string, number>();
+  for (const holding of computeHoldings(existing.map(fromPrismaTransaction))) {
+    startingQuantities.set(holding.instrumentId, holding.quantity);
+  }
+  return startingQuantities;
 }
 
 /**
@@ -93,7 +126,15 @@ export async function validateImportRows(
   }
 
   const instruments = await loadKnownInstruments();
-  return actionOk(validateMappedRows(rows, instruments));
+  const report = validateMappedRows(rows, instruments);
+
+  // Golden-rule honesty: the commit step's oversell guard is the real
+  // enforcement, but the dry run must not tell someone "all rows look good"
+  // when a SELL in the batch would actually be rejected at commit time.
+  const startingQuantities = await loadStartingQuantities(userId);
+  applyOversellProjection(report, startingQuantities);
+
+  return actionOk(report);
 }
 
 /**
@@ -142,12 +183,42 @@ export async function importTransactions(
     result.ok ? [toTransactionRecord(result.parsed)] : [],
   );
 
-  // One transaction: either every row lands or none do.
-  await prisma.$transaction(async (tx) => {
+  // One transaction that does BOTH the oversell check and the write while
+  // holding a lock on this portfolio — so it's atomic:
+  //   1. Lock the portfolio row (concurrent imports/sells wait their turn).
+  //   2. Re-read the existing holdings INSIDE the lock (never a stale read).
+  //   3. Walk the batch in order and reject any SELL that exceeds what's held
+  //      at that point (existing shares + earlier BUYs in this same file) —
+  //      the same guard the single-transaction path runs. A missed SELL here
+  //      would invent cash the account never earned (golden rule).
+  //   4. Only if every row is within its position, write them all — one
+  //      failure imports nothing.
+  const outcome = await prisma.$transaction(async (tx) => {
+    await lockPortfolioForWrite(tx, portfolio.id);
+
+    const existing = await tx.transaction.findMany({
+      where: { portfolioId: portfolio.id },
+    });
+    const startingQuantities = new Map<string, number>();
+    for (const holding of computeHoldings(existing.map(fromPrismaTransaction))) {
+      startingQuantities.set(holding.instrumentId, holding.quantity);
+    }
+
+    const oversell = findImportOversell(report.results, startingQuantities);
+    if (oversell) {
+      return {
+        ok: false as const,
+        error: `Nothing was imported: ${oversell.message}`,
+      };
+    }
+
     await tx.transaction.createMany({
       data: records.map((record) => ({ ...record, portfolioId: portfolio.id })),
     });
+    return { ok: true as const };
   });
+
+  if (!outcome.ok) return actionError(outcome.error);
 
   revalidatePath("/portfolio");
   revalidatePath("/dashboard");

@@ -15,9 +15,13 @@ const thesisIdSchema = z
   .min(1, "Pick a thesis.");
 
 /** PRICE_ABOVE / PRICE_BELOW: a price in the instrument's own currency. */
+// Upper bound matches the transaction schema's MONEY_MAX: the threshold is
+// stored in a Decimal(20, 8) column, so an absurd value (e.g. 1e30) would
+// otherwise overflow Postgres (22003 → 500). Cap it for a clean 400 instead.
 const priceThresholdSchema = z.coerce
   .number({ error: "Enter a price as a number." })
-  .positive("Enter a price greater than zero.");
+  .positive("Enter a price greater than zero.")
+  .max(100_000_000_000, "That price is too large — check the number.");
 
 /** DAY_DROP: a positive percentage drop within a single day. */
 const dayDropThresholdSchema = z.coerce
