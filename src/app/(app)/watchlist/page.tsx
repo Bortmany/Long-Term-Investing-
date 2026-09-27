@@ -6,6 +6,7 @@ import { Eye } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getQuote } from "@/lib/data";
+import { savedAlertRule } from "@/lib/alerts/describe";
 import { badgePropsForValueSource } from "@/components/source-badge";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
@@ -36,7 +37,23 @@ export default async function WatchlistPage() {
     prisma.watchlistItem.findMany({ where: { userId } }),
     prisma.alert.findMany({
       where: { userId },
-      include: { instrument: true, thesis: { include: { instrument: true } } },
+      include: {
+        instrument: true,
+        thesis: { include: { instrument: true } },
+        // The newest notification carries the settings the alert had WHEN
+        // it fired — the row explains a trigger from those, never from the
+        // alert's current (possibly since-edited) settings.
+        notifications: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: {
+            alertKind: true,
+            alertThreshold: true,
+            alertIntervalDays: true,
+            priceCurrency: true,
+          },
+        },
+      },
       orderBy: { createdAt: "desc" },
     }),
     prisma.thesis.findMany({
@@ -140,6 +157,17 @@ export default async function WatchlistPage() {
     intervalDays: alert.intervalDays,
     lastEvaluatedAt: alert.lastEvaluatedAt,
     lastOutcome: alert.lastOutcome,
+    firedRule: alert.notifications[0]
+      ? savedAlertRule({
+          alertKind: alert.notifications[0].alertKind,
+          alertThreshold:
+            alert.notifications[0].alertThreshold === null
+              ? null
+              : alert.notifications[0].alertThreshold.toNumber(),
+          alertIntervalDays: alert.notifications[0].alertIntervalDays,
+          priceCurrency: alert.notifications[0].priceCurrency,
+        })
+      : null,
   }));
 
   const instrumentOptions: AlertInstrumentOption[] = instruments.map((instrument) => ({

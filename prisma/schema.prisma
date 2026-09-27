@@ -464,6 +464,15 @@ model Notification {
   priceSource    PriceSource?
   priceAsOf      DateTime?
 
+  // What the alert was set to AT THE MOMENT IT FIRED — saved here because the
+  // owner can edit the alert afterwards. "Your alert was set at X" is only
+  // ever shown from these saved values, never from the alert's current
+  // settings. Null on notifications created before these were recorded; those
+  // show no "set at" line at all. The threshold is in priceCurrency.
+  alertKind         AlertKind?
+  alertThreshold    Decimal?   @db.Decimal(20, 8)
+  alertIntervalDays Int?
+
   readAt    DateTime?
   createdAt DateTime  @default(now())
 
