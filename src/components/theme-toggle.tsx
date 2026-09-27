@@ -6,6 +6,7 @@
 import { Check, Monitor, Moon, Sun, type LucideIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useTheme, type Theme } from "@/components/theme-provider";
 import {
   DropdownMenu,
@@ -39,18 +40,27 @@ export function ThemeToggle({
   const current = THEME_OPTIONS.find((option) => option.value === theme) ?? THEME_OPTIONS[0];
   const TriggerIcon =
     theme === "system" ? Monitor : resolvedTheme === "dark" ? Moon : Sun;
+  // The hover hint names the control and what it is set to now. In the
+  // sidebar (bottom-left of the screen) it pops out to the right; in the top
+  // bar it drops downward, matching the notification bell next to it.
+  const hint = `Theme: ${current.label}`;
 
   return (
     <DropdownMenu className={className}>
       <DropdownMenuTrigger>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          aria-label={`Theme — currently ${current.label}`}
-        >
-          <TriggerIcon className="size-5" />
-        </Button>
+        <Tooltip>
+          <TooltipTrigger>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label={`Theme — currently ${current.label}`}
+            >
+              <TriggerIcon className="size-5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side={placement === "topbar" ? "bottom" : "right"}>{hint}</TooltipContent>
+        </Tooltip>
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align={placement === "topbar" ? "end" : "start"}

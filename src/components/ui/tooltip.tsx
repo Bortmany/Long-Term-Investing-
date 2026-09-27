@@ -43,7 +43,9 @@ function TooltipContent({
   className,
   side = "top",
   ...props
-}: React.HTMLAttributes<HTMLSpanElement> & { side?: "top" | "right" }) {
+}: React.HTMLAttributes<HTMLSpanElement> & {
+  side?: "top" | "right" | "bottom" | "left";
+}) {
   return (
     <span
       role="tooltip"
@@ -52,6 +54,8 @@ function TooltipContent({
         "pointer-events-none absolute z-50 whitespace-nowrap rounded-md bg-slate-900 px-2.5 py-1 text-xs text-slate-50 opacity-0 shadow-sm transition-opacity duration-100 group-focus-within/tooltip:opacity-100 group-hover/tooltip:opacity-100 dark:bg-slate-50 dark:text-slate-900",
         side === "top" && "bottom-full left-1/2 mb-1.5 -translate-x-1/2",
         side === "right" && "left-full top-1/2 ml-2 -translate-y-1/2",
+        side === "bottom" && "top-full left-1/2 mt-1.5 -translate-x-1/2",
+        side === "left" && "right-full top-1/2 mr-2 -translate-y-1/2",
         className,
       )}
       {...props}
