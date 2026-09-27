@@ -114,8 +114,8 @@ export function rateLimit(
  * (e.g. the sign-in per-account guard in the auth route): only a call to
  * `rateLimit` should ever move the count, so code that needs to know "is this
  * key already blocked" first (to decide whether to register the hit at all)
- * can ask without itself contributing to the bucket. Mirrors Bean & Brew's
- * `rateLimitedNow()` (see `Bean-Brew/server.js`).
+ * can ask without itself contributing to the bucket. Mirrors the
+ * "rate limited now?" helper used in the owner's other apps.
  */
 export function peekRateLimit(key: string, options: RateLimitOptions): RateLimitResult {
   const bucket = store.peek(key);

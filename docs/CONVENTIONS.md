@@ -22,7 +22,7 @@ In practice:
 - `src/lib/data/` — the market-data layer (see caching rule below).
 - `src/lib/portfolio/` — pure portfolio math functions (no I/O; testable without a database).
 - `src/proxy.ts` — route protection. Note: Next.js 16 renamed "middleware" to "proxy"; this file plays that role. Public routes: `/sign-in`, `/sign-up`, `/api/auth`, `/api/health`. Everything else requires a session cookie.
-- `/sign-up` allows public self-registration. Acceptable for local use only — it must be disabled or gated before any non-local deployment (Phase 2 item).
+- `/sign-up` is CLOSED by default: the page shows a "registration is closed" message and the server rejects sign-up attempts unless `ALLOW_SIGNUPS="true"` is set (needed briefly when seeding a fresh database — remove it afterwards). The app is invitation-only; a live deployment must never set it.
 - `tests/unit/` — Vitest unit tests (run by `npm run test`, no database needed).
 - `tests/e2e/` — Playwright smoke tests (run by `npm run test:e2e` only, never part of `npm run test`).
 - `prisma/` — schema, numbered migrations, seed script.
@@ -102,6 +102,10 @@ Naming: files kebab-case (`market-data.ts`), types/components PascalCase, functi
   diff.** `src/app/privacy/page.tsx` is written against exactly what
   `prisma/schema.prisma` stores — a schema change that adds a personal field
   without touching that page is an incomplete diff, not a follow-up.
+- Both `/privacy` and `/terms` show a contact address as a mailto link, read
+  server-side by `getLegalContactEmail` in `src/lib/legal-contact.ts` from the
+  optional env var `PRIVACY_CONTACT_EMAIL` (default: the owner's address,
+  `naeljam@hotmail.com`). Never hardcode a contact address in a page.
 - Data rights live in Settings: "Your data" (download everything, one JSON
   file, `src/lib/account-export.ts`) and "Danger" (delete my account,
   password-confirmed, rate-limited like sign-in, wipes everything via the

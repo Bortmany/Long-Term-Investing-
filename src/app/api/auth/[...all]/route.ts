@@ -136,8 +136,9 @@ export async function POST(request: Request): Promise<Response> {
   const response = await handlers.POST(request);
 
   // --- Sign-in per-account guard: OUTCOME-based ---------------------------
-  // Better Auth has just verified the password. Mirrors Bean & Brew's
-  // admin-login limiter (Bean-Brew/server.js, rateLimitedNow/registerAttempt):
+  // Better Auth has just verified the password. Mirrors the admin-login
+  // limiter pattern used in the owner's other apps (a "rate limited now?"
+  // check paired with a "register this attempt" call):
   // only a WRONG password ever counts against the per-email bucket, and a
   // RIGHT password always gets in — even while this email has a pile of
   // recent wrong guesses — and clears the bucket. This is what makes the
