@@ -1,0 +1,14 @@
+if command -v pg_isready >/dev/null 2>&1 && ! pg_isready -q; then
+  echo ""
+  echo "InvestIQ: the local Postgres database isn't running, so the check can't run."
+  echo "Start it (on this Mac: brew services start postgresql@16) and push again."
+  echo "In an emergency, git push --no-verify skips the check."
+  echo ""
+  exit 1
+fi
+echo ""
+echo "InvestIQ: running the full verify recipe before this push goes to GitHub —"
+echo "bring the local database up to date, then lint, type check, build, and the"
+echo "tests. This takes a minute or two."
+echo ""
+npm run verify

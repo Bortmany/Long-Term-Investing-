@@ -126,4 +126,6 @@ npm run build
 npm run test
 ```
 
+**Pre-push check.** Every `git push` first runs `npm run verify` through `.husky/pre-push`, installed by `npm install`: `npx prisma migrate deploy` (applies any new migrations to the database in `.env` — it never resets or wipes one), `prisma generate`, then lint, type check, build and tests. It stops straight away with a plain message if local Postgres isn't running, and takes about half a minute to a minute. Seeding is left out. In an emergency, `git push --no-verify` skips it.
+
 (Optional extra: `npm run test:e2e` runs the Playwright smoke tests against a dev server; browsers are preinstalled — never run `playwright install`.)
