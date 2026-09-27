@@ -7,9 +7,12 @@ import {
   sweepAlerts,
   type AlertRecord,
   type AlertStore,
+  type RecordFireParams,
 } from "@/lib/alerts/engine";
 import type { DataResult, InstrumentRef, Quote } from "@/lib/data";
 import { prisma } from "@/lib/prisma";
+import { describeFiredAlert, savedAlertRule } from "@/lib/alerts/describe";
+import { formatMoney } from "@/lib/format";
 
 const NOW = new Date("2026-07-19T12:00:00Z");
 const USER_ID = "user-1";
@@ -48,7 +51,14 @@ function makeFakeAlertStore(seed: AlertRecord[] = []) {
   const outcomes = new Map<string, string>();
   const thesisChecks = new Map<string, Date[]>();
   const previousCloses = new Map<string, { price: number; asOf: Date } | null>();
-  const notifications: { alertId: string; userId: string; title: string; body: string; hadPrice: boolean }[] = [];
+  const notifications: {
+    alertId: string;
+    userId: string;
+    title: string;
+    body: string;
+    hadPrice: boolean;
+    rule: RecordFireParams["rule"];
+  }[] = [];
 
   const store: AlertStore = {
     findDueAlerts: vi.fn(async (scope, now, minIntervalMs) => {
@@ -77,8 +87,8 @@ function makeFakeAlertStore(seed: AlertRecord[] = []) {
       if (alert) alert.lastEvaluatedAt = now;
       outcomes.set(alertId, outcome);
     }),
-    recordFire: vi.fn(async ({ alertId, userId, title, body, now, price }) => {
-      notifications.push({ alertId, userId, title, body, hadPrice: Boolean(price) });
+    recordFire: vi.fn(async ({ alertId, userId, title, body, now, price, rule }) => {
+      notifications.push({ alertId, userId, title, body, hadPrice: Boolean(price), rule });
       const alert = alerts.find((a) => a.id === alertId);
       if (alert) {
         alert.lastEvaluatedAt = now;
@@ -127,6 +137,54 @@ describe("sweepAlerts — fires once, then no-op", () => {
     expect(second.due).toBe(0);
     expect(second.fired).toBe(0);
     expect(getQuoteFn).toHaveBeenCalledTimes(1); // never re-fetched for the now-TRIGGERED alert
+  });
+});
+
+describe("sweepAlerts — the notification keeps the settings the alert had when it fired", () => {
+  it("a later edit to the alert never changes the 'your alert was set at' line", async () => {
+    const instrument = makeInstrument("inst-9", "AAPL");
+    const { store, alerts, notifications } = makeFakeAlertStore([
+      makeAlertRecord({
+        id: "alert-9",
+        kind: "PRICE_ABOVE",
+        instrumentId: instrument.id,
+        instrument,
+        threshold: 100,
+      }),
+    ]);
+    await sweepAlerts({ userId: USER_ID }, { store, getQuoteFn: vi.fn(async () => okQuote(150)), now: NOW });
+    expect(notifications).toHaveLength(1);
+    expect(notifications[0].rule).toEqual({ kind: "PRICE_ABOVE", threshold: 100, intervalDays: null });
+
+    // The owner edits the alert afterwards (updateAlert) — new target and type.
+    alerts[0].threshold = 250;
+    alerts[0].kind = "PRICE_BELOW";
+
+    const line = describeFiredAlert(
+      savedAlertRule({
+        alertKind: notifications[0].rule.kind,
+        alertThreshold: notifications[0].rule.threshold,
+        alertIntervalDays: notifications[0].rule.intervalDays,
+        priceCurrency: "USD",
+      }),
+    );
+    expect(line).toBe(`Your alert was set at ${formatMoney(100, "USD")} or above.`);
+    expect(line).not.toContain("250");
+  });
+
+  it("a thesis-review alert saves its interval at the moment it fires", async () => {
+    const { store, notifications } = makeFakeAlertStore([
+      makeAlertRecord({
+        id: "alert-10",
+        kind: "THESIS_REVIEW_DUE",
+        thesisId: "thesis-10",
+        thesis: { id: "thesis-10", createdAt: new Date(NOW.getTime() - 200 * 86_400_000), instrument: { ticker: "AAPL" } },
+        intervalDays: 90,
+      }),
+    ]);
+    await sweepAlerts({ userId: USER_ID }, { store, getQuoteFn: vi.fn(), now: NOW });
+    expect(notifications).toHaveLength(1);
+    expect(notifications[0].rule).toEqual({ kind: "THESIS_REVIEW_DUE", threshold: null, intervalDays: 90 });
   });
 });
 

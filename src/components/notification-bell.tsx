@@ -30,6 +30,13 @@ export type NotificationBellItem = {
   priceCurrency: Currency | null;
   priceSource: PriceSource | null;
   priceAsOf: Date | null;
+  /**
+   * One plain-English line saying what the owner had asked for, so the
+   * notification shows the threshold next to the real value in its title and
+   * body (src/lib/alerts/describe.ts). Null when the alert behind it is gone
+   * or had no number on record — nothing is invented to fill the gap.
+   */
+  explanation: string | null;
 };
 
 /**
@@ -155,6 +162,11 @@ export function NotificationBell({
                   ) : null}
                 </div>
                 <p className="mt-0.5 text-slate-600 dark:text-slate-400">{item.body}</p>
+                {item.explanation ? (
+                  <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                    {item.explanation}
+                  </p>
+                ) : null}
                 <div className="mt-1 flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500">
                   <span>{formatShortDate(item.createdAt)}</span>
                   {item.priceSource && item.priceAtTrigger !== null && item.priceCurrency ? (

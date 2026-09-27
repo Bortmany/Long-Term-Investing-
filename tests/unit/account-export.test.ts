@@ -98,6 +98,9 @@ function fullRows(): AccountExportRows {
         priceCurrency: "OMR",
         priceSource: "MANUAL",
         priceAsOf: now,
+        alertKind: "PRICE_ABOVE",
+        alertThreshold: new Prisma.Decimal("0.4"),
+        alertIntervalDays: null,
         readAt: null,
         createdAt: now,
       },
@@ -159,6 +162,8 @@ describe("buildAccountExport", () => {
     expect(result.alerts[0].threshold).toBe(0.4);
     expect(typeof result.notifications[0].priceAtTrigger).toBe("number");
     expect(result.notifications[0].priceAtTrigger).toBe(0.41);
+    expect(result.notifications[0].alertThreshold).toBe(0.4);
+    expect(result.notifications[0].alertKind).toBe("PRICE_ABOVE");
 
     // The user's own manual overrides also come back as plain numbers.
     expect(typeof result.manualPrices[0].price).toBe("number");
