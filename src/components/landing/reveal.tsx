@@ -4,6 +4,10 @@
 // starts slightly lowered and transparent, then eases into place the first
 // time it scrolls into view (IntersectionObserver, fired once).
 //
+// Use it only on sections further down the page, never on the top (hero)
+// section: content starts hidden until scripts load, and the first thing a
+// visitor sees must never be blank.
+//
 // Motion respect: the Tailwind `motion-reduce:` classes below pin the content
 // fully visible and cancel the transition, so a visitor who prefers reduced
 // motion sees everything immediately no matter what the observer does.

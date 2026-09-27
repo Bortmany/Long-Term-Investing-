@@ -107,7 +107,7 @@ export default async function LandingPage() {
         <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-6">
           <p className="text-lg font-semibold tracking-tight">InvestIQ AI</p>
           <div className="flex items-center gap-1">
-            <ThemeToggle />
+            <ThemeToggle placement="topbar" />
             <Button asChild variant="ghost" size="sm">
               <Link href="/sign-in">Sign in</Link>
             </Button>
@@ -116,30 +116,25 @@ export default async function LandingPage() {
       </header>
 
       <main>
-        {/* Hero */}
+        {/* Hero — shown straight away, never hidden behind the scroll reveal:
+            it is the first thing a visitor sees, even before scripts load. */}
         <section className="mx-auto max-w-5xl px-6 pb-20 pt-20 text-center sm:pb-28 sm:pt-28">
-          <Reveal>
-            <h1 className="mx-auto max-w-3xl text-balance text-4xl font-semibold tracking-tight sm:text-5xl lg:text-6xl">
-              Long-term investing, minus the noise.
-            </h1>
-          </Reveal>
-          <Reveal delay={100}>
-            <p className="mx-auto mt-6 max-w-2xl text-pretty text-base text-slate-500 dark:text-slate-400 sm:text-lg">
-              A private companion for portfolios that span New York, Muscat, Tadawul and Dubai.
-              It derives your cash and dividends from what you actually did — and never shows
-              you a number without saying where it came from.
+          <h1 className="mx-auto max-w-3xl text-balance text-4xl font-semibold tracking-tight sm:text-5xl lg:text-6xl">
+            Long-term investing, minus the noise.
+          </h1>
+          <p className="mx-auto mt-6 max-w-2xl text-pretty text-base text-slate-500 dark:text-slate-400 sm:text-lg">
+            A private companion for portfolios that span New York, Muscat, Tadawul and Dubai.
+            It derives your cash and dividends from what you actually did — and never shows
+            you a number without saying where it came from.
+          </p>
+          <div className="mt-10 flex flex-col items-center gap-3">
+            <Button asChild size="lg">
+              <Link href="/sign-in">Sign in</Link>
+            </Button>
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              New accounts are invitation-only for now.
             </p>
-          </Reveal>
-          <Reveal delay={200}>
-            <div className="mt-10 flex flex-col items-center gap-3">
-              <Button asChild size="lg">
-                <Link href="/sign-in">Sign in</Link>
-              </Button>
-              <p className="text-sm text-slate-500 dark:text-slate-400">
-                New accounts are invitation-only for now.
-              </p>
-            </div>
-          </Reveal>
+          </div>
         </section>
 
         {/* Interactive demo */}

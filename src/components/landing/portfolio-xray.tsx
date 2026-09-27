@@ -220,7 +220,8 @@ export function PortfolioXray() {
               ))}
             </ul>
             <p className="mt-4 text-xs text-slate-500 dark:text-slate-400">
-              Cash here is derived: an {formatMoney(SAMPLE_DEPOSIT, "OMR")} sample deposit minus
+              Cash here is derived: a sample deposit of OMR{" "}
+              {SAMPLE_DEPOSIT.toLocaleString("en-US")} minus
               what the picked holdings cost. In the app, cash and dividends are computed from
               your recorded transactions the same way — never typed in.
             </p>
