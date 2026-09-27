@@ -118,7 +118,7 @@ Run these in order from the repo root; all must pass before reporting work as do
 ```
 pg_ctlcluster 16 main start
 npm install
-npx prisma migrate dev
+npx prisma migrate deploy
 npx prisma db seed
 npm run lint
 npm run typecheck
