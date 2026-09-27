@@ -3,7 +3,8 @@
 Plain-English list of what to set up before this goes public. Full context lives in the central `Agents/docs/go-live-and-security-audit.md`.
 
 ## Must do before launch
-- [ ] **Pick a host** — there is no deploy config committed yet (no Railway/Vercel file). Decide where it runs.
+- [ ] **Host: Railway** — `railway.json` is committed and covers the build, runs `prisma migrate deploy` before each deploy, and points the health check at `/api/health`. Create the Railway project and connect this repo.
+- [ ] **Set `TRUST_PROXY_HEADERS="true"`** on Railway — the app sits behind Railway's proxy, so without this it would see the proxy's address instead of the real visitor's and rate limits would lump every user together.
 - [ ] **Postgres database** → set `DATABASE_URL`.
 - [ ] **Generate `BETTER_AUTH_SECRET`** (the `.env.example` shows the command) — at least 32 characters. Do not leave it blank or short: in production the app now refuses to start without one (`src/instrumentation.ts`), so this is caught automatically rather than discovered later.
 - [ ] **Set `BETTER_AUTH_URL`** to the real public web address.
@@ -17,6 +18,7 @@ Plain-English list of what to set up before this goes public. Full context lives
 - [ ] `ANTHROPIC_API_KEY` — Anthropic key for the AI features (health scores, committee, thesis checks, buy/sell analysis, weekly reviews). **This IS used by the app now** (`src/lib/ai/client.ts`, `src/lib/ai/analysis.ts`) — without it, every AI surface shows the honest "AI features are turned off" notice instead of a made-up analysis; nothing breaks, AI just stays dormant. Every AI call is capped per-user per-day (`DAILY_AI_ANALYSIS_LIMIT`) so a runaway loop can't produce a surprise bill.
 - [ ] `CRON_SECRET` — a long random bearer secret for the two scheduled endpoints, `POST /api/cron/weekly-review` and `POST /api/cron/check-alerts`. Leave it unset and both endpoints answer a dormant `503` and do nothing — no scheduling happens. Set it to turn scheduling on, then call either endpoint with `Authorization: Bearer <CRON_SECRET>` (see `.github/workflows/weekly-review.yml.example` and `check-alerts.yml.example`). If it's set but shorter than 16 characters, the app logs a warning at startup (not a hard failure — this only weakens an optional feature) — generate it the same way as `BETTER_AUTH_SECRET`.
 - [ ] `RESEND_API_KEY` / `RESEND_FROM` — turn on the optional weekly-review email, sent to a user's own address each time their weekly review finishes. Leave either blank and nothing changes — no network call is ever made. `/api/health`'s `email` field reports `"configured"` or `"dormant"`.
+- [ ] `PRIVACY_CONTACT_EMAIL` — the address shown as a mailto link on `/privacy` and `/terms` for questions. Leave it unset and the pages show the owner's own address (`naeljam@hotmail.com`); set it to route those questions to a different inbox.
 
 ## Data rights (built in — nothing to set up)
 - **Download my data**: any signed-in user can download a complete JSON export of everything the app stores about their account from Settings → "Your data" (`GET /api/account/export`, rate-limited to 5/hour per user).

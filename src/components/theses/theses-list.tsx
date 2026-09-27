@@ -117,7 +117,7 @@ export function ThesesList({ rows }: { rows: ThesisListRow[] }) {
                   {row.latestScore === null ? (
                     <span className="text-slate-400">—</span>
                   ) : (
-                    <span className="inline-flex items-center justify-end gap-1.5 tabular-nums">
+                    <span className="inline-flex items-center justify-end gap-1.5 text-base font-semibold tabular-nums">
                       {row.latestScore}
                       <TrendArrow trend={row.trend} />
                     </span>

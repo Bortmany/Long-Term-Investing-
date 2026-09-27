@@ -68,6 +68,11 @@ export type RecordFireParams = {
   now: Date;
   /** Present for price-kind alerts (the golden-rule snapshot); absent for THESIS_REVIEW_DUE. */
   price?: RecordFirePriceInfo;
+  /**
+   * The alert's settings at the moment it fired, saved on the notification so
+   * its "your alert was set at…" line stays true even if the alert is edited later.
+   */
+  rule: { kind: AlertKind; threshold: number | null; intervalDays: number | null };
 };
 
 export interface AlertStore {
@@ -190,7 +195,7 @@ export function createPrismaAlertStore(): AlertStore {
       });
     },
 
-    async recordFire({ alertId, userId, title, body, now, price }) {
+    async recordFire({ alertId, userId, title, body, now, price, rule }) {
       await prisma.$transaction([
         prisma.notification.create({
           data: {
@@ -198,6 +203,9 @@ export function createPrismaAlertStore(): AlertStore {
             alertId,
             title,
             body,
+            alertKind: rule.kind,
+            alertThreshold: rule.threshold,
+            alertIntervalDays: rule.intervalDays,
             ...(price
               ? {
                   priceAtTrigger: price.amount,
@@ -352,6 +360,7 @@ export async function sweepAlerts(
         title: result.title,
         body: result.body,
         now,
+        rule: { kind: alert.kind, threshold: alert.threshold, intervalDays: alert.intervalDays },
         price: {
           amount: quoteResult.data.price,
           currency: quoteResult.data.currency,
@@ -375,7 +384,14 @@ export async function sweepAlerts(
 
     if (result.fired) {
       fired += 1;
-      await store.recordFire({ alertId: alert.id, userId: alert.userId, title: result.title, body: result.body, now });
+      await store.recordFire({
+        alertId: alert.id,
+        userId: alert.userId,
+        title: result.title,
+        body: result.body,
+        now,
+        rule: { kind: alert.kind, threshold: alert.threshold, intervalDays: alert.intervalDays },
+      });
     } else {
       await store.recordNoFire(alert.id, now, result.outcome);
     }

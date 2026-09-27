@@ -23,17 +23,31 @@ export type ThesisInstrumentOption = { id: string; ticker: string; name: string 
 
 export function NewThesisDialog({
   instruments,
+  defaultInstrumentId,
+  size,
 }: {
   instruments: ThesisInstrumentOption[];
+  /**
+   * Which instrument starts selected. Used by the stock research page, where
+   * the owner is already looking at one stock and shouldn't have to pick it
+   * again. Ignored if it isn't one of the offered instruments.
+   */
+  defaultInstrumentId?: string;
+  /** Trigger button size — "sm" to sit beside the stock page's small buttons. */
+  size?: "default" | "sm";
 }) {
+  const initialInstrumentId =
+    instruments.find((instrument) => instrument.id === defaultInstrumentId)?.id ??
+    instruments[0]?.id ??
+    "";
   const [open, setOpen] = React.useState(false);
-  const [instrumentId, setInstrumentId] = React.useState(instruments[0]?.id ?? "");
+  const [instrumentId, setInstrumentId] = React.useState(initialInstrumentId);
   const [statement, setStatement] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
   const [isSaving, startSaving] = React.useTransition();
 
   function reset() {
-    setInstrumentId(instruments[0]?.id ?? "");
+    setInstrumentId(initialInstrumentId);
     setStatement("");
     setError(null);
   }
@@ -73,7 +87,7 @@ export function NewThesisDialog({
         }
       }}
     >
-      <Button type="button" onClick={() => setOpen(true)}>
+      <Button type="button" size={size} onClick={() => setOpen(true)}>
         <Plus aria-hidden="true" />
         New Thesis
       </Button>

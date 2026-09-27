@@ -37,21 +37,45 @@ export default async function SettingsPage() {
   });
   const baseCurrency = portfolio?.baseCurrency ?? Currency.OMR;
 
-  const fxRows = await prisma.fxRate.findMany({
-    orderBy: [{ base: "asc" }, { quote: "asc" }, { asOf: "desc" }],
-  });
-
-  // Decimal → number at the edge (fromPrismaFxRate), plus the per-row source
-  // badge computed here so the client component gets plain display data.
-  const rates: FxRateDisplayRow[] = fxRows.map((row) => ({
-    id: row.id,
-    ...fromPrismaFxRate(row),
-    asOfLabel: formatShortDate(row.asOf),
-    badge: badgePropsForValueSource({
-      kind: badgeForPriceSource(row.source),
-      asOf: row.asOf,
+  // The shared cache (FMP / SEED) plus THIS user's own manual rates. The
+  // shared table is read-only from here (written only by the FMP refresh /
+  // seed paths); a user can only add/delete their OWN manual rates, which live
+  // in the user-scoped ManualFxRate table — see docs/CONVENTIONS.md.
+  const [sharedFxRows, manualFxRows] = await Promise.all([
+    prisma.fxRate.findMany({
+      orderBy: [{ base: "asc" }, { quote: "asc" }, { asOf: "desc" }],
     }),
-  }));
+    prisma.manualFxRate.findMany({
+      where: { userId: session.user.id },
+      orderBy: [{ base: "asc" }, { quote: "asc" }, { asOf: "desc" }],
+    }),
+  ]);
+
+  // Decimal → number at the edge, plus the per-row source badge computed here
+  // so the client component gets plain display data. Only the user's own
+  // manual rows carry a delete action.
+  const rates: FxRateDisplayRow[] = [
+    ...manualFxRows.map((row) => ({
+      id: row.id,
+      base: row.base,
+      quote: row.quote,
+      rate: row.rate.toNumber(),
+      asOf: row.asOf,
+      asOfLabel: formatShortDate(row.asOf),
+      badge: badgePropsForValueSource({ kind: "manual" as const, asOf: row.asOf }),
+      deletable: true,
+    })),
+    ...sharedFxRows.map((row) => ({
+      id: row.id,
+      ...fromPrismaFxRate(row),
+      asOfLabel: formatShortDate(row.asOf),
+      badge: badgePropsForValueSource({
+        kind: badgeForPriceSource(row.source),
+        asOf: row.asOf,
+      }),
+      deletable: false,
+    })),
+  ];
 
   // Boolean only — never the key itself.
   const hasFmpKey = Boolean(process.env.FMP_API_KEY);

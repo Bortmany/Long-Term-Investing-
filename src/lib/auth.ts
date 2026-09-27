@@ -17,6 +17,19 @@ export const auth = betterAuth({
   database: prismaAdapter(prisma, {
     provider: "postgresql",
   }),
+  // Turn OFF Better Auth's built-in rate limiter. It keys on the raw request
+  // IP, which — when the app is NOT behind a trusted proxy (our default) —
+  // collapses to one shared value for every visitor and 429s the whole app
+  // after a handful of total requests (a shared-bucket denial of service).
+  // We do our own limiting in the auth route wrapper
+  // (src/app/api/auth/[...all]/route.ts): a stable signed PER-BROWSER id plus a
+  // per-account / per-token key, which covers every sensitive auth POST
+  // (sign-in, sign-up, forget-password, reset-password) without making
+  // separate browsers share one bucket. Leaving Better Auth's limiter on would
+  // re-introduce exactly the DoS ours removes, one layer lower.
+  rateLimit: {
+    enabled: false,
+  },
   emailAndPassword: {
     enabled: true,
     disableSignUp: !signUpsAllowed(),

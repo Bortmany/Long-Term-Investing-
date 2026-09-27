@@ -44,7 +44,7 @@ export async function GET(request: NextRequest): Promise<Response> {
     return NextResponse.json({ message: "Account not found." }, { status: 404 });
   }
 
-  const [accounts, sessions, portfolios, watchlist, theses, aiAnalyses, weeklyReviews, alerts, notifications] =
+  const [accounts, sessions, portfolios, watchlist, theses, aiAnalyses, weeklyReviews, alerts, notifications, manualPrices, manualFxRates] =
     await Promise.all([
       prisma.account.findMany({
         where: { userId },
@@ -107,10 +107,38 @@ export async function GET(request: NextRequest): Promise<Response> {
           priceCurrency: true,
           priceSource: true,
           priceAsOf: true,
+          alertKind: true,
+          alertThreshold: true,
+          alertIntervalDays: true,
           readAt: true,
           createdAt: true,
         },
         orderBy: { createdAt: "desc" },
+      }),
+      // This user's OWN hand-entered price/FX overrides (user-scoped tables).
+      prisma.manualPrice.findMany({
+        where: { userId },
+        select: {
+          id: true,
+          price: true,
+          currency: true,
+          asOf: true,
+          createdAt: true,
+          instrument: { select: { ticker: true } },
+        },
+        orderBy: { createdAt: "asc" },
+      }),
+      prisma.manualFxRate.findMany({
+        where: { userId },
+        select: {
+          id: true,
+          base: true,
+          quote: true,
+          rate: true,
+          asOf: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: "asc" },
       }),
     ]);
 
@@ -125,6 +153,8 @@ export async function GET(request: NextRequest): Promise<Response> {
     weeklyReviews,
     alerts,
     notifications,
+    manualPrices,
+    manualFxRates,
   });
 
   logger.info("Account data export downloaded", { userId });

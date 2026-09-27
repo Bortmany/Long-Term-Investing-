@@ -44,9 +44,12 @@ import {
   sumTrailingDividendsPerShare,
 } from "@/lib/stocks/ratios";
 
-function revalidateThesisPages(thesisId?: string) {
+function revalidateThesisPages(thesisId?: string, instrumentId?: string) {
   revalidatePath("/theses");
   if (thesisId) revalidatePath(`/theses/${thesisId}`);
+  // The stock's research page shows "New Thesis" or "View thesis" depending
+  // on whether an open thesis exists — refresh it so the button is current.
+  if (instrumentId) revalidatePath(`/stocks/${instrumentId}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -108,7 +111,7 @@ export async function createThesis(input: {
     },
   });
 
-  revalidateThesisPages(created.id);
+  revalidateThesisPages(created.id, instrument.id);
   return actionOk({ id: created.id });
 }
 
@@ -140,7 +143,7 @@ async function setThesisStatus(
 
   await prisma.thesis.update({ where: { id: existing.id }, data: { status } });
 
-  revalidateThesisPages(existing.id);
+  revalidateThesisPages(existing.id, existing.instrumentId);
   return actionOk({ id: existing.id });
 }
 

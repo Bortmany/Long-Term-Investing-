@@ -1,8 +1,12 @@
 // ConnectKeyNotice (ui-spec-phases-2-6.md §2.5) — the first-class "AI is
-// off" state, shown instead of any AI trigger button or AI output whenever
-// ANTHROPIC_API_KEY is unset server-side. This exact component, exact copy,
-// every time — never paraphrased per-screen. No button: there is nothing to
-// click in-app (it's a server environment variable, not an in-app setting).
+// off" state, shown whenever ANTHROPIC_API_KEY is unset server-side. It
+// explains why the AI triggers are switched off; it does NOT hide results
+// that are already saved in the database. Those keep rendering in full with
+// their usual caption and disclaimer (docs/CONVENTIONS.md, AI rules) — this
+// notice only takes over a content area when there is nothing stored to
+// show. This exact component, exact copy, every time — never paraphrased
+// per-screen. No button: there is nothing to click in-app (it's a server
+// environment variable, not an in-app setting).
 import { KeyRound } from "lucide-react";
 
 export function ConnectKeyNotice() {

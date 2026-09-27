@@ -33,6 +33,8 @@ model User {
   weeklyReviews  WeeklyReview[]
   alerts         Alert[]
   notifications  Notification[]
+  manualPrices   ManualPrice[]
+  manualFxRates  ManualFxRate[]
 
   @@unique([email])
   @@map("user")
@@ -182,7 +184,13 @@ model Portfolio {
 
   transactions Transaction[]
 
-  @@index([userId])
+  // One portfolio per user (the app is single-portfolio for now — see
+  // getOrCreatePortfolio). A DB-level unique constraint, not just an index,
+  // closes a double-submit/two-tab race: without it, two concurrent
+  // "create my portfolio" calls could both pass the find-then-create check
+  // and insert two rows, silently splitting a user's transactions across
+  // both (and understating totals) instead of erroring.
+  @@unique([userId])
 }
 
 model Instrument {
@@ -204,6 +212,7 @@ model Instrument {
   theses             Thesis[]
   watchlistItems     WatchlistItem[]
   alerts             Alert[]
+  manualPrices       ManualPrice[]
 
   @@unique([ticker, market])
 }
@@ -271,6 +280,48 @@ model FxRate {
 
   @@unique([base, quote, asOf])
   @@index([base, quote, asOf(sort: Desc)])
+}
+
+// ---------------------------------------------------------------------------
+// USER-SCOPED manual overrides (SECURITY: never shared between users)
+//
+// PriceCache and FxRate above are the SHARED market-data cache — written only
+// by the server's FMP refresh / seed paths. A hand-entered price or FX rate
+// must NEVER touch that shared cache, because every user's valuation reads it
+// (one poisoned row would corrupt everyone's totals). Instead each user's own
+// manual entries live here, keyed by userId, and a user's valuation reads
+// only their own rows. They still carry the honest "manual" badge — for that
+// one user.
+// ---------------------------------------------------------------------------
+
+model ManualPrice {
+  id           String     @id @default(cuid())
+  userId       String
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  instrumentId String
+  instrument   Instrument @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+  price        Decimal    @db.Decimal(20, 8)
+  currency     Currency
+  // The date the price is FOR (never in the future — enforced in the action).
+  asOf         DateTime
+  createdAt    DateTime   @default(now())
+
+  @@index([userId, instrumentId, asOf(sort: Desc)])
+}
+
+model ManualFxRate {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  base      Currency
+  quote     Currency
+  rate      Decimal  @db.Decimal(20, 10)
+  asOf      DateTime
+  createdAt DateTime @default(now())
+
+  // One rate per pair+date per user; duplicates get a friendly error.
+  @@unique([userId, base, quote, asOf])
+  @@index([userId, base, quote, asOf(sort: Desc)])
 }
 
 // ---------------------------------------------------------------------------
@@ -412,6 +463,15 @@ model Notification {
   priceCurrency  Currency?
   priceSource    PriceSource?
   priceAsOf      DateTime?
+
+  // What the alert was set to AT THE MOMENT IT FIRED — saved here because the
+  // owner can edit the alert afterwards. "Your alert was set at X" is only
+  // ever shown from these saved values, never from the alert's current
+  // settings. Null on notifications created before these were recorded; those
+  // show no "set at" line at all. The threshold is in priceCurrency.
+  alertKind         AlertKind?
+  alertThreshold    Decimal?   @db.Decimal(20, 8)
+  alertIntervalDays Int?
 
   readAt    DateTime?
   createdAt DateTime  @default(now())

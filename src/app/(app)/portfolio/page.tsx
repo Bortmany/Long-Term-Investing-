@@ -6,13 +6,11 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { badgeForPriceSource, resolveProviderName } from "@/lib/data";
 import {
-  computePortfolioValue,
   convertAmount,
-  fromPrismaFxRate,
-  fromPrismaPriceCache,
   fromPrismaTransaction,
   type PriceInput,
 } from "@/lib/portfolio";
+import { loadPortfolioComputation } from "@/lib/portfolio-market-data";
 import { badgePropsForValueSources } from "@/components/source-badge";
 import { PortfolioView } from "@/components/portfolio/portfolio-view";
 import type {
@@ -39,12 +37,11 @@ export default async function PortfolioPage() {
     redirect("/sign-in");
   }
 
-  // Every user-owned query is scoped to the session user's id. The oldest
-  // portfolio is "the" portfolio (same rule as getOrCreatePortfolio).
-  const portfolio = await prisma.portfolio.findFirst({
-    where: { userId: session.user.id },
-    orderBy: { createdAt: "asc" },
-  });
+  // Every user-owned query is scoped to the session user's id. ONE shared
+  // computation with the Dashboard (same transactions, same order, same
+  // valuation — including this user's own manual price/FX overrides only) so
+  // the two pages' totals always agree. Null means no portfolio yet.
+  const computation = await loadPortfolioComputation(session.user.id);
 
   // Instruments are shared reference data (no userId column) — the dialog's
   // pickers list all of them.
@@ -70,7 +67,7 @@ export default async function PortfolioPage() {
 
   // No portfolio yet (brand-new account): the view shows the empty state and
   // the first createTransaction call will create the portfolio.
-  if (!portfolio) {
+  if (!computation) {
     return (
       <PortfolioView
         baseCurrency="OMR"
@@ -86,35 +83,9 @@ export default async function PortfolioPage() {
     );
   }
 
-  const transactionRows = await prisma.transaction.findMany({
-    where: { portfolioId: portfolio.id },
-    orderBy: [{ tradeDate: "desc" }, { createdAt: "desc" }],
-  });
-
-  const instrumentIds = [
-    ...new Set(
-      transactionRows
-        .map((t) => t.instrumentId)
-        .filter((id): id is string => id !== null),
-    ),
-  ];
-
-  const [priceRows, fxRows] = await Promise.all([
-    prisma.priceCache.findMany({ where: { instrumentId: { in: instrumentIds } } }),
-    prisma.fxRate.findMany(),
-  ]);
-
-  const transactions = transactionRows.map(fromPrismaTransaction);
-  const prices = priceRows.map(fromPrismaPriceCache);
-  const fxRates = fxRows.map(fromPrismaFxRate);
+  const { portfolio, transactionRows, prices, fxRates, portfolioValue } =
+    computation;
   const base = portfolio.baseCurrency;
-
-  const portfolioValue = computePortfolioValue({
-    transactions,
-    prices,
-    fxRates,
-    baseCurrency: base,
-  });
 
   // Latest known price per instrument (for the Current Price column).
   const latestPriceByInstrument = new Map<string, PriceInput>();
@@ -232,6 +203,11 @@ export default async function PortfolioPage() {
         baseCurrency={base}
         holdings={holdings}
         holdingsBadge={badgePropsForValueSources(portfolioValue.sources)}
+        weightsNote={
+          portfolioValue.cashValue < 0
+            ? "Cash is negative (recorded spending exceeds deposits), so holdings are shown against a smaller total and can add up to more than 100%."
+            : undefined
+        }
         transactions={transactionData}
         instruments={instruments}
         currencies={currencies}

@@ -134,7 +134,28 @@ export type ExportNotificationRow = {
   priceCurrency: Currency | null;
   priceSource: PriceSource | null;
   priceAsOf: Date | null;
+  alertKind: AlertKind | null;
+  alertThreshold: Prisma.Decimal | null;
+  alertIntervalDays: number | null;
   readAt: Date | null;
+  createdAt: Date;
+};
+
+export type ExportManualPriceRow = {
+  id: string;
+  price: Prisma.Decimal;
+  currency: Currency;
+  asOf: Date;
+  createdAt: Date;
+  instrument: { ticker: string };
+};
+
+export type ExportManualFxRateRow = {
+  id: string;
+  base: Currency;
+  quote: Currency;
+  rate: Prisma.Decimal;
+  asOf: Date;
   createdAt: Date;
 };
 
@@ -149,6 +170,8 @@ export type AccountExportRows = {
   weeklyReviews: ExportWeeklyReviewRow[];
   alerts: ExportAlertRow[];
   notifications: ExportNotificationRow[];
+  manualPrices: ExportManualPriceRow[];
+  manualFxRates: ExportManualFxRateRow[];
 };
 
 // ---------------------------------------------------------------------------
@@ -191,7 +214,28 @@ export type ExportedNotification = {
   priceCurrency: Currency | null;
   priceSource: PriceSource | null;
   priceAsOf: Date | null;
+  alertKind: AlertKind | null;
+  alertThreshold: number | null;
+  alertIntervalDays: number | null;
   readAt: Date | null;
+  createdAt: Date;
+};
+
+export type ExportedManualPrice = {
+  id: string;
+  instrumentTicker: string;
+  price: number;
+  currency: Currency;
+  asOf: Date;
+  createdAt: Date;
+};
+
+export type ExportedManualFxRate = {
+  id: string;
+  base: Currency;
+  quote: Currency;
+  rate: number;
+  asOf: Date;
   createdAt: Date;
 };
 
@@ -207,6 +251,9 @@ export type AccountExport = {
   weeklyReviews: ExportWeeklyReviewRow[];
   alerts: ExportedAlert[];
   notifications: ExportedNotification[];
+  /** Prices and FX rates this user entered by hand (their own overrides). */
+  manualPrices: ExportedManualPrice[];
+  manualFxRates: ExportedManualFxRate[];
 };
 
 // Runtime whitelists for the two models that can carry a credential
@@ -256,6 +303,9 @@ function toExportedNotification(n: ExportNotificationRow): ExportedNotification 
     priceCurrency: n.priceCurrency,
     priceSource: n.priceSource,
     priceAsOf: n.priceAsOf,
+    alertKind: n.alertKind,
+    alertThreshold: n.alertThreshold === null ? null : n.alertThreshold.toNumber(),
+    alertIntervalDays: n.alertIntervalDays,
     readAt: n.readAt,
     createdAt: n.createdAt,
   };
@@ -291,5 +341,21 @@ export function buildAccountExport(rows: AccountExportRows, now: Date = new Date
     weeklyReviews: rows.weeklyReviews,
     alerts: rows.alerts.map(toExportedAlert),
     notifications: rows.notifications.map(toExportedNotification),
+    manualPrices: rows.manualPrices.map((p) => ({
+      id: p.id,
+      instrumentTicker: p.instrument.ticker,
+      price: p.price.toNumber(),
+      currency: p.currency,
+      asOf: p.asOf,
+      createdAt: p.createdAt,
+    })),
+    manualFxRates: rows.manualFxRates.map((r) => ({
+      id: r.id,
+      base: r.base,
+      quote: r.quote,
+      rate: r.rate.toNumber(),
+      asOf: r.asOf,
+      createdAt: r.createdAt,
+    })),
   };
 }

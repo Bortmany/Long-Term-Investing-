@@ -79,14 +79,25 @@ export async function setBaseCurrency(
   return actionOk({ baseCurrency: updated.baseCurrency });
 }
 
+// FX-rate upper bound: the rate column is Decimal(20, 10) — 10 digits before
+// the point — so a value at/over 10^10 overflows Postgres (22003 → 500). Cap
+// well under that for a clean 400. No real exchange rate approaches this.
+const FX_RATE_MAX = 1_000_000_000; // 1e9
+
 const addFxRateSchema = z
   .object({
     base: z.enum(Currency, { error: "Pick a valid base currency." }),
     quote: z.enum(Currency, { error: "Pick a valid quote currency." }),
     rate: z.coerce
       .number({ error: "Enter the rate as a number." })
-      .positive("The rate must be greater than zero."),
-    asOf: z.coerce.date({ error: "Enter a valid as-of date." }),
+      .positive("The rate must be greater than zero.")
+      .max(FX_RATE_MAX, "That rate is too large — check the number."),
+    asOf: z.coerce
+      .date({ error: "Enter a valid as-of date." })
+      // A rate can't be "as of" a day that hasn't happened yet.
+      .refine((d) => d.getTime() <= Date.now(), {
+        message: "The as-of date can't be in the future.",
+      }),
   })
   .refine((value) => value.base !== value.quote, {
     message: "Base and quote must be two different currencies.",
@@ -95,9 +106,14 @@ const addFxRateSchema = z
 export type AddFxRateInput = z.input<typeof addFxRateSchema>;
 
 /**
- * Add a manually entered FX rate (1 base = rate quote), source MANUAL.
- * The [base, quote, asOf] combination must be new — duplicates get a
- * friendly error instead of a crash.
+ * Add a manually entered FX rate (1 base = rate quote) into the signed-in
+ * user's OWN override table (ManualFxRate) — NOT the shared FxRate cache.
+ *
+ * SECURITY (docs/CONVENTIONS.md): the shared FxRate table is written only by
+ * the server's FMP refresh / seed paths. A user's hand-entered rate is
+ * user-scoped so it can never change anyone else's currency conversions. Each
+ * user's valuation reads only their own manual rates (still "manual" badged).
+ * The [base, quote, asOf] combination must be new for this user.
  */
 export async function addFxRate(
   input: AddFxRateInput,
@@ -116,13 +132,13 @@ export async function addFxRate(
   }
 
   try {
-    const created = await prisma.fxRate.create({
+    const created = await prisma.manualFxRate.create({
       data: {
+        userId,
         base: parsed.data.base,
         quote: parsed.data.quote,
         rate: parsed.data.rate,
         asOf: parsed.data.asOf,
-        source: "MANUAL",
       },
     });
     revalidateMoneyPages();
@@ -140,7 +156,7 @@ export async function addFxRate(
   }
 }
 
-/** Delete one stored FX rate by id. */
+/** Delete one of the signed-in user's OWN stored FX rates by id. */
 export async function deleteFxRate(
   id: string,
 ): Promise<ActionResult<{ id: string }>> {
@@ -154,16 +170,11 @@ export async function deleteFxRate(
     return actionError("That FX rate could not be found.");
   }
 
-  try {
-    await prisma.fxRate.delete({ where: { id } });
-  } catch (error) {
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2025"
-    ) {
-      return actionError("That FX rate could not be found — it may already be deleted.");
-    }
-    throw error;
+  // Ownership scope: deleteMany with the userId filter means a user can only
+  // ever delete THEIR OWN rate — passing someone else's id deletes nothing.
+  const result = await prisma.manualFxRate.deleteMany({ where: { id, userId } });
+  if (result.count === 0) {
+    return actionError("That FX rate could not be found — it may already be deleted.");
   }
 
   revalidateMoneyPages();

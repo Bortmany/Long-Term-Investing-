@@ -31,6 +31,21 @@ function checkStartupSecrets(): void {
     );
   }
 
+  // Rate-limit IP source: when the proxy headers aren't trusted, anonymous
+  // callers are limited by a signed per-browser cookie instead of a real IP
+  // (see src/lib/rate-limit.ts). That's the SAFE default, but if this app runs
+  // behind a proxy you control (Railway, a load balancer) you probably want
+  // TRUST_PROXY_HEADERS="true" so limits key on the real client IP. Say so
+  // loudly once at startup so it's a deliberate choice, not an oversight.
+  if (process.env.TRUST_PROXY_HEADERS !== "true") {
+    logger.warn(
+      "TRUST_PROXY_HEADERS is not \"true\": anonymous rate limiting keys on a " +
+        "signed per-browser cookie, not the real client IP. This is the safe " +
+        "default. If this app runs behind a proxy you control that sets " +
+        "X-Forwarded-For, set TRUST_PROXY_HEADERS=\"true\" to limit by real IP.",
+    );
+  }
+
   const cronSecret = process.env.CRON_SECRET;
   if (cronSecret && cronSecret.length < MIN_CRON_SECRET_LENGTH) {
     // A weak CRON_SECRET only weakens an optional feature (scheduled
@@ -46,6 +61,13 @@ function checkStartupSecrets(): void {
 
 export async function register(): Promise<void> {
   checkStartupSecrets();
+
+  // Node.js-only: see instrumentation-node.ts for why this is a dynamic
+  // import guarded by NEXT_RUNTIME rather than a top-level import here.
+  if (process.env.NEXT_RUNTIME === "nodejs") {
+    const { subscribeSocketIpDiagnostics } = await import("./instrumentation-node");
+    await subscribeSocketIpDiagnostics();
+  }
 
   if (!process.env.SENTRY_DSN) return;
   try {

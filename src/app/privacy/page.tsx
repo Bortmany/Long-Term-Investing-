@@ -4,11 +4,16 @@
 // change (docs/CONVENTIONS.md, engineering-standards.md §6).
 import Link from "next/link";
 
+import { getLegalContactEmail } from "@/lib/legal-contact";
+
 export const metadata = { title: "Privacy Policy — InvestIQ AI" };
 
 const LAST_UPDATED = "July 19, 2026";
 
 export default function PrivacyPage() {
+  // Server component: read the contact address from the environment here.
+  const contactEmail = getLegalContactEmail();
+
   return (
     <main className="mx-auto min-h-screen max-w-2xl px-4 py-10 sm:px-6">
       <Link href="/sign-in" className="text-sm text-blue-600 hover:underline dark:text-blue-400">
@@ -61,6 +66,13 @@ export default function PrivacyPage() {
               <strong>Your portfolio:</strong> every transaction you record
               (buys, sells, dividends, deposits, withdrawals, fees) —
               amounts, dates, and the stock/ETF/REIT involved.
+            </li>
+            <li>
+              <strong>Prices and exchange rates you enter by hand</strong> —
+              when you record a manual price for a stock, or a currency
+              exchange rate, we store it against your account. These are yours
+              alone: they are only ever used to value your own portfolio, never
+              shown to or mixed with anyone else&apos;s.
             </li>
             <li>
               <strong>Your watchlist</strong> — the stocks you&apos;re tracking
@@ -166,8 +178,14 @@ export default function PrivacyPage() {
           </h2>
           <p className="mt-2">
             This app is currently a personal tool with a single operator. If
-            you have questions about your data, contact the person who
-            invited you to use it.
+            you have questions about your data, email{" "}
+            <a
+              href={`mailto:${contactEmail}`}
+              className="text-blue-600 hover:underline dark:text-blue-400"
+            >
+              {contactEmail}
+            </a>
+            .
           </p>
         </section>
       </div>

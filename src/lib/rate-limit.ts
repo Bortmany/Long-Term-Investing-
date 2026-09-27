@@ -10,6 +10,8 @@
 // store behind the same `RateLimitStore` interface below; no caller changes.
 // We deliberately add NO redis dependency until that day.
 
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+
 export type RateLimitOptions = { limit: number; windowMs: number };
 
 export type RateLimitResult =
@@ -21,6 +23,10 @@ type Bucket = { count: number; resetAt: number };
 /** The seam a future Redis store implements — swap it in without caller edits. */
 interface RateLimitStore {
   hit(key: string, windowMs: number): Bucket;
+  /** Read a bucket WITHOUT counting a hit — see `peekRateLimit` below. */
+  peek(key: string): Bucket | undefined;
+  /** Forget a key entirely — see `resetRateLimit` below. */
+  reset(key: string): void;
 }
 
 // In-memory fixed-window store. Guarded on globalThis so Next.js dev
@@ -56,6 +62,14 @@ class MemoryRateLimitStore implements RateLimitStore {
       }
     }
     return existing;
+  }
+
+  peek(key: string): Bucket | undefined {
+    return this.buckets.get(key);
+  }
+
+  reset(key: string): void {
+    this.buckets.delete(key);
   }
 }
 
@@ -95,11 +109,65 @@ export function rateLimit(
 }
 
 /**
- * The visitor's IP for anonymous rate limiting. Behind a proxy (Railway) the
- * real client is the FIRST hop of `x-forwarded-for`; fall back to `x-real-ip`,
- * then a constant so header-less traffic still shares one bucket.
+ * Check whether `key` is ALREADY at/over its limit — WITHOUT counting this
+ * check as a hit. Pairs with `resetRateLimit` for OUTCOME-BASED limiting
+ * (e.g. the sign-in per-account guard in the auth route): only a call to
+ * `rateLimit` should ever move the count, so code that needs to know "is this
+ * key already blocked" first (to decide whether to register the hit at all)
+ * can ask without itself contributing to the bucket. Mirrors the
+ * "rate limited now?" helper used in the owner's other apps.
  */
-export function getClientIp(headers: Headers): string {
+export function peekRateLimit(key: string, options: RateLimitOptions): RateLimitResult {
+  const bucket = store.peek(key);
+  const now = Date.now();
+  if (!bucket || bucket.resetAt <= now) {
+    return { ok: true, remaining: options.limit };
+  }
+  if (bucket.count >= options.limit) {
+    const retryAfterSeconds = Math.max(1, Math.ceil((bucket.resetAt - now) / 1000));
+    return { ok: false, retryAfterSeconds };
+  }
+  return { ok: true, remaining: options.limit - bucket.count };
+}
+
+/**
+ * Forget a key's bucket entirely. Used when a sign-in SUCCEEDS, so a run of
+ * recent wrong guesses against an account never lingers (and can't block a
+ * later correct password) once the right one has gotten in.
+ */
+export function resetRateLimit(key: string): void {
+  store.reset(key);
+}
+
+/**
+ * Whether to trust the `x-forwarded-for` / `x-real-ip` headers for the client
+ * IP. These headers are trivially spoofable by the caller, so an attacker
+ * could set a fresh value per request and get a fresh rate-limit bucket every
+ * time — defeating an IP-based limit. Only trust them when the app is actually
+ * behind a proxy you control that overwrites them (Railway, a load balancer),
+ * which the operator signals by setting TRUST_PROXY_HEADERS="true".
+ * Default: DON'T trust — safer, and combined with the per-account limiter it
+ * still stops brute force.
+ */
+export function shouldTrustProxyHeaders(): boolean {
+  return process.env.TRUST_PROXY_HEADERS === "true";
+}
+
+/**
+ * The visitor's IP for anonymous rate limiting. Only reads the forwarding
+ * headers when the operator has declared the proxy trusted (see above);
+ * otherwise every header-only visitor shares the "unknown" bucket, so a
+ * spoofed `x-forwarded-for` can't win a fresh bucket. Real client-address
+ * routing would require the platform's connection info (not available from a
+ * Web `Request`); until then the per-account key below is the real defense.
+ */
+export function getClientIp(
+  headers: Headers,
+  options?: { trustProxyHeaders?: boolean },
+): string {
+  const trust = options?.trustProxyHeaders ?? shouldTrustProxyHeaders();
+  if (!trust) return "unknown";
+
   const forwarded = headers.get("x-forwarded-for");
   if (forwarded) {
     const first = forwarded.split(",")[0]?.trim();
@@ -112,8 +180,114 @@ export function ipKey(scope: string, ip: string): string {
   return `${scope}:ip:${ip}`;
 }
 
+// ---------------------------------------------------------------------------
+// Real socket IP (server-trusted, never client-set) — the fallback for a
+// cookie-less anonymous caller when TRUST_PROXY_HEADERS is off.
+//
+// src/instrumentation.ts subscribes to Node's `diagnostics_channel` on every
+// incoming request and stamps the TRUE TCP peer address onto this header
+// BEFORE Next.js (or any client-controlled code) reads the request — the
+// assignment there unconditionally OVERWRITES whatever a caller sent under
+// this name, so it can never be spoofed the way `x-forwarded-for` can.
+// getSocketIp() below just reads it back. This is a server-to-server signal,
+// not something callers are meant to set — never trust it in a context that
+// didn't go through that subscriber (see the null fallback below).
+// ---------------------------------------------------------------------------
+
+export const SOCKET_IP_HEADER = "x-investiq-internal-socket-ip";
+
+/**
+ * The real socket-level source address for this request, or null when the
+ * instrumentation subscriber never ran (e.g. a `Request` built directly in a
+ * unit test, bypassing the real HTTP server). Trusted precisely because
+ * src/instrumentation.ts always overwrites this header with the genuine TCP
+ * peer address before any handler sees the request.
+ */
+export function getSocketIp(headers: Headers): string | null {
+  const value = headers.get(SOCKET_IP_HEADER);
+  return value && value.trim() ? value.trim() : null;
+}
+
+// ---------------------------------------------------------------------------
+// Per-browser anonymous id (used when the proxy headers are NOT trusted).
+//
+// With TRUST_PROXY_HEADERS off (the default) we can't read a real client IP,
+// so without this every anonymous visitor would share one "unknown" bucket and
+// a handful of requests would lock sign-in for the whole app. Instead each
+// browser gets a random id kept in a signed, httpOnly cookie: the signature
+// (HMAC with BETTER_AUTH_SECRET) means the client can't forge or reuse someone
+// else's id to raid their bucket, and it carries NO personal data (just a
+// random token). The cookie plumbing lives in src/lib/anon-rate-id.ts; the
+// pure sign/verify/mint helpers live here so they're unit-testable.
+// ---------------------------------------------------------------------------
+
+/** The httpOnly cookie name that stores the signed per-browser anon id. */
+export const ANON_ID_COOKIE = "iq_anon";
+
+/**
+ * The key HMAC-signing uses. BETTER_AUTH_SECRET is required in production (the
+ * app refuses to start without it — see src/instrumentation.ts); the
+ * dev-only fallback just keeps `npm run dev`/tests working without one and is
+ * never used to protect anything real.
+ */
+function anonSigningSecret(): string {
+  return process.env.BETTER_AUTH_SECRET || "dev-only-insecure-anon-id-secret";
+}
+
+/** A fresh, unguessable per-browser id (never derived from anything personal). */
+export function mintAnonId(): string {
+  return randomBytes(16).toString("hex");
+}
+
+/** Sign an anon id as `<id>.<hmac>` for storing in the cookie. */
+export function signAnonId(id: string): string {
+  const sig = createHmac("sha256", anonSigningSecret()).update(id).digest("hex");
+  return `${id}.${sig}`;
+}
+
+/**
+ * Verify a signed cookie value and return the id inside it, or null when the
+ * value is missing, malformed, or the signature doesn't match (tampered).
+ */
+export function verifyAnonId(value: string | undefined | null): string | null {
+  if (!value) return null;
+  const dot = value.lastIndexOf(".");
+  if (dot <= 0 || dot === value.length - 1) return null;
+
+  const id = value.slice(0, dot);
+  const providedSig = value.slice(dot + 1);
+  const expectedSig = createHmac("sha256", anonSigningSecret())
+    .update(id)
+    .digest("hex");
+
+  const provided = Buffer.from(providedSig);
+  const expected = Buffer.from(expectedSig);
+  if (provided.length !== expected.length) return null;
+  return timingSafeEqual(provided, expected) ? id : null;
+}
+
 export function userKey(scope: string, userId: string): string {
   return `${scope}:user:${userId}`;
+}
+
+/**
+ * A per-account rate-limit key (e.g. sign-in attempts against ONE email).
+ * Lower-cased so casing can't split the bucket. This limits brute force
+ * against a single account regardless of how many IPs (real or spoofed) the
+ * attacker rotates through.
+ */
+export function emailKey(scope: string, email: string): string {
+  return `${scope}:email:${email.trim().toLowerCase()}`;
+}
+
+/**
+ * A per-token rate-limit key (e.g. password-reset attempts against ONE reset
+ * token). Case-sensitive (tokens are). Bounds guessing/replay against a single
+ * reset link no matter how many browsers or IPs the attempts come from — the
+ * token equivalent of `emailKey`.
+ */
+export function tokenKey(scope: string, token: string): string {
+  return `${scope}:token:${token.trim()}`;
 }
 
 /** Plain-English message for a denied request (owner is not a developer). */

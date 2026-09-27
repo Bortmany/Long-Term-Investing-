@@ -124,8 +124,8 @@ export function TransactionsTable({
             className="w-40"
             aria-label="Filter by instrument"
           />
-          <Button type="button" onClick={onAdd}>
-            Add Transaction
+          <Button type="button" variant="ghost" onClick={onAdd}>
+            + Add
           </Button>
         </div>
       </CardHeader>

@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 
 import { signOutAction } from "@/app/actions/sign-out";
+import { SourceBadgeLegend } from "@/components/source-badge-legend";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -239,7 +240,7 @@ export function AppShell({
         <span className="text-lg font-semibold">InvestIQ AI</span>
         <div className="ml-auto flex items-center gap-1">
           {notificationBellMobile}
-          <ThemeToggle />
+          <ThemeToggle placement="topbar" />
         </div>
       </header>
 
@@ -265,22 +266,44 @@ export function AppShell({
         </SheetContent>
       </Sheet>
 
-      {/* Page content */}
-      <main className="min-h-screen md:pl-16 lg:pl-60">
+      {/* Page content.
+          overflow-x-clip: floating decorations that hang off a page element —
+          a SourceBadge tooltip centred on an icon at the right edge of a card,
+          for example — must never widen the page and give the whole document a
+          sideways scrollbar. This is the same idea as the shared Table's
+          "overflow-x-auto" wrapper (src/components/ui/table.tsx): the container
+          keeps its own overflow to itself. "clip" (not "hidden") is deliberate —
+          it adds no scrollbar, creates no scroll container, and leaves the
+          mobile top bar's sticky positioning and normal page scrolling alone.
+          Because <main> reaches the right edge of the window, nothing that is
+          visible on screen today gets cut; only the part that was already
+          off-screen stops being scrollable to. Full-screen overlays (Dialog,
+          Sheet) are position: fixed, so they are unaffected. */}
+      <main className="min-h-screen overflow-x-clip md:pl-16 lg:pl-60">
         <div className="mx-auto w-full max-w-6xl p-4 sm:p-6 lg:p-8">{children}</div>
         {/* Persistent disclaimer shown under every authenticated page. */}
         <footer className="mx-auto w-full max-w-6xl px-4 pb-4 sm:px-6 lg:px-8">
           <p className="text-center text-xs text-slate-500 dark:text-slate-400">
             Analysis to support your own decisions — not financial advice.
             {" · "}
-            <Link href="/privacy" className="hover:underline">
+            <Link
+              href="/privacy"
+              className="text-blue-600 hover:underline dark:text-blue-400"
+            >
               Privacy
             </Link>
             {" · "}
-            <Link href="/terms" className="hover:underline">
+            <Link
+              href="/terms"
+              className="text-blue-600 hover:underline dark:text-blue-400"
+            >
               Terms
             </Link>
           </p>
+          {/* The key to the source badges that sit next to every number. */}
+          <div className="mt-1 text-center">
+            <SourceBadgeLegend />
+          </div>
         </footer>
       </main>
     </div>

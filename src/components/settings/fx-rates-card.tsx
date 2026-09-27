@@ -52,6 +52,11 @@ export type FxRateDisplayRow = {
   asOfLabel: string;
   /** Source badge props computed server-side from the row's PriceSource. */
   badge: Pick<SourceBadgeProps, "variant" | "date">;
+  /**
+   * Whether this row can be deleted here — true only for the signed-in user's
+   * OWN manual rates. The shared FMP / seed rates are read-only from Settings.
+   */
+  deletable: boolean;
 };
 
 /**
@@ -258,24 +263,26 @@ export function FxRatesCard({
                     <SourceBadge {...row.badge} />
                   </TableCell>
                   <TableCell>
-                    <Tooltip>
-                      <TooltipTrigger>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="size-9"
-                          aria-label={`Delete the ${row.base} to ${row.quote} rate as of ${row.asOfLabel}`}
-                          onClick={() => {
-                            setDeleteError(null);
-                            setDeleting(row);
-                          }}
-                        >
-                          <Trash2 aria-hidden="true" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="left">{`Delete the ${row.base} to ${row.quote} rate`}</TooltipContent>
-                    </Tooltip>
+                    {row.deletable ? (
+                      <Tooltip>
+                        <TooltipTrigger>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="size-9"
+                            aria-label={`Delete the ${row.base} to ${row.quote} rate as of ${row.asOfLabel}`}
+                            onClick={() => {
+                              setDeleteError(null);
+                              setDeleting(row);
+                            }}
+                          >
+                            <Trash2 aria-hidden="true" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="left">{`Delete the ${row.base} to ${row.quote} rate`}</TooltipContent>
+                      </Tooltip>
+                    ) : null}
                   </TableCell>
                 </TableRow>
               ))}

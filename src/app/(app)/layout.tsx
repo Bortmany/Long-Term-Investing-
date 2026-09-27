@@ -6,6 +6,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { AppShell } from "@/components/app-shell";
 import { NotificationBell, type NotificationBellItem } from "@/components/notification-bell";
+import { describeFiredAlert, savedAlertRule } from "@/lib/alerts/describe";
 import { sweepAlertsForUserThrottled } from "@/lib/alerts/engine";
 
 // Latest notifications shown in the bell's panel (BUILD-PLAN.md Phase 7).
@@ -55,6 +56,18 @@ export default async function AuthenticatedLayout({
     priceCurrency: row.priceCurrency,
     priceSource: row.priceSource,
     priceAsOf: row.priceAsOf,
+    // Built ONLY from the settings saved on the notification when the alert
+    // fired — never from the alert's current settings, which the owner may
+    // have edited since. Older notifications without saved settings get no
+    // explanation line (the title and body still say what happened).
+    explanation: describeFiredAlert(
+      savedAlertRule({
+        alertKind: row.alertKind,
+        alertThreshold: row.alertThreshold === null ? null : row.alertThreshold.toNumber(),
+        alertIntervalDays: row.alertIntervalDays,
+        priceCurrency: row.priceCurrency,
+      }),
+    ),
   }));
 
   return (
