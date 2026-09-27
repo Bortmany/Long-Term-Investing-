@@ -128,4 +128,6 @@ npm run test
 
 **Pre-push check.** Every `git push` first runs `npm run verify` through `.husky/pre-push`, installed by `npm install`: `npx prisma migrate deploy` (applies any new migrations to the database in `.env` — it never resets or wipes one), `prisma generate`, then lint, type check, build and tests. It stops straight away with a plain message if local Postgres isn't running, and takes about half a minute to a minute. Seeding is left out. In an emergency, `git push --no-verify` skips it.
 
+**GitHub check.** `.github/workflows/verify.yml` runs the same steps as `npm run verify` on every pull request and every push to main: a throwaway Postgres 16 database, a freshly generated CI-only sign-in secret (no real keys), `npx prisma migrate deploy`, then lint, type check, build and tests. Seeding and the browser tests are left out, as they are locally. Cost: GitHub Actions is free here. The repo is meant to be private, and a private repo on GitHub's free plan gets 2,000 free minutes a month (one run takes a few minutes); while it is public, minutes are unlimited. A newer push to the same branch cancels the older run, which saves minutes.
+
 (Optional extra: `npm run test:e2e` runs the Playwright smoke tests against a dev server; browsers are preinstalled — never run `playwright install`.)
