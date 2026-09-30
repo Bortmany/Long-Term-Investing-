@@ -36,6 +36,11 @@ model User {
   manualPrices   ManualPrice[]
   manualFxRates  ManualFxRate[]
 
+  // Free or Pro (Step 2). Free by default. Changed only by the billing
+  // webhook or the owner's `npm run plan:set` command — never by the user.
+  plan           Plan          @default(FREE)
+  subscription   Subscription?
+
   @@unique([email])
   @@map("user")
 }
@@ -382,6 +387,9 @@ model AiAnalysis {
   @@index([type, subjectType, subjectId, createdAt(sort: Desc)])
   @@index([inputHash])
   @@index([userId, createdAt(sort: Desc)])
+  // The app-wide daily AI limit counts every user's rows since midnight UTC —
+  // a range scan the per-user index above can't serve.
+  @@index([createdAt])
 }
 
 model WatchlistItem {
@@ -478,4 +486,45 @@ model Notification {
 
   @@index([userId, readAt])
   @@index([userId, createdAt(sort: Desc)])
+}
+
+// ---------------------------------------------------------------------------
+// Plans and billing (Step 2 "go public"). Billing is built but OFF until the
+// owner turns it on; while it is off these two tables stay empty.
+// ---------------------------------------------------------------------------
+
+enum Plan {
+  FREE
+  PRO
+}
+
+// One per paying user. Only the billing code writes it (checkout start and
+// the verified Stripe webhook). No card details are ever stored — Stripe
+// keeps those. Deleted with the account.
+model Subscription {
+  id                     String    @id @default(cuid())
+  userId                 String    @unique
+  user                   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider               String    @default("stripe")
+  providerCustomerId     String
+  providerSubscriptionId String?   @unique
+  // Stripe's own status word ("active", "past_due", "canceled", ...). Plain
+  // text on purpose, so a new Stripe status never needs a migration.
+  status                 String
+  // "month" or "year".
+  interval               String
+  currentPeriodEnd       DateTime?
+  cancelAtPeriodEnd      Boolean   @default(false)
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  @@index([providerCustomerId])
+}
+
+// Every Stripe event id we have handled, so a repeat delivery is ignored.
+// No personal data: just the event id and its type.
+model BillingEvent {
+  id         String   @id
+  type       String
+  receivedAt DateTime @default(now())
 }

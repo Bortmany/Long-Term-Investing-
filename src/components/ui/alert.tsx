@@ -16,6 +16,10 @@ const alertVariants = cva(
         // import's "Import complete" message.
         success:
           "border-green-600/50 bg-card text-green-600 dark:text-green-400 [&>svg]:text-current",
+        // Amber "heads-up" — careful, not broken. Used only for calm warnings
+        // (email not set up locally, a failed payment).
+        warning:
+          "border-amber-600/50 bg-card text-amber-700 dark:text-amber-400 [&>svg]:text-current",
       },
     },
     defaultVariants: {
