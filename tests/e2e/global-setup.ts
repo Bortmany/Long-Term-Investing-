@@ -1,11 +1,11 @@
 import { request as playwrightRequest } from "@playwright/test";
+import { spawnSync } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 
 import {
   E2E_BASE_URL,
   E2E_USER_EMAIL,
-  E2E_USER_NAME,
   E2E_USER_PASSWORD,
   assertLocalTestDatabase,
 } from "./test-user";
@@ -29,6 +29,7 @@ import {
 // Path note: this file is plain CommonJS-mode TypeScript (package.json has
 // no "type": "module"), so it avoids `import.meta`. `process.cwd()` is safe
 // because `npm run test:e2e` always runs from the repo root.
+const CREATE_USER_SCRIPT = path.join(process.cwd(), "tests", "e2e", "create-test-user.ts");
 export const AUTH_STATE_PATH = path.join(process.cwd(), "tests", "e2e", ".auth", "user.json");
 
 export default async function globalSetup(): Promise<void> {
@@ -36,20 +37,22 @@ export default async function globalSetup(): Promise<void> {
 
   assertLocalTestDatabase(process.env);
 
-  const { PrismaClient } = await import("@prisma/client");
-  const { ensureVerifiedPasswordUser, seedDemoDataForUser } = await import("../../prisma/seed-demo");
-  const prisma = new PrismaClient();
-  try {
-    const user = await ensureVerifiedPasswordUser(prisma, {
-      email: E2E_USER_EMAIL,
-      name: E2E_USER_NAME,
-      password: E2E_USER_PASSWORD,
-      // Keep the stored password in step with E2E_TEST_PASSWORD between runs.
-      resetPassword: true,
-    });
-    await seedDemoDataForUser(prisma, user.id);
-  } finally {
-    await prisma.$disconnect();
+  // Run the user-creation step in its own process under tsx: it needs Better
+  // Auth, which Playwright's TypeScript loader can't load. The password goes
+  // through the environment, never the command line.
+  const result = spawnSync(
+    process.execPath,
+    [path.join(process.cwd(), "node_modules", "tsx", "dist", "cli.mjs"), CREATE_USER_SCRIPT],
+    {
+      cwd: process.cwd(),
+      env: { ...process.env, E2E_TEST_PASSWORD: E2E_USER_PASSWORD },
+      encoding: "utf8",
+    },
+  );
+  if (result.error || result.status !== 0) {
+    const detail =
+      (result.stderr || "").trim() || (result.stdout || "").trim() || result.error?.message || "";
+    throw new Error(`E2E setup: creating the test user failed. ${detail}`);
   }
 
   const context = await playwrightRequest.newContext({ baseURL: E2E_BASE_URL });

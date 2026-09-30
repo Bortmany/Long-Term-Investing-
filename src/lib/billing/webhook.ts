@@ -13,6 +13,10 @@
 //   3. Users are found ONLY by the Stripe customer id we stored when they
 //      started checkout — never by anything else in the event. An event for a
 //      customer we don't know (e.g. a deleted account) is ignored with 200.
+//   3b. Stripe may deliver events out of order, so for subscription events we
+//      do NOT trust the (possibly stale) event body: we re-fetch the
+//      subscription from Stripe and apply its CURRENT state. A late older
+//      event therefore just re-applies the newest truth.
 //   4. Events we don't use are acknowledged with 200 and ignored.
 //
 // Never logged: the raw body, the signature header, or any key.
@@ -22,6 +26,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { resolveEffectivePlan } from "@/lib/plan-access";
+import { getStripe } from "@/lib/billing/stripe-client";
 import type { PlanName } from "@/lib/plans";
 
 export type WebhookOutcome = { status: number; body: Record<string, unknown> };
@@ -122,7 +127,21 @@ export function subscriptionUpdateFrom(sub: Stripe.Subscription): SubscriptionUp
   };
 }
 
-async function applyEvent(event: Stripe.Event, tx: WebhookTx, now: Date): Promise<void> {
+type FetchSubscription = (subscriptionId: string) => Promise<Stripe.Subscription>;
+
+/** The default: ask Stripe (only possible while billing is on). */
+const fetchSubscriptionFromStripe: FetchSubscription = async (subscriptionId) => {
+  const stripe = getStripe();
+  if (!stripe) throw new Error("Billing is off; cannot fetch the subscription");
+  return stripe.subscriptions.retrieve(subscriptionId);
+};
+
+async function applyEvent(
+  event: Stripe.Event,
+  tx: WebhookTx,
+  now: Date,
+  fetchSubscription: FetchSubscription,
+): Promise<void> {
   switch (event.type) {
     case "checkout.session.completed": {
       const session = event.data.object;
@@ -168,10 +187,32 @@ async function applyEvent(event: Stripe.Event, tx: WebhookTx, now: Date): Promis
       ) {
         return;
       }
-      const update = subscriptionUpdateFrom(sub);
+      // Current state from Stripe, not the event body (which may be stale).
+      let current: Stripe.Subscription;
+      try {
+        current = await fetchSubscription(sub.id);
+      } catch (error) {
+        // A deleted subscription may no longer be retrievable; its event is final.
+        const gone =
+          event.type === "customer.subscription.deleted" &&
+          (error as { code?: string } | null)?.code === "resource_missing";
+        if (!gone) throw error;
+        current = sub;
+      }
+      if (customerIdOf(current.customer) !== customerId) return;
+      // A finished or never-paid OTHER subscription must not overwrite the one on file.
+      if (
+        row.providerSubscriptionId &&
+        row.providerSubscriptionId !== current.id &&
+        (current.status === "canceled" || current.status === "incomplete_expired")
+      ) {
+        return;
+      }
+      const update = subscriptionUpdateFrom(current);
       await tx.updateSubscription(row.userId, update);
+      // Same decision function the rest of the app uses, so they can't disagree.
       const plan: PlanName =
-        event.type === "customer.subscription.deleted"
+        event.type === "customer.subscription.deleted" && current.status === "canceled"
           ? "FREE"
           : resolveEffectivePlan({
               plan: "PRO",
@@ -211,6 +252,7 @@ export async function handleStripeWebhook(
   deps: {
     store?: WebhookStore;
     constructEvent?: (rawBody: string, signature: string, secret: string) => Stripe.Event;
+    fetchSubscription?: FetchSubscription;
   } = {},
 ): Promise<WebhookOutcome> {
   const construct =
@@ -219,6 +261,7 @@ export async function handleStripeWebhook(
       // Static helper: verifying needs only the webhook secret, no Stripe client.
       Stripe.webhooks.constructEvent(rawBody, signature, secret));
   const store = deps.store ?? prismaWebhookStore;
+  const fetchSubscription = deps.fetchSubscription ?? fetchSubscriptionFromStripe;
 
   // 1. Signature first, before anything else.
   if (!params.signature) {
@@ -241,7 +284,7 @@ export async function handleStripeWebhook(
   // 2 + 3. Record the id and apply the change in one transaction.
   try {
     const outcome = await store.runOnce(event.id, event.type, (tx) =>
-      applyEvent(event, tx, params.now ?? new Date()),
+      applyEvent(event, tx, params.now ?? new Date(), fetchSubscription),
     );
     return {
       status: 200,

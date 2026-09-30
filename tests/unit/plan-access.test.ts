@@ -88,6 +88,28 @@ describe("resolveEffectivePlan", () => {
     ).toBe("FREE");
   });
 
+  it("incomplete / incomplete_expired / unpaid / paused are Free even with a future period end", () => {
+    for (const status of ["incomplete", "incomplete_expired", "unpaid", "paused"]) {
+      expect(
+        resolveEffectivePlan({
+          plan: "PRO",
+          subscription: { status, currentPeriodEnd: future, providerSubscriptionId: "sub_1" },
+          now: NOW,
+        }),
+      ).toBe("FREE");
+    }
+  });
+
+  it("trialing → Pro", () => {
+    expect(
+      resolveEffectivePlan({
+        plan: "PRO",
+        subscription: { status: "trialing", currentPeriodEnd: future, providerSubscriptionId: "sub_1" },
+        now: NOW,
+      }),
+    ).toBe("PRO");
+  });
+
   it("lapsed (unpaid / incomplete_expired) with the period over → Free", () => {
     for (const status of ["unpaid", "incomplete_expired", "paused"]) {
       expect(

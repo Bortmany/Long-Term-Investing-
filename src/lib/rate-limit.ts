@@ -314,7 +314,7 @@ export const EXTERNAL_LOOKUP_RATE_LIMIT: RateLimitOptions = {
 };
 // AI analysis generation (Health Score, Committee, etc.) calls a paid model
 // API. This is a burst guard, separate from and in addition to the daily
-// per-user $ cap in src/lib/ai/spend-cap.ts (DAILY_AI_ANALYSIS_LIMIT) — this
+// AI spending limits in src/lib/ai/spend-cap.ts (app-wide, per-user daily, Pro monthly) — this
 // one stops rapid double-clicks/retries within a minute; the spend cap stops
 // the day's total cost.
 export const AI_GENERATION_RATE_LIMIT: RateLimitOptions = {

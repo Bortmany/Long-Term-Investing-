@@ -14,7 +14,7 @@ export type StripeLike = {
   customers: Pick<Stripe["customers"], "create">;
   checkout: { sessions: Pick<Stripe["checkout"]["sessions"], "create"> };
   billingPortal: { sessions: Pick<Stripe["billingPortal"]["sessions"], "create"> };
-  subscriptions: Pick<Stripe["subscriptions"], "cancel">;
+  subscriptions: Pick<Stripe["subscriptions"], "cancel" | "retrieve">;
 };
 
 let cached: { key: string; client: Stripe } | null = null;

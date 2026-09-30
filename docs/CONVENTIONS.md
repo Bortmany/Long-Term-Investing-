@@ -60,12 +60,17 @@ Naming: files kebab-case (`market-data.ts`), types/components PascalCase, functi
 - **`AiDisclaimer` on every AI surface.** Any screen that shows a persisted `AiAnalysis` result
   shows the exact line "This is analysis to support your own decision, not financial advice."
   — never paraphrased per-screen.
-- **Daily spend cap.** Each user may generate at most `DAILY_AI_ANALYSIS_LIMIT` (25) new
-  `AiAnalysis` rows per UTC day (`src/lib/ai/spend-cap.ts`). One persisted row is one unit
-  against the cap, regardless of how many model calls produced it (e.g. a Committee run makes
-  several API calls but persists one row). Reusing a stored analysis by input hash never counts
-  against the cap. A refusal is a typed result with a plain-English message: what happened, when
-  it resets, and that existing analyses are still available — never a silent failure.
+- **AI spend caps.** Three limits, checked in this order — the first that fails wins
+  (`src/lib/ai/spend-cap.ts`, limits in `src/lib/plans.ts`): (1) app-wide, new analyses
+  today across all users must stay under `GLOBAL_AI_DAILY_CAP` (default 100; `0` pauses AI
+  for everyone); (2) per-user daily, Free 2 / Pro 10; (3) Pro monthly, 150. Days and months are
+  UTC. One persisted `AiAnalysis` row is one unit, however many model calls produced it (a
+  Committee run makes several calls but saves one row). Generations still running count as if
+  already saved (in-flight reservations), so simultaneous clicks cannot slip past a cap.
+  Reusing a stored analysis by input hash is free and never reaches the cap. Scheduled weekly
+  reviews count like any other analysis. A refusal is a typed result carrying a reason and a
+  plain-English message (what happened, when it resets, that existing analyses are still
+  available) — never a silent failure.
 - **No key → `ConnectKeyNotice`, honest and first-class — but stored results still show.**
   When `ANTHROPIC_API_KEY` is unset, every AI *trigger* is switched off: the button renders
   disabled (or is hidden where there is nothing stored to act on), and the `ConnectKeyNotice`
@@ -110,6 +115,16 @@ Naming: files kebab-case (`market-data.ts`), types/components PascalCase, functi
   file, `src/lib/account-export.ts`) and "Danger" (delete my account,
   password-confirmed, rate-limited like sign-in, wipes everything via the
   database's `ON DELETE CASCADE`).
+
+## Plans and billing
+
+- **Where plans live.** The two plans (Free, Pro), their limits, prices and feature list are in `src/lib/plans.ts` (pure data). Who is on Pro is decided in `src/lib/plan-access.ts`: `resolveEffectivePlan` turns the stored `User.plan` plus any subscription into the plan the app actually uses (owner-granted Pro without a Stripe subscription stays Pro; a real subscription is Pro while active/trialing/past due, with a short grace for a late renewal message, or until a cancelled period ends; everything else is Free).
+- **Gates are enforced on the server.** Pro-only actions (committee, thesis check, weekly review, review alerts) call `requirePro` and return a typed `PRO_REQUIRED` refusal. Hiding a button is never the protection — the notice is only the explanation.
+- **Billing is dormant by default.** It is on only with `BILLING_ENABLED="true"` and all four Stripe values (`getBillingMode` in `src/lib/billing/config.ts`); a live key outside production counts as off. While dormant: the webhook answers 503, the Stripe SDK is never built, and no upgrade UI is shown (screens say Pro is "coming soon").
+- **The webhook** (`/api/billing/webhook`, the only public billing path) verifies Stripe's signature before anything else, then records each event id in `BillingEvent` so a repeated delivery is applied once.
+- **Who may change a plan.** Only the verified webhook, or the owner's `npm run plan:set` command. Never a client request or a page view.
+- **Downgrading never hides saved work.** A Free user keeps seeing every stored committee, thesis check and review with its usual caption and `AiDisclaimer`; only the generate button is replaced by the Pro notice (covered by `tests/unit/downgraded-user-render.test.ts`).
+- **Stripe secrets** (`STRIPE_SECRET_KEY`, `STRIPE_PRICE_*`) are read only inside `src/lib/billing/*`; the webhook route passes `STRIPE_WEBHOOK_SECRET` straight into that code. Never log or return them.
 
 ## VERIFY RECIPE
 

@@ -17,18 +17,33 @@ Plain-English list of what to set up before this goes public. Full context lives
 
 ## Optional
 - [ ] `FMP_API_KEY` — free Financial Modeling Prep key for live US stock prices (without it, prices are manual/sample, clearly labelled).
-- [ ] `ANTHROPIC_API_KEY` — Anthropic key for the AI features (health scores, committee, thesis checks, buy/sell analysis, weekly reviews). **This IS used by the app now** (`src/lib/ai/client.ts`, `src/lib/ai/analysis.ts`) — without it, every AI surface shows the honest "AI features are turned off" notice instead of a made-up analysis; nothing breaks, AI just stays dormant. Every AI call is capped per-user per-day (`DAILY_AI_ANALYSIS_LIMIT`) so a runaway loop can't produce a surprise bill.
+- [ ] `ANTHROPIC_API_KEY` — Anthropic key for the AI features (health scores, committee, thesis checks, buy/sell analysis, weekly reviews). **This IS used by the app now** (`src/lib/ai/client.ts`, `src/lib/ai/analysis.ts`) — without it, every AI surface shows the honest "AI features are turned off" notice instead of a made-up analysis; nothing breaks, AI just stays dormant. Three caps stop a surprise bill, checked in this order: an app-wide daily cap (`GLOBAL_AI_DAILY_CAP`, default 100 new analyses a day across everyone; set `0` to pause AI for everybody — pick a number you'd be happy to pay for on a bad day), then a per-person daily cap (Free 2, Pro 10), then a Pro monthly cap (150). All reset on UTC days/months. Plans and limits live in `src/lib/plans.ts`.
 - [ ] `CRON_SECRET` — a long random bearer secret for the two scheduled endpoints, `POST /api/cron/weekly-review` and `POST /api/cron/check-alerts`. Leave it unset and both endpoints answer a dormant `503` and do nothing — no scheduling happens. Set it to turn scheduling on, then call either endpoint with `Authorization: Bearer <CRON_SECRET>` (see `.github/workflows/weekly-review.yml.example` and `check-alerts.yml.example`). If it's set but shorter than 16 characters, the app logs a warning at startup (not a hard failure — this only weakens an optional feature) — generate it the same way as `BETTER_AUTH_SECRET`.
 - [ ] `RESEND_API_KEY` / `RESEND_FROM` — **required on the live site for sign-ups and password reset** (see "Set up email" above). They also turn on the optional weekly-review email, sent to a user's own address each time their weekly review finishes. Leave either blank and nothing changes — no network call is ever made. `/api/health`'s `email` field reports `"configured"` or `"dormant"`.
 - [ ] `PRIVACY_CONTACT_EMAIL` — the address shown as a mailto link on `/privacy` and `/terms` for questions. Leave it unset and the pages show the owner's own address (`naeljam@hotmail.com`); set it to route those questions to a different inbox.
 
 ## Data rights (built in — nothing to set up)
 - **Download my data**: any signed-in user can download a complete JSON export of everything the app stores about their account from Settings → "Your data" (`GET /api/account/export`, rate-limited to 5/hour per user).
+- **Keep payments switched on until every active subscription is cancelled** — deleting an account only cancels the Stripe subscription while billing is on.
+- **Scheduled weekly reviews share the app-wide `GLOBAL_AI_DAILY_CAP`** with everything else, so on a busy day they can be skipped once the cap is used up.
 - **Delete my account**: Settings → "Danger" lets a user permanently delete their account (password-confirmed, rate-limited like sign-in). The database's `ON DELETE CASCADE` wipes every dependent row — sessions, portfolios, transactions, theses, alerts, notifications, AI analyses — in the same operation.
 - **Privacy policy and terms**: `/privacy` and `/terms` are public pages, linked from the sign-in/sign-up pages, the landing page footer and the footer of every authenticated page. Both are honest templates pending a professional legal review. They now cover plans and pricing, billing details kept (never card details), email confirmation, Stripe as reseller, the `iq_anon` security cookie, auto-renewal and the refund line. The `/terms` "is Pro on sale?" sentence follows `BILLING_ENABLED` live. **Before payments are turned on, a lawyer must review both pages** (Gulf and US, per `docs/decisions/advice-wording.md` §3) — this is a hard blocker for switching billing on, not a "once it makes money" item.
 
 ## Payments
-- Payments: none.
+Payments stay **OFF** (`BILLING_ENABLED` unset) until every box below is ticked. With billing off there are no upgrade buttons and the Stripe webhook answers "dormant" (503).
+- [ ] A Stripe account exists (via Stripe Atlas or directly).
+- [ ] Managed Payments is enabled on it, and you have confirmed that it is actually active.
+- [ ] Live keys, the webhook endpoint (`/api/billing/webhook`) and the live prices (monthly and yearly) are created in Stripe; set `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_PRO_MONTHLY`, `STRIPE_PRICE_PRO_YEARLY`.
+- [ ] A lawyer has reviewed `/terms` and `/privacy`.
+- [ ] Only then set `BILLING_ENABLED="true"` and restart. Check `/api/health` shows the billing mode you expect.
+
+### Give someone Pro by hand
+Works whether or not billing is on. From a shell pointed at the right database (it reads `DATABASE_URL`):
+`npm run plan:set -- --email someone@example.com --plan PRO`
+Use `--plan FREE` to put them back. If the person has a Stripe subscription the command refuses; add `--force` only if you really mean to override it.
+
+### Before deploying
+- [ ] **Take a database backup before deploying the migration that carries this change** (the plans and billing tables). Confirm the backup exists first.
 
 ## Backups & recovery (engineering-standards.md §8)
 - [ ] **Turn on automatic backups at the hosting/database provider** before real users' data exists there, and confirm it's actually on from the provider's dashboard — don't assume a database has backups by default.

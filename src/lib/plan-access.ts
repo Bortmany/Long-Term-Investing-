@@ -8,8 +8,9 @@
 //     `npm run plan:set`); stays Pro until the owner changes it.
 //   - PRO with a Stripe subscription         -> Pro while it is active, trialing
 //     or past due (with a short grace for a late renewal webhook), or while a
-//     cancelled subscription's paid period hasn't ended yet.
-//   - anything else                          -> Free.
+//     CANCELLED subscription's paid period hasn't ended yet.
+//   - anything else (incomplete, incomplete_expired, unpaid, paused)
+//                                            -> Free.
 //
 // Gates are enforced HERE, in server code (actions, the cron sweep, the alert
 // engine) — never only by hiding a button. Downgrading never hides or deletes
@@ -59,8 +60,14 @@ export function resolveEffectivePlan({
     return periodEnd.getTime() + RENEWAL_GRACE_MS > now.getTime() ? "PRO" : "FREE";
   }
 
-  // Cancelled (or any other state): Pro only until the paid period ends.
-  return periodEnd && periodEnd.getTime() > now.getTime() ? "PRO" : "FREE";
+  // Cancelled: Pro only until the paid period ends.
+  if (subscription.status === "canceled") {
+    return periodEnd && periodEnd.getTime() > now.getTime() ? "PRO" : "FREE";
+  }
+
+  // incomplete, incomplete_expired, unpaid, paused, anything unknown: nothing
+  // was paid for, whatever the period end says.
+  return "FREE";
 }
 
 // ---------------------------------------------------------------------------

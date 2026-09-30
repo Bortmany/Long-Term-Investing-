@@ -93,8 +93,9 @@ docs/              Conventions, build plan, roadmap, designs, research.
 
 3. **Environment.** Copy `.env.example` to `.env` and fill in the values —
    see the table below. At minimum you need `DATABASE_URL`, a generated
-   `BETTER_AUTH_SECRET`, and (to seed the demo) a `SEED_DEMO_PASSWORD` of
-   at least 12 characters.
+   `BETTER_AUTH_SECRET`, and (outside production, to seed the demo) a
+   `SEED_DEMO_PASSWORD` of at least 12 characters. The production seed
+   creates no demo user and doesn't need it.
 
 4. **Install, apply migrations, add demo data:**
 
@@ -143,6 +144,26 @@ version:
 | `RESEND_API_KEY` / `RESEND_FROM` | Optional weekly-review email via Resend. Either empty = email stays off. |
 | `PRIVACY_CONTACT_EMAIL` | Contact address shown on `/privacy` and `/terms`. Empty = the owner's default address. |
 | `SEED_DEMO_PASSWORD` | Password for the seeded demo login, used only by `prisma db seed`. Must be at least 12 characters; the seed refuses to run without it. |
+
+### Plans and billing (payments are OFF by default)
+
+Billing is on only when `BILLING_ENABLED` is `"true"` **and** all four Stripe values are set. A live key (`sk_live_`) outside production counts as off.
+
+| Variable | Purpose |
+|---|---|
+| `GLOBAL_AI_DAILY_CAP` | Most new AI analyses across all users per UTC day. Default 100; `0` pauses AI for everyone. |
+| `BILLING_ENABLED` | The literal `"true"` (plus the four values below) turns payments on. Empty = off. |
+| `STRIPE_SECRET_KEY` | Stripe secret key (`sk_test_...` or `sk_live_...`). Never commit it. |
+| `STRIPE_WEBHOOK_SECRET` | Signing secret for the `/api/billing/webhook` endpoint. |
+| `STRIPE_PRICE_PRO_MONTHLY` / `STRIPE_PRICE_PRO_YEARLY` | Stripe price ids for Pro. |
+
+Give someone Pro (or put them back on Free) by hand, with billing on or off:
+
+```bash
+npm run plan:set -- --email someone@example.com --plan PRO
+npm run plan:set -- --email someone@example.com --plan FREE
+# add --force for a user who has a Stripe subscription
+```
 
 ## Checks
 

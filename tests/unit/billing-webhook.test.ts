@@ -4,7 +4,7 @@
 // unknown event → 200; unknown customer → 200 and ignored; our failure → 500.
 // Only fake test secrets are used — never a real key.
 import Stripe from "stripe";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   handleStripeWebhook,
   type SubscriptionUpdate,
@@ -63,7 +63,15 @@ function fakeDb(options: { failOnApply?: boolean } = {}) {
   return { store, users, billing, events, work };
 }
 
+// A fake Stripe: by default it answers with the subscription inside the event
+// just signed; a test can set `stripeNow` to say what Stripe REALLY holds now.
+let lastSigned: Record<string, unknown> | null = null;
+let stripeNow: Record<string, unknown> | null = null;
+const fakeStripe = async () =>
+  (stripeNow ?? (lastSigned!.data as { object: unknown }).object) as unknown as Stripe.Subscription;
+
 function signed(event: Record<string, unknown>) {
+  lastSigned = event;
   const payload = JSON.stringify(event);
   const signature = Stripe.webhooks.generateTestHeaderString({ payload, secret: SECRET });
   return { rawBody: payload, signature };
@@ -104,7 +112,7 @@ describe("billing webhook — signature first", () => {
 
     const outcome = await handleStripeWebhook(
       { rawBody, signature: "t=1,v1=forged", secret: SECRET, now: NOW },
-      { store: db.store },
+      { store: db.store, fetchSubscription: fakeStripe },
     );
 
     expect(outcome.status).toBe(400);
@@ -122,7 +130,7 @@ describe("billing webhook — signature first", () => {
     const db = fakeDb();
     const outcome = await handleStripeWebhook(
       { rawBody: "{}", signature: null, secret: SECRET, now: NOW },
-      { store: db.store },
+      { store: db.store, fetchSubscription: fakeStripe },
     );
     expect(outcome.status).toBe(400);
     expect(db.work).not.toHaveBeenCalled();
@@ -136,7 +144,7 @@ describe("billing webhook — signature first", () => {
     const tampered = rawBody.replace("cus_known", "cus_other");
     const outcome = await handleStripeWebhook(
       { rawBody: tampered, signature, secret: SECRET, now: NOW },
-      { store: db.store },
+      { store: db.store, fetchSubscription: fakeStripe },
     );
     expect(outcome.status).toBe(400);
     expect(db.work).not.toHaveBeenCalled();
@@ -144,12 +152,16 @@ describe("billing webhook — signature first", () => {
   });
 });
 
+beforeEach(() => {
+  stripeNow = null;
+});
+
 describe("billing webhook — applying events", () => {
   it("a good subscription event is applied: Pro, status, interval and period end stored", async () => {
     const db = fakeDb();
     const outcome = await handleStripeWebhook(
       { ...signed(subscriptionEvent("evt_3", "customer.subscription.created")), secret: SECRET, now: NOW },
-      { store: db.store },
+      { store: db.store, fetchSubscription: fakeStripe },
     );
     expect(outcome.status).toBe(200);
     expect(db.users.get("user-1")!.plan).toBe("PRO");
@@ -167,11 +179,11 @@ describe("billing webhook — applying events", () => {
     const setPlanCalls: PlanName[] = [];
     const event = signed(subscriptionEvent("evt_4", "customer.subscription.created"));
 
-    const first = await handleStripeWebhook({ ...event, secret: SECRET, now: NOW }, { store: db.store });
+    const first = await handleStripeWebhook({ ...event, secret: SECRET, now: NOW }, { store: db.store, fetchSubscription: fakeStripe });
     setPlanCalls.push(db.users.get("user-1")!.plan);
     // Owner downgrades by hand in between: a replay must NOT flip it back.
     db.users.get("user-1")!.plan = "FREE";
-    const second = await handleStripeWebhook({ ...event, secret: SECRET, now: NOW }, { store: db.store });
+    const second = await handleStripeWebhook({ ...event, secret: SECRET, now: NOW }, { store: db.store, fetchSubscription: fakeStripe });
 
     expect(first.status).toBe(200);
     expect(second.status).toBe(200);
@@ -188,7 +200,7 @@ describe("billing webhook — applying events", () => {
         secret: SECRET,
         now: NOW,
       },
-      { store: db.store },
+      { store: db.store, fetchSubscription: fakeStripe },
     );
     expect(outcome.status).toBe(200);
     expect(db.work).not.toHaveBeenCalled();
@@ -203,7 +215,7 @@ describe("billing webhook — applying events", () => {
         secret: SECRET,
         now: NOW,
       },
-      { store: db.store },
+      { store: db.store, fetchSubscription: fakeStripe },
     );
     expect(outcome.status).toBe(200);
     expect(db.users.get("user-1")!.plan).toBe("FREE");
@@ -220,7 +232,7 @@ describe("billing webhook — applying events", () => {
         secret: SECRET,
         now: NOW,
       },
-      { store: db.store },
+      { store: db.store, fetchSubscription: fakeStripe },
     );
     expect(db.users.get("user-1")!.plan).toBe("FREE");
   });
@@ -235,7 +247,7 @@ describe("billing webhook — applying events", () => {
         secret: SECRET,
         now: NOW,
       },
-      { store: db.store },
+      { store: db.store, fetchSubscription: fakeStripe },
     );
     expect(db.users.get("user-1")!.plan).toBe("PRO");
     expect(db.billing.get("cus_known")!.update!.cancelAtPeriodEnd).toBe(true);
@@ -260,13 +272,13 @@ describe("billing webhook — applying events", () => {
     });
     await handleStripeWebhook(
       { ...signed(checkout("evt_9", "someone-else")), secret: SECRET, now: NOW },
-      { store: db.store },
+      { store: db.store, fetchSubscription: fakeStripe },
     );
     expect(db.billing.get("cus_known")!.providerSubscriptionId).toBeNull();
 
     await handleStripeWebhook(
       { ...signed(checkout("evt_10", "user-1")), secret: SECRET, now: NOW },
-      { store: db.store },
+      { store: db.store, fetchSubscription: fakeStripe },
     );
     expect(db.billing.get("cus_known")!.providerSubscriptionId).toBe("sub_999");
     // Checkout alone never grants Pro; only the subscription events do.
@@ -278,9 +290,72 @@ describe("billing webhook — applying events", () => {
     vi.spyOn(logger, "error").mockImplementation(() => {});
     const broken = fakeDb({ failOnApply: true });
     const event = signed(subscriptionEvent("evt_11", "customer.subscription.created"));
-    const failed = await handleStripeWebhook({ ...event, secret: SECRET, now: NOW }, { store: broken.store });
+    const failed = await handleStripeWebhook({ ...event, secret: SECRET, now: NOW }, { store: broken.store, fetchSubscription: fakeStripe });
     expect(failed.status).toBe(500);
     expect(broken.events.has("evt_11")).toBe(false);
     vi.restoreAllMocks();
+  });
+});
+
+describe("billing webhook — out-of-order events", () => {
+  it("an older 'active' event arriving after a newer cancellation does not undo it", async () => {
+    const db = fakeDb();
+    db.users.get("user-1")!.plan = "PRO";
+    db.billing.get("cus_known")!.providerSubscriptionId = "sub_123";
+    // Stripe's truth now: cancelled and the paid period is over.
+    stripeNow = {
+      id: "sub_123",
+      object: "subscription",
+      customer: "cus_known",
+      status: "canceled",
+      cancel_at_period_end: false,
+      cancel_at: null,
+      items: {
+        object: "list",
+        data: [
+          {
+            current_period_end: Math.floor(NOW.getTime() / 1000) - 86400,
+            price: { recurring: { interval: "month" } },
+          },
+        ],
+      },
+    };
+    // The late, stale event still says "active".
+    const late = subscriptionEvent("evt_old", "customer.subscription.updated", { status: "active" });
+    const outcome = await handleStripeWebhook(
+      { ...signed(late), secret: SECRET, now: NOW },
+      { store: db.store, fetchSubscription: fakeStripe },
+    );
+    expect(outcome.status).toBe(200);
+    expect(db.users.get("user-1")!.plan).toBe("FREE");
+    expect(db.billing.get("cus_known")!.update!.status).toBe("canceled");
+  });
+
+  it("a failed Stripe lookup gives 500 so Stripe retries, and nothing is recorded", async () => {
+    const db = fakeDb();
+    const outcome = await handleStripeWebhook(
+      { ...signed(subscriptionEvent("evt_x", "customer.subscription.updated")), secret: SECRET, now: NOW },
+      {
+        store: db.store,
+        fetchSubscription: async () => {
+          throw new Error("stripe down");
+        },
+      },
+    );
+    expect(outcome.status).toBe(500);
+    expect(db.events.has("evt_x")).toBe(false);
+  });
+
+  it("an incomplete subscription never grants Pro, even with a future period end", async () => {
+    const db = fakeDb();
+    await handleStripeWebhook(
+      {
+        ...signed(subscriptionEvent("evt_inc", "customer.subscription.created", { status: "incomplete" })),
+        secret: SECRET,
+        now: NOW,
+      },
+      { store: db.store, fetchSubscription: fakeStripe },
+    );
+    expect(db.users.get("user-1")!.plan).toBe("FREE");
   });
 });

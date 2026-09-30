@@ -259,7 +259,15 @@ export async function seedDemoDataForUser(
  */
 export async function ensureVerifiedPasswordUser(
   prisma: PrismaClient,
-  opts: { email: string; name: string; password: string; resetPassword?: boolean },
+  opts: {
+    email: string;
+    name: string;
+    password: string;
+    resetPassword?: boolean;
+    // Owner-granted plan (no subscription row), like `npm run plan:set`.
+    // Omit to leave the plan alone (new users default to FREE).
+    plan?: "FREE" | "PRO";
+  },
 ): Promise<{ id: string; created: boolean }> {
   const { auth } = await import("../src/lib/auth");
   const context = await auth.$context;
@@ -267,7 +275,10 @@ export async function ensureVerifiedPasswordUser(
 
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
-    await prisma.user.update({ where: { id: existing.id }, data: { emailVerified: true } });
+    await prisma.user.update({
+      where: { id: existing.id },
+      data: { emailVerified: true, ...(opts.plan ? { plan: opts.plan } : {}) },
+    });
     if (opts.resetPassword) {
       const hash = await context.password.hash(opts.password);
       await context.internalAdapter.updatePassword(existing.id, hash);
@@ -287,5 +298,8 @@ export async function ensureVerifiedPasswordUser(
     accountId: user.id,
     password: hash,
   });
+  if (opts.plan) {
+    await prisma.user.update({ where: { id: user.id }, data: { plan: opts.plan } });
+  }
   return { id: user.id, created: true };
 }
