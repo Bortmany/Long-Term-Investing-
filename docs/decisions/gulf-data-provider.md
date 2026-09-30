@@ -25,3 +25,5 @@ Status: proposed. Checked 2026-09-30.
 Not verified: FMP's Gulf coverage and its public-display terms (its pages blocked the check), and whether EODHD lists Gulf markets in its live exchange list. To confirm EODHD, call its exchanges endpoint with the free key.
 
 ## Recommendation: keep manual Gulf prices for now and email Twelve Data sales for a written public-display quote covering Tadawul, ADX, QSE and DFM. Until then, public stock pages show company facts and never vendor prices; MSX stays manual whatever we choose.
+
+**Owner decision (2026-09-30):** approved as recommended.

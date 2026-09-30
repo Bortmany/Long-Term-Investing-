@@ -56,3 +56,5 @@ Confidence notes: the Oman dates, the Saudi Article 15 exemption and the Saudi f
 - Zawya, Saudi CMA fine: https://www.zawya.com/en/capital-markets/equities/saudi-cma-imposes-fine-on-unlicensed-investment-advisor-olbh72pj
 
 ## Recommendation: Remove "suggested % of your portfolio", reword Buy/Sell/Recommendation labels as above, keep stock-level views identical for every user, and get a lawyer's sign-off before the paid Pro plan opens.
+
+**Owner decision (2026-09-30):** approved as recommended.

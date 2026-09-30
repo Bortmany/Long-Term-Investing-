@@ -45,3 +45,5 @@
 - https://docs.stripe.com/atlas/signup
 - https://docs.stripe.com/atlas/business-taxes
 - FastSpring and Gumroad fees: third-party reviews (dodopayments.com, cartmango.com) — rough.
+
+**Owner decision (2026-09-30):** approved, with one change: build it but keep it OFF. Billing code is built against Stripe test mode and stays dormant (no upgrade button, checkout or webhook processing) until the owner switches it on with a flag and live keys.

@@ -53,3 +53,5 @@ Still open: Musaffa's price, Zoya's Gulf coverage and permission to display verd
 - https://faithscreener.com/blog/aaoifi-standard-21-explained
 - https://www.halalterminal.com/blog/posts/best-islamic-finance-apis-2026
 - https://academy.musaffa.com/halal-stocks-in-tasi-saudi-arabia/
+
+**Owner decision (2026-09-30):** approved as recommended.

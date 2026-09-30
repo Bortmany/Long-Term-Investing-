@@ -36,3 +36,5 @@ Gulf brokers such as Sarwa, Derayah, Al Rajhi Capital, EFG Hermes and Bank Musca
 Not yet confirmed: SnapTrade's full brokerage list (check support.snaptrade.com/brokerages before relying on IBKR, Schwab, Fidelity, Trading 212 or Saxo coverage), and eToro's and Schwab's export formats from official pages.
 
 ## Recommendation: Ship IBKR Flex (free) plus the 7 CSV presets now, and add SnapTrade at $1 per user per month (plus $100 base) only once paying users ask for auto-sync at other brokers.
+
+**Owner decision (2026-09-30):** approved as recommended.

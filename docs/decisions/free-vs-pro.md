@@ -52,3 +52,5 @@ None of the five shows Muscat (MSX), Saudi (Tadawul) or Dubai (DFM) support. Gul
 Unconfirmed: Stock Rover's own page and third-party sites disagree on prices; Simply Wall St's Unlimited monthly price.
 
 ## Recommendation: Launch Free (2 analyses a day) and Pro at $9.99 a month or $89 a year (10 analyses a day), with a per-user monthly ceiling and a whole-app daily spend limit.
+
+**Owner decision (2026-09-30):** approved as recommended.
