@@ -9,6 +9,7 @@ import { Circle } from "lucide-react";
 import { checkThesis } from "@/app/actions/theses";
 import { AiPanel, type AiPanelAnalysis } from "@/components/ai-panel";
 import { ExplainerTip } from "@/components/explainer-tip";
+import { ProFeatureNotice } from "@/components/pro-feature-notice";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { ThesisCheckOutput } from "@/lib/ai/schemas";
 import { RecommendationChip } from "./recommendation-chip";
@@ -59,6 +60,8 @@ export function ThesisCheckPanel({
   hasKey,
   analysis,
   output,
+  proLocked = false,
+  billingEnabled = false,
 }: {
   thesisId: string;
   hasKey: boolean;
@@ -66,6 +69,13 @@ export function ThesisCheckPanel({
   analysis: AiPanelAnalysis | null;
   /** The zod-validated structured output matching `analysis`, or null. */
   output: ThesisCheckOutput | null;
+  /**
+   * AI thesis check-ups are Pro. For a Free user the "part of Pro" notice
+   * replaces the button; the latest stored check still shows in full.
+   */
+  proLocked?: boolean;
+  /** From isBillingEnabled() on the server — picks the notice's wording. */
+  billingEnabled?: boolean;
 }) {
   return (
     <AiPanel
@@ -76,6 +86,7 @@ export function ThesisCheckPanel({
       hasKey={hasKey}
       skeleton={SKELETON}
       onAction={() => checkThesis(thesisId)}
+      proNotice={proLocked ? <ProFeatureNotice billingEnabled={billingEnabled} /> : undefined}
     >
       {output ? (
         <div className="space-y-6">

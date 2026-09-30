@@ -8,6 +8,7 @@ import { GitBranch } from "lucide-react";
 import { conveneCommittee } from "@/app/actions/committee";
 import { AiPanel, type AiPanelAnalysis } from "@/components/ai-panel";
 import { ExplainerTip } from "@/components/explainer-tip";
+import { ProFeatureNotice } from "@/components/pro-feature-notice";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -50,6 +51,8 @@ export function CommitteeResultPanel({
   analysis,
   output,
   readOnly = false,
+  proLocked = false,
+  billingEnabled = false,
 }: {
   instrumentId: string;
   hasKey: boolean;
@@ -59,6 +62,13 @@ export function CommitteeResultPanel({
   output: CommitteeOutput | null;
   /** Historical read-only view (src/app/(app)/committee/history/[id]/page.tsx) — hides the action button. */
   readOnly?: boolean;
+  /**
+   * The full Committee is Pro. For a Free user the "part of Pro" notice
+   * replaces the button; any stored run still shows in full.
+   */
+  proLocked?: boolean;
+  /** From isBillingEnabled() on the server — picks the notice's wording. */
+  billingEnabled?: boolean;
 }) {
   return (
     <AiPanel
@@ -70,6 +80,9 @@ export function CommitteeResultPanel({
       readOnly={readOnly}
       skeleton={SKELETON}
       onAction={() => conveneCommittee(instrumentId)}
+      proNotice={
+        proLocked && !readOnly ? <ProFeatureNotice billingEnabled={billingEnabled} /> : undefined
+      }
     >
       {output ? (
         <div className="space-y-6">

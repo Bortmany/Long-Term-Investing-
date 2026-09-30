@@ -14,7 +14,10 @@ import { LoaderCircle, RefreshCw, Sparkles, TriangleAlert } from "lucide-react";
 import { AiDisclaimer } from "@/components/ai-disclaimer";
 import { ConnectKeyNotice } from "@/components/connect-key-notice";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AiLimitNotice } from "@/components/ai-limit-notice";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { inferAiLimitFromMessage, isAiLimitCode, type AiLimitCode } from "@/lib/ai/limit-messages";
 import {
   Card,
   CardContent,
@@ -43,6 +46,7 @@ export function AiPanel({
   skeleton,
   children,
   onAction,
+  proNotice,
   className,
 }: {
   title: React.ReactNode;
@@ -62,19 +66,46 @@ export function AiPanel({
   children?: React.ReactNode;
   /** The server action to run when the button is clicked. */
   onAction?: () => Promise<ActionResult<unknown>>;
+  /**
+   * Set on Pro-only panels for a Free user (a ProFeatureNotice): it takes the
+   * button's place. A stored analysis still renders in full below it.
+   */
+  proNotice?: React.ReactNode;
   className?: string;
 }) {
   const [error, setError] = React.useState<string | null>(null);
+  // A spend-limit refusal: shown as the calm grey AiLimitNotice, never as a
+  // red error. It also switches the button off for the rest of this page
+  // view (reloading re-enables it; the server always decides again).
+  const [limit, setLimit] = React.useState<{
+    code: AiLimitCode;
+    message: string;
+    upgradeHref?: string;
+  } | null>(null);
+  // A "part of Pro" refusal that arrived from the server (e.g. the plan
+  // lapsed while this page was open) — also calm grey, not red.
+  const [proRefusal, setProRefusal] = React.useState<string | null>(null);
   const [isPending, startTransition] = React.useTransition();
   const noticeId = React.useId();
+  const limitNoticeId = React.useId();
 
   function handleAction() {
-    if (!onAction || isPending || !hasKey) return;
+    if (!onAction || isPending || !hasKey || limit) return;
     setError(null);
+    setProRefusal(null);
     startTransition(async () => {
       const result = await onAction();
       if (!result.ok) {
-        setError(result.error);
+        const inferred = isAiLimitCode(result.code)
+          ? { code: result.code, upgradeHref: result.upgradeHref }
+          : inferAiLimitFromMessage(result.error);
+        if (inferred) {
+          setLimit({ code: inferred.code, message: result.error, upgradeHref: inferred.upgradeHref });
+        } else if (result.code === "PRO_REQUIRED") {
+          setProRefusal(result.error);
+        } else {
+          setError(result.error);
+        }
       }
       // On success, the calling server action's revalidatePath refreshes
       // this page's data — the fresh `analysis` prop arrives via the normal
@@ -99,37 +130,52 @@ export function AiPanel({
     );
   }
 
-  const showButton = !readOnly;
+  // A Pro-only panel for a Free user has no button at all — the Pro notice
+  // takes its place (the server refuses the action regardless).
+  const showButton = !readOnly && !proNotice;
   // With no key the button stays visible but disabled, and the notice below
   // the content says why. On a read-only historical view there's no button to
   // explain, so no notice either.
   const showKeyNotice = !hasKey && showButton;
+
+  const button = (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      disabled={isPending || !hasKey || limit !== null}
+      aria-describedby={showKeyNotice ? noticeId : limit ? limitNoticeId : undefined}
+      onClick={handleAction}
+    >
+      {isPending ? (
+        <>
+          <LoaderCircle className="animate-spin" aria-hidden="true" />
+          {pendingLabel}
+        </>
+      ) : (
+        <>
+          <RefreshCw aria-hidden="true" />
+          {actionLabel}
+        </>
+      )}
+    </Button>
+  );
 
   return (
     <Card className={className}>
       <CardHeader className="flex-row items-center justify-between">
         <CardTitle>{title}</CardTitle>
         {showButton ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={isPending || !hasKey}
-            aria-describedby={showKeyNotice ? noticeId : undefined}
-            onClick={handleAction}
-          >
-            {isPending ? (
-              <>
-                <LoaderCircle className="animate-spin" aria-hidden="true" />
-                {pendingLabel}
-              </>
-            ) : (
-              <>
-                <RefreshCw aria-hidden="true" />
-                {actionLabel}
-              </>
-            )}
-          </Button>
+          limit ? (
+            // A disabled button can't show a hover hint itself, so the hint
+            // sits on a focusable wrapper around it.
+            <Tooltip>
+              <TooltipTrigger>{button}</TooltipTrigger>
+              <TooltipContent side="bottom">Available again after the limit resets.</TooltipContent>
+            </Tooltip>
+          ) : (
+            button
+          )
         ) : null}
       </CardHeader>
 
@@ -152,12 +198,36 @@ export function AiPanel({
         </div>
       ) : null}
 
+      {/* Calm notices sit above the content; a stored analysis stays fully
+          visible underneath them (16px gap). */}
+      {limit || proRefusal || proNotice ? (
+        <div className="space-y-4 px-6 pb-4">
+          {proNotice}
+          {limit ? (
+            <AiLimitNotice
+              id={limitNoticeId}
+              code={limit.code}
+              message={limit.message}
+              upgradeHref={limit.upgradeHref}
+            />
+          ) : null}
+          {proRefusal ? (
+            <p
+              role="status"
+              className="max-w-2xl rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
+            >
+              {proRefusal}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
       <CardContent>
         {analysis ? (
           <div className={cn(isPending && "pointer-events-none opacity-60")}>{children}</div>
         ) : isPending && skeleton ? (
           skeleton
-        ) : (
+        ) : limit || proRefusal || proNotice ? null : (
           <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
             <Sparkles className="size-6 text-slate-400" aria-hidden="true" />
             <p className="text-sm text-slate-500 dark:text-slate-400">
@@ -173,9 +243,13 @@ export function AiPanel({
         ) : null}
       </CardContent>
 
-      <CardFooter>
-        <AiDisclaimer />
-      </CardFooter>
+      {/* The disclaimer goes with shown content; a bare limit or Pro notice
+          with nothing stored needs no disclaimer. */}
+      {analysis || !(limit || proRefusal || proNotice) ? (
+        <CardFooter>
+          <AiDisclaimer />
+        </CardFooter>
+      ) : null}
     </Card>
   );
 }

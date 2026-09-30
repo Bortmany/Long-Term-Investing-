@@ -12,7 +12,8 @@ const now = new Date("2026-07-19T12:00:00Z");
 /** Every table populated with one row, so "includes rows from every table" is provable. */
 function fullRows(): AccountExportRows {
   return {
-    user: { name: "Ada Lovelace", email: "ada@example.com", createdAt: now },
+    user: { name: "Ada Lovelace", email: "ada@example.com", createdAt: now, plan: "PRO" },
+    subscription: null,
     accounts: [{ providerId: "credential", createdAt: now, updatedAt: now }],
     sessions: [{ createdAt: now, ipAddress: "203.0.113.5", userAgent: "Mozilla/5.0" }],
     portfolios: [
@@ -213,5 +214,49 @@ describe("buildAccountExport", () => {
 
     // The honest fields are still there — this isn't stripping everything.
     expect(serialized).toContain("credential");
+  });
+
+  // go-public spec B7: the download includes the plan and subscription
+  // details — and never a key, secret or card detail.
+  it("includes the plan and subscription, and no secrets ride along", () => {
+    const rows = fullRows();
+    rows.subscription = {
+      provider: "stripe",
+      providerCustomerId: "cus_test_123",
+      providerSubscriptionId: "sub_test_456",
+      status: "active",
+      interval: "month",
+      currentPeriodEnd: now,
+      cancelAtPeriodEnd: false,
+      createdAt: now,
+      updatedAt: now,
+      // Things that must never be exported even if a query over-selects.
+      stripeSecretKey: "sk_test_should_not_leak",
+      webhookSecret: "whsec_should_not_leak",
+      cardNumber: "4242424242424242",
+    } as unknown as NonNullable<AccountExportRows["subscription"]>;
+
+    const result = buildAccountExport(rows, now);
+    expect(result.plan.plan).toBe("PRO");
+    expect(result.plan.subscription).toMatchObject({
+      provider: "stripe",
+      providerCustomerId: "cus_test_123",
+      providerSubscriptionId: "sub_test_456",
+      status: "active",
+      interval: "month",
+      cancelAtPeriodEnd: false,
+    });
+
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain("sk_test_should_not_leak");
+    expect(serialized).not.toContain("whsec_should_not_leak");
+    expect(serialized).not.toContain("4242424242424242");
+  });
+
+  it("a user who never paid exports their plan with no subscription", () => {
+    const rows = fullRows();
+    rows.user.plan = "FREE";
+    const result = buildAccountExport(rows, now);
+    expect(result.plan).toEqual({ plan: "FREE", subscription: null });
   });
 });

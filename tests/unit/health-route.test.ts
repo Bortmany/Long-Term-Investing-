@@ -5,16 +5,22 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
+type SignUpStatus = { open: true } | { open: false; reason: "paused" | "email_unavailable" };
+
 const getSession = vi.fn();
+let signUpStatus: SignUpStatus = { open: false, reason: "paused" };
+let billingMode: "dormant" | "test" | "live" = "dormant";
 
 vi.mock("@/lib/prisma", () => ({
   prisma: { $queryRaw: vi.fn(async () => [{ "?column?": 1 }]) },
 }));
 vi.mock("@/lib/auth", () => ({
   auth: { api: { getSession: (...args: unknown[]) => getSession(...args) } },
-  signUpsAllowed: () => false,
+  getSignUpStatus: () => signUpStatus,
+  signUpsAllowed: () => signUpStatus.open,
 }));
 vi.mock("@/lib/email/send", () => ({ isEmailConfigured: () => false }));
+vi.mock("@/lib/billing/config", () => ({ getBillingMode: () => billingMode }));
 
 import { GET } from "@/app/api/health/route";
 
@@ -29,6 +35,8 @@ describe("/api/health caller-aware shape", () => {
     getSession.mockReset();
     getSession.mockResolvedValue(null);
     process.env.CRON_SECRET = "a-long-test-cron-secret-value";
+    signUpStatus = { open: false, reason: "paused" };
+    billingMode = "dormant";
   });
 
   afterEach(() => {
@@ -41,30 +49,57 @@ describe("/api/health caller-aware shape", () => {
     expect(body).toEqual({ status: "ok", db: true });
   });
 
+  it("anonymous caller never sees signups or billing, even when sign-ups are open", async () => {
+    signUpStatus = { open: true };
+    billingMode = "test";
+    const body = await (await GET(request())).json();
+    expect(body).toEqual({ status: "ok", db: true });
+  });
+
   it("a wrong bearer token is treated as anonymous", async () => {
     const body = await (await GET(request({ authorization: "Bearer nope" }))).json();
     expect(body).toEqual({ status: "ok", db: true });
   });
 
-  it("the CRON_SECRET bearer unlocks the full detail", async () => {
+  it("the CRON_SECRET bearer unlocks the full detail (paused by SIGNUPS_PAUSED)", async () => {
     const body = await (
       await GET(request({ authorization: "Bearer a-long-test-cron-secret-value" }))
     ).json();
-    expect(body).toMatchObject({
+    expect(body).toEqual({
       status: "ok",
       db: true,
       sentry: "dormant",
       cron: "configured",
       email: "dormant",
-      signups: "closed",
+      signups: "paused",
+      signupsReason: "SIGNUPS_PAUSED",
+      billing: "dormant",
     });
+  });
+
+  it("reports email_not_configured when production has no email", async () => {
+    signUpStatus = { open: false, reason: "email_unavailable" };
+    getSession.mockResolvedValue({ user: { id: "u1" } });
+    const body = await (await GET(request())).json();
+    expect(body.signups).toBe("paused");
+    expect(body.signupsReason).toBe("email_not_configured");
+  });
+
+  it("open sign-ups have no signupsReason, and billing mode is passed through", async () => {
+    signUpStatus = { open: true };
+    billingMode = "test";
+    getSession.mockResolvedValue({ user: { id: "u1" } });
+    const body = await (await GET(request())).json();
+    expect(body.signups).toBe("open");
+    expect(body).not.toHaveProperty("signupsReason");
+    expect(body.billing).toBe("test");
   });
 
   it("a signed-in session unlocks the full detail", async () => {
     getSession.mockResolvedValue({ user: { id: "u1" } });
     const body = await (await GET(request())).json();
     expect(Object.keys(body).sort()).toEqual(
-      ["cron", "db", "email", "sentry", "signups", "status"].sort(),
+      ["billing", "cron", "db", "email", "sentry", "signups", "signupsReason", "status"].sort(),
     );
   });
 

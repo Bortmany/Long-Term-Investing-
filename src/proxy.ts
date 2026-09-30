@@ -10,6 +10,12 @@ import { isActionBodyDecodable, NEXT_ACTION_HEADER } from "@/lib/action-body";
 const PUBLIC_PATHS = [
   "/sign-in",
   "/sign-up",
+  // Account-access screens reached from emails or by signed-out visitors:
+  // "check your inbox", the verify-email result page, and password reset.
+  "/check-email",
+  "/verify-email",
+  "/forgot-password",
+  "/reset-password",
   "/privacy",
   "/terms",
   "/api/auth",
@@ -17,12 +23,17 @@ const PUBLIC_PATHS = [
   "/api/cron",
 ];
 
+// Public on the EXACT path only (no prefix match). The Stripe webhook does its
+// own authentication (Stripe's signature, checked with STRIPE_WEBHOOK_SECRET)
+// instead of a session cookie. Nothing else under /api/billing is public.
+const PUBLIC_EXACT_PATHS = ["/api/billing/webhook"];
+
 function isPublic(pathname: string): boolean {
   // The landing page at "/" is public (exact match only — it can't go in
   // PUBLIC_PATHS or the prefix check would make every route public).
   // Signed-in visitors still end up on /dashboard: src/app/page.tsx checks
   // the session server-side and redirects them.
-  if (pathname === "/") {
+  if (pathname === "/" || PUBLIC_EXACT_PATHS.includes(pathname)) {
     return true;
   }
   return PUBLIC_PATHS.some(

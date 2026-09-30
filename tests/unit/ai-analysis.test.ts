@@ -10,6 +10,7 @@ import {
 } from "@/lib/ai/analysis";
 import type { AiClientResult, AiMessagesClient } from "@/lib/ai/client";
 import type { SpendCapResult } from "@/lib/ai/spend-cap";
+import { PRO_DAILY_LIMIT_MESSAGE } from "@/lib/ai/limit-messages";
 
 const noteSchema = z.object({ note: z.string(), score: z.number() });
 
@@ -82,7 +83,11 @@ function refusingSpendCap() {
   return vi.fn(
     async (): Promise<SpendCapResult> => ({
       ok: false,
-      message: "You've reached today's limit of 25 new AI analyses.",
+      message: PRO_DAILY_LIMIT_MESSAGE,
+      reason: "user_daily",
+      plan: "PRO",
+      resetsAt: new Date("2026-07-20T00:00:00Z"),
+      code: "AI_LIMIT_PRO_DAILY",
     }),
   );
 }

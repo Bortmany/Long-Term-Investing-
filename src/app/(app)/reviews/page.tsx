@@ -6,6 +6,8 @@ import { ClipboardCheck } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getAiClient } from "@/lib/ai/client";
+import { isPro } from "@/lib/plan-access";
+import { isBillingEnabled } from "@/lib/billing/config";
 import { weeklyReviewSchema } from "@/lib/ai/schemas";
 import { ConnectKeyNotice } from "@/components/connect-key-notice";
 import { EmptyState } from "@/components/empty-state";
@@ -41,6 +43,10 @@ export default async function ReviewsPage() {
   const userId = session.user.id;
 
   const hasAiKey = getAiClient().ok;
+  // The weekly review is Pro. The server enforces it too; this only picks
+  // whether the run button or the "part of Pro" notice shows.
+  const userIsPro = await isPro(userId);
+  const billingEnabled = isBillingEnabled();
 
   const reviews = await prisma.weeklyReview.findMany({
     where: { userId },
@@ -72,7 +78,13 @@ export default async function ReviewsPage() {
         icon={ClipboardCheck}
         heading="Reviews"
         sentence="Weekly AI reviews of your whole portfolio will appear here."
-        action={<RunWeeklyReviewButton hasKey={hasAiKey} />}
+        action={
+          <RunWeeklyReviewButton
+            hasKey={hasAiKey}
+            proLocked={!userIsPro}
+            billingEnabled={billingEnabled}
+          />
+        }
       />
     );
   }
@@ -81,8 +93,14 @@ export default async function ReviewsPage() {
     <div className="space-y-6">
       <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-semibold">Reviews</h1>
-        <RunWeeklyReviewButton hasKey={hasAiKey} />
+        {userIsPro ? <RunWeeklyReviewButton hasKey={hasAiKey} /> : null}
       </div>
+
+      {/* Free plan: the notice sits under the heading, full width; every past
+          review below stays listed and readable (nothing is hidden). */}
+      {userIsPro ? null : (
+        <RunWeeklyReviewButton hasKey={hasAiKey} proLocked billingEnabled={billingEnabled} />
+      )}
 
       <Table>
         <TableHeader>

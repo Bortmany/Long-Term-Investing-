@@ -1,12 +1,23 @@
-// Server wrapper for the sign-up page. Sign-ups are closed by default (only
-// ALLOW_SIGNUPS="true" opens them): the form is replaced by a calm
-// registration-closed message — and the server rejects sign-up attempts too
-// (see src/lib/auth.ts), so the gate is not just visual.
+// Server wrapper for the sign-up page. Sign-ups are OPEN by default.
+// getSignUpStatus() (src/lib/auth.ts) closes them when SIGNUPS_PAUSED="true"
+// ("paused") or when production can't send confirmation emails
+// ("email_unavailable"). When closed, the form is replaced by a calm card —
+// and the server refuses sign-up attempts too (the auth route wrapper checks
+// the same function), so the gate is not just visual.
 
 import Link from "next/link";
 import { connection } from "next/server";
 
-import { signUpsAllowed } from "@/lib/auth";
+import { getSignUpStatus } from "@/lib/auth";
+import {
+  SIGNUPS_PAUSED_MESSAGE,
+  SIGNUPS_PAUSED_TITLE,
+  SIGNUPS_UNAVAILABLE_MESSAGE,
+  SIGNUPS_UNAVAILABLE_TITLE,
+} from "@/lib/auth-schema";
+import { isEmailConfigured } from "@/lib/email/send";
+import { AuthShell } from "@/components/auth/auth-shell";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -17,46 +28,35 @@ import {
 import { SignUpForm } from "./sign-up-form";
 
 export default async function SignUpPage() {
-  // Evaluate ALLOW_SIGNUPS per request, not at build time — otherwise the
-  // prerendered page could keep showing the form after sign-ups were closed.
+  // Evaluate per request, not at build time — otherwise the prerendered page
+  // could keep showing the form after sign-ups were paused.
   await connection();
 
-  if (signUpsAllowed()) {
-    return <SignUpForm />;
+  const status = getSignUpStatus();
+  if (status.open) {
+    return (
+      <AuthShell>
+        <SignUpForm emailConfigured={isEmailConfigured()} />
+      </AuthShell>
+    );
   }
 
+  const paused = status.reason === "paused";
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-slate-50 p-4 dark:bg-slate-950">
-      <p className="mb-6 text-xl font-semibold">InvestIQ AI</p>
-      <Card className="w-full max-w-sm">
+    <AuthShell>
+      <Card className="w-full">
         <CardHeader>
-          <CardTitle>Registration is closed</CardTitle>
+          <CardTitle>{paused ? SIGNUPS_PAUSED_TITLE : SIGNUPS_UNAVAILABLE_TITLE}</CardTitle>
           <CardDescription>
-            This app isn&apos;t accepting new accounts right now.
+            {paused ? SIGNUPS_PAUSED_MESSAGE : SIGNUPS_UNAVAILABLE_MESSAGE}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            If you already have an account, you can{" "}
-            <Link
-              href="/sign-in"
-              className="text-blue-600 hover:underline dark:text-blue-400"
-            >
-              sign in here
-            </Link>
-            .
-          </p>
+          <Button asChild size="lg" className="w-full">
+            <Link href="/sign-in">Sign in</Link>
+          </Button>
         </CardContent>
       </Card>
-      <p className="mt-6 text-center text-xs text-slate-400 dark:text-slate-500">
-        <Link href="/privacy" className="hover:underline">
-          Privacy
-        </Link>
-        {" · "}
-        <Link href="/terms" className="hover:underline">
-          Terms
-        </Link>
-      </p>
-    </main>
+    </AuthShell>
   );
 }

@@ -5,6 +5,8 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getQuote } from "@/lib/data";
 import { getAiClient } from "@/lib/ai/client";
+import { isPro } from "@/lib/plan-access";
+import { isBillingEnabled } from "@/lib/billing/config";
 import {
   buyAnalysisSchema,
   committeeOutputSchema,
@@ -58,6 +60,10 @@ export default async function CommitteePage({
     prisma.portfolio.findFirst({ where: { userId }, orderBy: { createdAt: "asc" } }),
   ]);
   const hasAiKey = getAiClient().ok;
+  // The full Committee is Pro (Buy and Sell analyses are on every plan). The
+  // server action enforces this too; this only picks what the panel shows.
+  const userIsPro = await isPro(userId);
+  const billingEnabled = isBillingEnabled();
 
   const selectedInstrumentId = instruments.some((i) => i.id === instrumentParam)
     ? (instrumentParam as string)
@@ -217,6 +223,8 @@ export default async function CommitteePage({
             <CommitteeResultPanel
               instrumentId={selectedInstrumentId}
               hasKey={hasAiKey}
+              proLocked={!userIsPro}
+              billingEnabled={billingEnabled}
               analysis={analysisCaption}
               output={committeeOutput}
             />

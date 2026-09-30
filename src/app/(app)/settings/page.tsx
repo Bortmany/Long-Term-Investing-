@@ -2,7 +2,10 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { Currency } from "@prisma/client";
 
-import { auth, signUpsAllowed } from "@/lib/auth";
+import { auth } from "@/lib/auth";
+import { getLegalContactEmail } from "@/lib/legal-contact";
+import { loadPlansCardData } from "@/lib/billing/plans-card-data";
+import { PlansCard } from "@/components/settings/plans-card";
 import { prisma } from "@/lib/prisma";
 import { badgeForPriceSource } from "@/lib/data";
 import { fromPrismaFxRate } from "@/lib/portfolio";
@@ -19,10 +22,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export const metadata = { title: "Settings — InvestIQ AI" };
 
-// Settings (UI spec §3.4): base currency, FX rates, and two informational
-// cards. Server component — it learns ONLY whether an FMP key exists (a
-// boolean); the key value itself never reaches the client.
-export default async function SettingsPage() {
+// Settings (UI spec §3.4): base currency, FX rates, appearance, Plans &
+// billing (go-public-ui.md §3), your data and danger zone. Server component —
+// it learns ONLY whether an FMP key exists (a boolean); the key value itself
+// never reaches the client, and no Stripe key ever does either.
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ billing?: string }>;
+}) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) {
     redirect("/sign-in");
@@ -79,8 +87,14 @@ export default async function SettingsPage() {
 
   // Boolean only — never the key itself.
   const hasFmpKey = Boolean(process.env.FMP_API_KEY);
-  const signUpsOpen = signUpsAllowed();
   const currencies = Object.values(Currency);
+
+  // Plan + AI usage for the Plans & billing card ({ ok: false } → the card's
+  // error state, never a guessed number). ?billing= is only ever acted on
+  // while billing is on, and it never grants Pro by itself.
+  const plansData = await loadPlansCardData(session.user.id);
+  const { billing } = await searchParams;
+  const checkoutReturn = billing === "success" || billing === "cancelled" ? billing : null;
 
   return (
     <>
@@ -108,31 +122,13 @@ export default async function SettingsPage() {
           </CardContent>
         </Card>
 
-        {/* Account Access — a neutral heads-up reflecting the ACTUAL state of
-            the ALLOW_SIGNUPS gate, checked server-side per request. */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Account Access</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {signUpsOpen ? (
-              <p className="text-sm text-slate-500 dark:text-slate-400">
-                Sign-up is currently open to anyone who can reach this app
-                (ALLOW_SIGNUPS is set to &quot;true&quot;). That&apos;s fine for
-                local use. Before deploying this somewhere public, close
-                sign-ups by removing ALLOW_SIGNUPS from the environment.
-              </p>
-            ) : (
-              <p className="text-sm text-slate-500 dark:text-slate-400">
-                Sign-up is currently closed — only existing accounts can sign
-                in. That&apos;s the safe setting for any public deployment. To
-                open it temporarily (for example while seeding a fresh
-                database), set ALLOW_SIGNUPS to &quot;true&quot; in the
-                environment.
-              </p>
-            )}
-          </CardContent>
-        </Card>
+        {/* Plans & billing — where the old "Account Access" card was. Usage
+            comes from the same function that enforces the AI limits. */}
+        <PlansCard
+          data={plansData}
+          checkoutReturn={checkoutReturn}
+          contactEmail={getLegalContactEmail()}
+        />
 
         <YourDataCard />
 

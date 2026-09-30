@@ -41,17 +41,45 @@ export default function SettingsLoading() {
           </CardContent>
         </Card>
 
-        {/* Appearance + Account Access */}
-        {Array.from({ length: 2 }).map((_, i) => (
-          <Card key={i}>
-            <CardHeader>
-              <Skeleton className="h-5 w-28" />
-            </CardHeader>
-            <CardContent>
-              <Skeleton className="h-4 w-full max-w-md" />
-            </CardContent>
-          </Card>
-        ))}
+        {/* Appearance */}
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-5 w-28" />
+          </CardHeader>
+          <CardContent>
+            <Skeleton className="h-4 w-full max-w-md" />
+          </CardContent>
+        </Card>
+
+        {/* Plans & billing: title + plan badge, the state line, two usage
+            rows, four "what's included" rows. */}
+        <Card>
+          <CardHeader className="flex-row items-center justify-between">
+            <Skeleton className="h-5 w-32" />
+            <Skeleton className="h-6 w-14 rounded-full" />
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Skeleton className="h-4 w-64 max-w-full" />
+            <div className="grid gap-6 sm:grid-cols-2">
+              <div className="space-y-4">
+                {Array.from({ length: 2 }).map((_, i) => (
+                  <div key={i} className="space-y-2">
+                    <Skeleton className="h-4 w-40" />
+                    <Skeleton className="h-2 w-full" />
+                  </div>
+                ))}
+              </div>
+              <div className="space-y-2">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <Skeleton className="size-4 rounded-full" />
+                    <Skeleton className="h-4 flex-1" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </>
   );

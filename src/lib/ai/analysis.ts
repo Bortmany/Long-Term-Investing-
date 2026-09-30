@@ -17,8 +17,14 @@ import { z, type ZodType } from "zod";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { ANALYST_SYSTEM_PREAMBLE } from "@/lib/ai/prompts";
-import { checkAiSpendCap, type SpendCapDeps, type SpendCapResult } from "@/lib/ai/spend-cap";
-import { getAiClient, type AiClientResult } from "@/lib/ai/client";
+import {
+  checkAiSpendCap,
+  type SpendCapDeps,
+  type SpendCapRefusal,
+  type SpendCapResult,
+} from "@/lib/ai/spend-cap";
+import type { AiLimitCode, SpendCapReason } from "@/lib/ai/limit-messages";
+import { getAiClient, type AiClientResult, type AiMessagesClient } from "@/lib/ai/client";
 
 /** What kind of thing an analysis is about — matches AiAnalysis.subjectType. */
 export type AiSubjectType = "instrument" | "thesis" | "portfolio";
@@ -50,9 +56,37 @@ export type RunAnalysisUnavailableReason =
   | "schema_mismatch"
   | "provider_error";
 
+/**
+ * Present only when a spend limit refused the run: the limit's code (for the
+ * calm "limit reached" notice) and, when an upgrade is genuinely on offer,
+ * the link to the Plans card. See src/lib/ai/spend-cap.ts.
+ */
+export type RunAnalysisLimitInfo = {
+  code: AiLimitCode;
+  reason: SpendCapReason;
+  resetsAt: Date;
+  upgradeHref?: string;
+};
+
 export type RunAnalysisResult<T> =
   | { ok: true; data: T; analysis: AiAnalysis }
-  | { ok: false; unavailable: RunAnalysisUnavailableReason; message: string };
+  | {
+      ok: false;
+      unavailable: RunAnalysisUnavailableReason;
+      message: string;
+      limit?: RunAnalysisLimitInfo;
+    };
+
+/** Copy the structured bits of a spend-cap refusal onto a run result. */
+export function limitInfoFrom(refusal: SpendCapRefusal): RunAnalysisLimitInfo {
+  const info: RunAnalysisLimitInfo = {
+    code: refusal.code,
+    reason: refusal.reason,
+    resetsAt: refusal.resetsAt,
+  };
+  if (refusal.upgradeHref) info.upgradeHref = refusal.upgradeHref;
+  return info;
+}
 
 // --- Injectable seams (tests supply fakes; production uses the defaults) ---
 
@@ -180,14 +214,37 @@ export async function runAnalysis<T>(
 
   const capResult = await spendCap(params.userId, undefined, now);
   if (!capResult.ok) {
-    return { ok: false, unavailable: "spend_cap", message: capResult.message };
+    return {
+      ok: false,
+      unavailable: "spend_cap",
+      message: capResult.message,
+      limit: limitInfoFrom(capResult),
+    };
   }
 
+  // The cap reserved a slot for this run; give it back however the run ends
+  // (saved or failed) — from then on the saved row itself is what counts.
+  try {
+    return await generateAndPersist(params, clientResult.client, store, inputHash, input, dataAsOf);
+  } finally {
+    capResult.release?.();
+  }
+}
+
+/** The model call → validate → persist half of runAnalysis (runs only after the cap said yes). */
+async function generateAndPersist<T>(
+  params: RunAnalysisParams<T>,
+  client: AiMessagesClient,
+  store: AiAnalysisStore,
+  inputHash: string,
+  input: unknown,
+  dataAsOf: Date,
+): Promise<RunAnalysisResult<T>> {
   const jsonSchema = z.toJSONSchema(params.schema, { target: "draft-2020-12" });
 
   let response;
   try {
-    response = await clientResult.client.messages.create({
+    response = await client.messages.create({
       model: params.model,
       max_tokens: MAX_OUTPUT_TOKENS,
       // The shared analyst preamble is the one big, unchanging block, so it

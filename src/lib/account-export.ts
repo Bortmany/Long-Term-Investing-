@@ -34,6 +34,25 @@ export type ExportUserRow = {
   name: string;
   email: string;
   createdAt: Date;
+  /** Free or Pro, as stored. */
+  plan: "FREE" | "PRO";
+};
+
+/**
+ * The user's billing record, if payments were ever used. Only the payment
+ * provider's own reference ids and the subscription's state — no card data
+ * (InvestIQ never has any) and no keys.
+ */
+export type ExportSubscriptionRow = {
+  provider: string;
+  providerCustomerId: string;
+  providerSubscriptionId: string | null;
+  status: string;
+  interval: string;
+  currentPeriodEnd: Date | null;
+  cancelAtPeriodEnd: boolean;
+  createdAt: Date;
+  updatedAt: Date;
 };
 
 /**
@@ -161,6 +180,7 @@ export type ExportManualFxRateRow = {
 
 export type AccountExportRows = {
   user: ExportUserRow;
+  subscription: ExportSubscriptionRow | null;
   accounts: ExportAccountRow[];
   sessions: ExportSessionRow[];
   portfolios: ExportPortfolioRow[];
@@ -242,6 +262,8 @@ export type ExportedManualFxRate = {
 export type AccountExport = {
   exportedAt: Date;
   profile: { name: string; email: string; createdAt: Date };
+  /** Your plan and, if you ever paid through Stripe, your subscription's state. */
+  plan: { plan: "FREE" | "PRO"; subscription: ExportSubscriptionRow | null };
   accounts: ExportAccountRow[];
   sessions: ExportSessionRow[];
   portfolios: ExportedPortfolio[];
@@ -268,6 +290,22 @@ function toExportedAccount(a: ExportAccountRow): ExportAccountRow {
 
 function toExportedSession(s: ExportSessionRow): ExportSessionRow {
   return { createdAt: s.createdAt, ipAddress: s.ipAddress, userAgent: s.userAgent };
+}
+
+// Field-by-field, like the account and session whitelists above: nothing
+// rides along from the row unless it is named here.
+function toExportedSubscription(s: ExportSubscriptionRow): ExportSubscriptionRow {
+  return {
+    provider: s.provider,
+    providerCustomerId: s.providerCustomerId,
+    providerSubscriptionId: s.providerSubscriptionId,
+    status: s.status,
+    interval: s.interval,
+    currentPeriodEnd: s.currentPeriodEnd,
+    cancelAtPeriodEnd: s.cancelAtPeriodEnd,
+    createdAt: s.createdAt,
+    updatedAt: s.updatedAt,
+  };
 }
 
 function toExportedTransaction(t: ExportTransactionRow): ExportedTransaction {
@@ -324,6 +362,10 @@ export function buildAccountExport(rows: AccountExportRows, now: Date = new Date
       name: rows.user.name,
       email: rows.user.email,
       createdAt: rows.user.createdAt,
+    },
+    plan: {
+      plan: rows.user.plan,
+      subscription: rows.subscription ? toExportedSubscription(rows.subscription) : null,
     },
     accounts: rows.accounts.map(toExportedAccount),
     sessions: rows.sessions.map(toExportedSession),

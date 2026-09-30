@@ -13,11 +13,13 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import {
   actionError,
+  aiRunError,
   actionOk,
   NOT_SIGNED_IN_ERROR,
   type ActionResult,
 } from "@/lib/action-result";
 import { getSessionUserId } from "@/lib/user-portfolio";
+import { PRO_FEATURE_LABELS, requirePro } from "@/lib/plan-access";
 import {
   AI_GENERATION_RATE_LIMIT,
   rateLimit,
@@ -215,6 +217,11 @@ export async function conveneCommittee(
   const limited = rateLimit(userKey("ai-committee", userId), AI_GENERATION_RATE_LIMIT);
   if (!limited.ok) return actionError(rateLimitMessage(limited.retryAfterSeconds));
 
+  // Pro gate, enforced here on the server — hiding the button is never the
+  // only protection. (Buy and Sell analyses below stay on every plan.)
+  const pro = await requirePro(userId, PRO_FEATURE_LABELS.committee);
+  if (!pro.ok) return pro;
+
   const parsed = instrumentIdSchema.safeParse(instrumentId);
   if (!parsed.success) {
     return actionError(parsed.error.issues[0]?.message ?? "Pick a stock first.");
@@ -234,7 +241,7 @@ export async function conveneCommittee(
     buildInput: () => buildCommitteeInput(instrument, thesis),
   });
 
-  if (!result.ok) return actionError(result.message);
+  if (!result.ok) return aiRunError(result);
 
   revalidatePath("/committee");
   return actionOk({ id: result.analysis.id });
@@ -305,7 +312,7 @@ export async function runBuyAnalysis(
     schema: buyAnalysisSchema,
   });
 
-  if (!result.ok) return actionError(result.message);
+  if (!result.ok) return aiRunError(result);
 
   revalidatePath("/committee");
   return actionOk({ id: result.analysis.id });
@@ -439,7 +446,7 @@ export async function runSellAnalysis(
     schema: sellAnalysisSchema,
   });
 
-  if (!result.ok) return actionError(result.message);
+  if (!result.ok) return aiRunError(result);
 
   revalidatePath("/committee");
   return actionOk({ id: result.analysis.id });

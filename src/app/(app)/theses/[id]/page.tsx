@@ -8,6 +8,8 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getQuote } from "@/lib/data";
 import { getAiClient } from "@/lib/ai/client";
+import { isPro } from "@/lib/plan-access";
+import { isBillingEnabled } from "@/lib/billing/config";
 import { thesisCheckSchema } from "@/lib/ai/schemas";
 import {
   badgePropsForValueSource,
@@ -149,6 +151,10 @@ export default async function ThesisDetailPage({
 
   // --- Latest Check panel data ----------------------------------------------
   const hasAiKey = getAiClient().ok;
+  // AI check-ups are Pro (writing and closing a thesis stay free). The server
+  // action enforces this too; this only picks what the panel shows.
+  const userIsPro = await isPro(userId);
+  const billingEnabled = isBillingEnabled();
   let checkOutput = null;
   if (storedAnalysis) {
     const parsed = thesisCheckSchema.safeParse(storedAnalysis.output);
@@ -241,6 +247,8 @@ export default async function ThesisDetailPage({
       <ThesisCheckPanel
         thesisId={thesis.id}
         hasKey={hasAiKey}
+        proLocked={!userIsPro}
+        billingEnabled={billingEnabled}
         analysis={checkAnalysis}
         output={checkOutput}
       />

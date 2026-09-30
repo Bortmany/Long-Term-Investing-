@@ -14,6 +14,7 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "format": "prettier --write .",
+    "plan:set": "tsx scripts/set-plan.ts",
     "verify": "prisma migrate deploy && prisma generate && npm run lint && npm run typecheck && npm run build && npm test",
     "prepare": "husky || true"
   },

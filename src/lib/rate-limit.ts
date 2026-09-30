@@ -326,3 +326,22 @@ export const AI_GENERATION_RATE_LIMIT: RateLimitOptions = {
 // generous for a person checking their own data, tight enough to stop a
 // scripted loop from hammering the database with full-account reads.
 export const EXPORT_RATE_LIMIT: RateLimitOptions = { limit: 5, windowMs: 60 * 60_000 };
+
+// --- Go public safely, chunk A (sign-up and account emails) ---------------
+// Sign-up: at most 5 new-account attempts per hour from one caller (browser
+// or, behind a trusted proxy, IP). Stacked on top of AUTH_RATE_LIMIT's
+// 10-per-minute check, which stays.
+export const SIGNUP_RATE_LIMIT: RateLimitOptions = { limit: 5, windowMs: 60 * 60_000 };
+// Account emails (confirm-your-email resends, password-reset requests): at
+// most 5 per hour for any ONE email address, so nobody can flood someone's
+// inbox or burn the email-sending allowance on one address.
+export const EMAIL_SEND_RATE_LIMIT: RateLimitOptions = { limit: 5, windowMs: 60 * 60_000 };
+// --- end chunk A ------------------------------------------------------------
+
+// --- Go public safely, chunk B (plans and billing) -------------------------
+// Upgrade (Stripe Checkout) and Manage billing (Stripe's portal) each call
+// Stripe: at most 5 a minute per signed-in user (userKey). The billing
+// webhook has its own, far more generous per-IP limit in its route, so Stripe
+// itself is never blocked.
+export const BILLING_ACTION_RATE_LIMIT: RateLimitOptions = { limit: 5, windowMs: 60_000 };
+// --- end chunk B ------------------------------------------------------------

@@ -114,13 +114,12 @@ docs/              Conventions, build plan, roadmap, designs, research.
    npm run dev
    ```
 
-   Open http://localhost:3000. The seed creates a demo login
-   (`owner@example.com`, password from `SEED_DEMO_PASSWORD` in your `.env`)
-   with a year of sample transactions across six stocks in three currencies.
-
-   Seeding needs `ALLOW_SIGNUPS="true"` set (the seed creates its user
-   through the normal sign-up path; `.env.example` already has it) — see the
-   sign-ups note below.
+   Open http://localhost:3000. On your own machine the seed creates a demo
+   login (`owner@example.com`, password from `SEED_DEMO_PASSWORD` in your
+   `.env`, email already confirmed) with a year of sample transactions across
+   six stocks in three currencies. In production (`NODE_ENV="production"`)
+   the seed creates **no** demo login — only the shared sample prices and
+   exchange rates, labelled "sample data".
 
 ## Environment variables
 
@@ -132,7 +131,9 @@ version:
 | `DATABASE_URL` | PostgreSQL connection string. |
 | `BETTER_AUTH_SECRET` | Secret that signs sign-in session cookies. Generate with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`. Required — the app refuses to start in production without it. |
 | `BETTER_AUTH_URL` | The public URL the app runs at. |
-| `ALLOW_SIGNUPS` | Gates `/sign-up`. Sign-ups are **closed by default**; only the literal string `"true"` opens them. Needed temporarily while seeding; never set `"true"` on a public deployment. |
+| `SIGNUPS_PAUSED` | The off-switch for new accounts. Sign-ups are **open by default**; the literal string `"true"` pauses them (existing people can still sign in). |
+| `SEED_DEMO_PASSWORD` | Password for the local demo login the seed creates. Never used in production. |
+| `E2E_TEST_PASSWORD` | Password for the end-to-end tests' own local login (`e2e-test@investiq.test`). Local test runs only. |
 | `FMP_API_KEY` | Financial Modeling Prep key for live US stock prices/fundamentals. Empty = manual/sample prices only, clearly badged. |
 | `ANTHROPIC_API_KEY` | Enables the AI features (health scores, committee, thesis checks, weekly reviews). Empty = every AI surface shows an honest "AI features are off" notice instead of a made-up result. |
 | `SENTRY_DSN` / `NEXT_PUBLIC_SENTRY_DSN` | Error tracking. Empty = tracking stays off, nothing is sent anywhere. |
@@ -184,23 +185,33 @@ Browsers for the smoke tests are preinstalled — never run
   `npx prisma migrate deploy`.
 - **Start:** `npm start`.
 - **Health check:** `GET /api/health`, given up to 5 minutes — it reports
-  database connectivity plus whether Sentry, cron and email are configured
-  or dormant, and whether sign-ups are open or closed.
+  database connectivity. Signed-in users (or a caller with the cron
+  secret) also see whether Sentry, cron and email are configured or
+  dormant, whether sign-ups are open or paused, and the billing mode.
 - **If it crashes:** Railway restarts it, up to 5 times.
 
 Set the environment variables from the table above in Railway's dashboard
 before the first deploy (including `TRUST_PROXY_HEADERS="true"`, since the
-app sits behind Railway's proxy). `ALLOW_SIGNUPS` should **not** be
-`"true"` on a public deployment — see the note below. `GO-LIVE.md` has the
-full checklist.
+app sits behind Railway's proxy), plus `RESEND_API_KEY` / `RESEND_FROM` —
+without email, the live site refuses sign-ups (see the note below).
+`GO-LIVE.md` has the full checklist.
 
-## Sign-ups are closed by default
+## Sign-ups are open by default
 
-`/sign-up` shows a "registration is closed" message and the server rejects
-sign-up attempts, unless `ALLOW_SIGNUPS` is set to the literal string
-`"true"`. Any other value, including leaving it unset, keeps sign-ups
-closed. This is deliberate: the app is meant to run as a single owner's
-private tool unless someone has explicitly decided to open it up.
+Anyone can create an account at `/sign-up`. With email set up
+(`RESEND_API_KEY` + `RESEND_FROM`), a new account must confirm its email
+address before it can sign in, and "Forgot password?" emails a reset link.
+Three safeguards:
+
+- `SIGNUPS_PAUSED="true"` pauses new sign-ups: the page says so and the
+  server refuses attempts. Existing people can still sign in.
+- In production, sign-ups are refused automatically while email isn't set
+  up, because nobody could confirm their address.
+- Sign-ups are limited to 5 an hour per browser (or IP behind a trusted
+  proxy), and confirmation/reset emails to 5 an hour per address.
+
+On your own machine without email, sign-ups still work: the page shows a
+note that email isn't set up, and the new account is signed straight in.
 
 ## Privacy & data controls
 

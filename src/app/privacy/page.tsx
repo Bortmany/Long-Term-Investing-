@@ -3,16 +3,22 @@
 // diff adds a new personal field, it must update this page in the SAME
 // change (docs/CONVENTIONS.md, engineering-standards.md §6).
 import Link from "next/link";
+import { connection } from "next/server";
 
+import { isBillingEnabled } from "@/lib/billing/config";
 import { getLegalContactEmail } from "@/lib/legal-contact";
+import { readBillingEnabledSafely } from "@/components/landing/landing-copy";
 
 export const metadata = { title: "Privacy Policy — InvestIQ AI" };
 
-const LAST_UPDATED = "July 19, 2026";
+const LAST_UPDATED = "September 30, 2026";
 
-export default function PrivacyPage() {
-  // Server component: read the contact address from the environment here.
+export default async function PrivacyPage() {
+  // Wait for a real request so the payments sentence and the contact address
+  // reflect the live settings, not whatever was set when the app was built.
+  await connection();
   const contactEmail = getLegalContactEmail();
+  const billingEnabled = readBillingEnabledSafely(() => isBillingEnabled());
 
   return (
     <main className="mx-auto min-h-screen max-w-2xl px-4 py-10 sm:px-6">
@@ -26,8 +32,8 @@ export default function PrivacyPage() {
       <p className="mt-4 text-sm text-amber-700 dark:text-amber-400">
         This is a plain-English template, not a document written by a lawyer.
         It describes exactly what the app stores and does today. A
-        professional legal review happens once InvestIQ AI starts making
-        money — until then, treat this as an honest description, not a legal
+        professional legal review happens before Pro goes on sale — until
+        then, treat this as an honest description, not a legal
         guarantee.
       </p>
 
@@ -37,8 +43,9 @@ export default function PrivacyPage() {
             What this app is
           </h2>
           <p className="mt-2">
-            InvestIQ AI is a personal long-term investing tool. You create an
-            account, record your own portfolio transactions, and the app
+            InvestIQ AI is portfolio tracking and research software, not
+            personalised advice. You create an account, record your own
+            portfolio transactions, and the app
             works out holdings, cash and returns, and — where you turn AI on
             — analysis of your own portfolio and stock theses. This policy
             explains what we store about you and why.
@@ -56,6 +63,31 @@ export default function PrivacyPage() {
               literally cannot read it back).
             </li>
             <li>
+              <strong>Email confirmation:</strong> whether you have confirmed
+              your email address. When you sign up or ask to reset your
+              password, we keep a short-lived record (which email or account
+              it is for, a random one-time code, and when it expires) so the
+              link in the email works. These records are deleted when used or
+              stop working when they expire.
+            </li>
+            <li>
+              <strong>Your plan:</strong> whether you are on Free or Pro.
+            </li>
+            <li>
+              <strong>Billing details, only if you pay for Pro:</strong> the
+              payment provider&apos;s name (Stripe), the customer and
+              subscription reference numbers Stripe gives us, your
+              subscription&apos;s status, whether you pay monthly or yearly,
+              when the current period ends, and whether it is set to cancel.
+              We also keep a list of the payment events we have already
+              handled (just Stripe&apos;s event reference and its type, nothing
+              about you), so the same event is never applied twice.{" "}
+              <strong>
+                Your card details are typed into Stripe&apos;s own page and never
+                reach or get stored by InvestIQ.
+              </strong>
+            </li>
+            <li>
               <strong>Sign-in sessions:</strong> when you signed in, the IP
               address and browser (user-agent string) that session came
               from. This is standard security bookkeeping — it lets us (and
@@ -64,7 +96,7 @@ export default function PrivacyPage() {
             </li>
             <li>
               <strong>Your portfolio:</strong> every transaction you record
-              (buys, sells, dividends, deposits, withdrawals, fees) —
+              (purchases, sales, dividends, deposits, withdrawals, fees) —
               amounts, dates, and the stock/ETF/REIT involved.
             </li>
             <li>
@@ -85,7 +117,7 @@ export default function PrivacyPage() {
             </li>
             <li>
               <strong>AI analyses of your portfolio</strong> — health scores,
-              committee reviews, buy/sell analyses and weekly reviews, when
+              committee reviews, upside/downside checks and weekly reviews, when
               you generate them (only available when an AI key is
               configured — see below).
             </li>
@@ -100,6 +132,11 @@ export default function PrivacyPage() {
               token or API key before it&apos;s ever written down.
             </li>
           </ul>
+          <p className="mt-3">
+            Nothing else is stored for plans or AI limits: how many AI
+            analyses you have used today is counted from the analyses already
+            saved above.
+          </p>
           <p className="mt-3">
             We never store a made-up or estimated figure as if it were real —
             every number the app shows carries a label saying where it came
@@ -132,11 +169,21 @@ export default function PrivacyPage() {
               (e.g. &quot;AAPL&quot;) are sent — never anything about you personally.
             </li>
             <li>
-              <strong>Resend</strong> (email delivery) — only if the
-              operator has turned on the optional weekly-review email. When
-              it is, your own email address is used to send you your own
-              weekly review. Left off, no email is ever sent and Resend
-              never sees anything.
+              <strong>Resend</strong> (email delivery) — sends your account
+              emails (confirm your email address, reset your password) and,
+              if you are on Pro and it is turned on, your weekly review. For
+              this it receives your email address and your name. If email
+              delivery isn&apos;t set up, no email is sent and Resend never
+              sees anything.
+            </li>
+            <li>
+              <strong>Stripe</strong> (payments) — only when payments are
+              turned on and you choose to pay for Pro. Stripe receives your
+              email address and the plan you choose, takes your card details
+              on its own page, and acts as our reseller (you may see it shown
+              as &quot;Link&quot;). {billingEnabled
+                ? "Payments are turned on."
+                : "Payments are not turned on yet, so nothing is sent to Stripe."}
             </li>
             <li>
               <strong>Sentry</strong> (error tracking) — only if the
@@ -152,6 +199,27 @@ export default function PrivacyPage() {
 
         <section>
           <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-50">
+            Cookies
+          </h2>
+          <p className="mt-2">
+            The app sets two cookies and nothing for advertising or tracking:
+          </p>
+          <ul className="mt-2 list-disc space-y-2 pl-5">
+            <li>
+              <strong>A sign-in cookie</strong> that keeps you signed in. It
+              points to your sign-in session described above.
+            </li>
+            <li>
+              <strong>A small security cookie</strong> (<code>iq_anon</code>)
+              holding a random, signed code. It is used only to limit how
+              often sign-in and sign-up can be tried from one browser, and
+              contains no personal data.
+            </li>
+          </ul>
+        </section>
+
+        <section>
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-50">
             Your rights
           </h2>
           <p className="mt-2">
@@ -161,9 +229,12 @@ export default function PrivacyPage() {
             <Link href="/settings" className="text-blue-600 hover:underline dark:text-blue-400">
               Settings
             </Link>{" "}
-            page — look for the &quot;Your data&quot; and &quot;Danger&quot; cards. Deleting your
-            account removes your portfolio, transactions, theses, alerts and
-            AI analyses with no undo.
+            page — look for the &quot;Your data&quot; and &quot;Danger&quot; cards. The download
+            includes your plan and any subscription details. Deleting your
+            account removes your portfolio, transactions, theses, alerts, AI
+            analyses, plan and billing details with no undo. If you have an
+            active Pro subscription, it is cancelled first, so you are never
+            charged again for an account that no longer exists.
           </p>
           <p className="mt-2">
             If InvestIQ AI is used from Oman, these rights are consistent
@@ -177,8 +248,8 @@ export default function PrivacyPage() {
             Questions
           </h2>
           <p className="mt-2">
-            This app is currently a personal tool with a single operator. If
-            you have questions about your data, email{" "}
+            InvestIQ AI is run by a single operator. If you have questions
+            about your data, email{" "}
             <a
               href={`mailto:${contactEmail}`}
               className="text-blue-600 hover:underline dark:text-blue-400"

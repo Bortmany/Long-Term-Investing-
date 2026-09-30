@@ -1,16 +1,17 @@
 import { expect, test } from "@playwright/test";
+import { E2E_USER_PASSWORD } from "./test-user";
 
-// The demo login's password is never hardcoded — it comes from the same
-// SEED_DEMO_PASSWORD the seed script used (same idiom as stocks.spec.ts).
+// The e2e test login (tests/e2e/test-user.ts) is never hardcoded here — its
+// password comes from E2E_TEST_PASSWORD (same idiom as stocks.spec.ts).
 try {
   process.loadEnvFile();
 } catch {
   // no .env file — rely on the environment
 }
 
-const DEMO_PASSWORD = process.env.SEED_DEMO_PASSWORD;
+const DEMO_PASSWORD = E2E_USER_PASSWORD;
 
-// Every test starts already signed in as the demo user — see
+// Every test starts already signed in as the e2e test user — see
 // tests/e2e/global-setup.ts. No per-file sign-in helper anymore.
 
 test("shows the seeded thesis, creates a new one, and the check panel is honest about no API key", async ({
@@ -18,7 +19,7 @@ test("shows the seeded thesis, creates a new one, and the check panel is honest 
 }) => {
   test.skip(
     !DEMO_PASSWORD,
-    "Set SEED_DEMO_PASSWORD in .env (the one used when seeding) to run this test",
+    "Set E2E_TEST_PASSWORD in .env to run this test",
   );
 
   await page.goto("/theses");

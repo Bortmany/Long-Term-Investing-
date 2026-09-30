@@ -36,7 +36,26 @@ export async function GET(request: NextRequest): Promise<Response> {
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { name: true, email: true, createdAt: true },
+    select: {
+      name: true,
+      email: true,
+      createdAt: true,
+      plan: true,
+      // The billing record: provider reference ids and state only.
+      subscription: {
+        select: {
+          provider: true,
+          providerCustomerId: true,
+          providerSubscriptionId: true,
+          status: true,
+          interval: true,
+          currentPeriodEnd: true,
+          cancelAtPeriodEnd: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      },
+    },
   });
   if (!user) {
     // The session cookie outlived the user row (shouldn't happen — kept
@@ -143,7 +162,8 @@ export async function GET(request: NextRequest): Promise<Response> {
     ]);
 
   const exportData = buildAccountExport({
-    user,
+    user: { name: user.name, email: user.email, createdAt: user.createdAt, plan: user.plan },
+    subscription: user.subscription,
     accounts,
     sessions,
     portfolios,

@@ -2,8 +2,9 @@ import { timingSafeEqual } from "node:crypto";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth, signUpsAllowed } from "@/lib/auth";
+import { auth, getSignUpStatus } from "@/lib/auth";
 import { isEmailConfigured } from "@/lib/email/send";
+import { getBillingMode } from "@/lib/billing/config";
 
 // Always answers 200. `db` tells you whether the database is reachable.
 //
@@ -14,9 +15,11 @@ import { isEmailConfigured } from "@/lib/email/send";
 // returned only when the request carries a valid session cookie or the
 // cron bearer secret (`Authorization: Bearer <CRON_SECRET>`).
 //
-// `signups` reflects the SAME ALLOW_SIGNUPS gate src/lib/auth.ts enforces,
-// so an operator can confirm from the outside that a public deployment
-// really does have sign-ups closed.
+// `signups` reflects the SAME getSignUpStatus() gate src/lib/auth.ts
+// enforces ("open", or "paused" with a `signupsReason` of "SIGNUPS_PAUSED" or
+// "email_not_configured"), and `billing` is getBillingMode() ("dormant",
+// "test" or "live"). Like the rest of the detail, an operator sees these
+// only when signed in or holding the cron secret — not from the outside.
 
 /** Constant-time string compare so a wrong guess can't be timed to narrow down the secret.
  *  Same idiom as the cron routes (copied deliberately, not re-derived). */
@@ -62,12 +65,20 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ status: "ok", db });
   }
 
+  const signUpStatus = getSignUpStatus();
   return NextResponse.json({
     status: "ok",
     db,
     sentry: process.env.SENTRY_DSN ? "configured" : "dormant",
     cron: process.env.CRON_SECRET ? "configured" : "dormant",
     email: isEmailConfigured() ? "configured" : "dormant",
-    signups: signUpsAllowed() ? "open" : "closed",
+    signups: signUpStatus.open ? "open" : "paused",
+    ...(signUpStatus.open
+      ? {}
+      : {
+          signupsReason:
+            signUpStatus.reason === "paused" ? "SIGNUPS_PAUSED" : "email_not_configured",
+        }),
+    billing: getBillingMode(),
   });
 }

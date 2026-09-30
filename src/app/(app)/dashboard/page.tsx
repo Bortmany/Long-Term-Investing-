@@ -25,6 +25,7 @@ import {
   type SourceBadgeProps,
 } from "@/components/source-badge";
 import { EmptyState } from "@/components/empty-state";
+import { EmailConfirmedNotice } from "@/components/auth/email-confirmed-notice";
 import { ExplainerTip } from "@/components/explainer-tip";
 import { LatestReviewCard } from "@/components/latest-review-card";
 import {
@@ -98,8 +99,14 @@ function gainLossColor(amount: number): string {
 // Everything is loaded server-side, scoped to the signed-in user, and run
 // through the pure portfolio math library. Golden rule: every figure carries
 // a source badge, and anything that couldn't be valued is SAID, not padded.
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const session = await auth.api.getSession({ headers: await headers() });
+  // Arrived from a confirmation link (via /verify-email): say so once.
+  const justVerified = (await searchParams).verified === "1";
   if (!session) {
     redirect("/sign-in");
   }
@@ -113,6 +120,7 @@ export default async function DashboardPage() {
   if (!computation) {
     return (
       <>
+        {justVerified ? <EmailConfirmedNotice /> : null}
         <h1 className="mb-6 text-2xl font-semibold">Dashboard</h1>
         <EmptyState
           icon={Inbox}
@@ -265,6 +273,7 @@ export default async function DashboardPage() {
 
   return (
     <>
+      {justVerified ? <EmailConfirmedNotice /> : null}
       <h1 className="mb-6 text-2xl font-semibold">Dashboard</h1>
 
       {incomplete ? (

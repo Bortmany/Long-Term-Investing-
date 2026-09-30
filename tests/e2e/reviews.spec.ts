@@ -1,17 +1,18 @@
 import { PrismaClient } from "@prisma/client";
 import { expect, test } from "@playwright/test";
+import { E2E_USER_EMAIL, E2E_USER_PASSWORD } from "./test-user";
 
-// The demo login's password is never hardcoded — it comes from the same
-// SEED_DEMO_PASSWORD the seed script used (same idiom as theses.spec.ts).
+// The e2e test login (tests/e2e/test-user.ts) is never hardcoded here — its
+// password comes from E2E_TEST_PASSWORD (same idiom as theses.spec.ts).
 try {
   process.loadEnvFile();
 } catch {
   // no .env file — rely on the environment
 }
 
-const DEMO_PASSWORD = process.env.SEED_DEMO_PASSWORD;
+const DEMO_PASSWORD = E2E_USER_PASSWORD;
 const CRON_SECRET = process.env.CRON_SECRET;
-const DEMO_EMAIL = "owner@example.com";
+const DEMO_EMAIL = E2E_USER_EMAIL;
 
 // One test below needs a review that ALREADY EXISTS while AI is switched off
 // — a state the UI can't reach on its own (generating one needs the very key
@@ -35,13 +36,13 @@ const STORED_REVIEW_OUTPUT = {
   behavioralNote: "Nothing to act on — sitting still is a decision too.",
 };
 
-// Every test starts already signed in as the demo user — see
+// Every test starts already signed in as the e2e test user — see
 // tests/e2e/global-setup.ts. No per-file sign-in helper anymore.
 
 test("shows the honest no-key state on /reviews, with no run button", async ({ page }) => {
   test.skip(
     !DEMO_PASSWORD,
-    "Set SEED_DEMO_PASSWORD in .env (the one used when seeding) to run this test",
+    "Set E2E_TEST_PASSWORD in .env to run this test",
   );
 
   await page.goto("/reviews");
@@ -60,14 +61,14 @@ test("a review already saved still shows with no key — only the run button is 
 }) => {
   test.skip(
     !DEMO_PASSWORD,
-    "Set SEED_DEMO_PASSWORD in .env (the one used when seeding) to run this test",
+    "Set E2E_TEST_PASSWORD in .env to run this test",
   );
 
   // A review saved in the database must never be hidden behind the no-key
   // notice (docs/CONVENTIONS.md, AI rules): the honest thing is to show the
   // real saved work and switch off only what can't run.
   const user = await prisma.user.findFirst({ where: { email: DEMO_EMAIL } });
-  test.skip(!user, `Demo user ${DEMO_EMAIL} not found — run \`npx prisma db seed\` first`);
+  test.skip(!user, `E2E user ${DEMO_EMAIL} not found — the e2e global setup creates it`);
 
   const period = "1999-W01"; // far in the past, so it can't collide with a real one
   const review = await prisma.weeklyReview.create({

@@ -27,8 +27,10 @@ import { getAiClient, type AiClientResult, type AiMessagesClient } from "@/lib/a
 import {
   computeInputHash,
   defaultStore,
+  limitInfoFrom,
   stableStringify,
   type AiAnalysisStore,
+  type RunAnalysisLimitInfo,
   type RunAnalysisUnavailableReason,
 } from "@/lib/ai/analysis";
 import { computeConsensus } from "@/lib/ai/consensus";
@@ -71,7 +73,13 @@ export type RunCommitteeParams = {
 
 export type RunCommitteeResult =
   | { ok: true; data: CommitteeOutput; analysis: AiAnalysis }
-  | { ok: false; unavailable: RunAnalysisUnavailableReason; message: string };
+  | {
+      ok: false;
+      unavailable: RunAnalysisUnavailableReason;
+      message: string;
+      /** Set only when a spend limit refused the run. */
+      limit?: RunAnalysisLimitInfo;
+    };
 
 export type RunCommitteeDeps = {
   store?: AiAnalysisStore;
@@ -234,14 +242,35 @@ export async function runCommittee(
   // once here, before any of the seven calls, never per-call.
   const capResult = await spendCap(params.userId, undefined, now);
   if (!capResult.ok) {
-    return { ok: false, unavailable: "spend_cap", message: capResult.message };
+    return {
+      ok: false,
+      unavailable: "spend_cap",
+      message: capResult.message,
+      limit: limitInfoFrom(capResult),
+    };
   }
 
+  // The cap reserved a slot for this run; give it back however the run ends
+  // (saved or failed) — from then on the saved row itself is what counts.
+  try {
+    return await conveneAndPersist(params, clientResult.client, store, input, inputHash, dataAsOf);
+  } finally {
+    capResult.release?.();
+  }
+}
+
+/** The seven model calls → assemble → persist half of runCommittee (only after the cap said yes). */
+async function conveneAndPersist(
+  params: RunCommitteeParams,
+  client: AiMessagesClient,
+  store: AiAnalysisStore,
+  input: unknown,
+  inputHash: string,
+  dataAsOf: Date,
+): Promise<RunCommitteeResult> {
   // SIX persona calls, in parallel.
   const personaResults = await Promise.all(
-    COMMITTEE_PERSONAS.map((persona) =>
-      callPersona(clientResult.client, params.model, persona, input),
-    ),
+    COMMITTEE_PERSONAS.map((persona) => callPersona(client, params.model, persona, input)),
   );
 
   if (personaResults.some((vote) => vote === null)) {
@@ -271,7 +300,7 @@ export async function runCommittee(
     );
 
   const synthesis = await callSynthesis(
-    clientResult.client,
+    client,
     params.model,
     input,
     taggedVotes,
