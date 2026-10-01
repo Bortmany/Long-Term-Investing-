@@ -1,10 +1,24 @@
 // Trailing dividend income, derived from DIVIDEND transactions.
 // Amounts that cannot be converted to the base currency are reported in
 // `missing`, never silently converted at 1.0 (golden rule).
+//
+// Rounding rule: each holding's dividend figure is rounded to the money's own
+// precision (OMR 3 decimals, others 2) and the headline total is the sum of
+// those ALREADY-ROUNDED figures — so the total on screen always equals the
+// rows beneath it, to the last decimal.
 
 import type { Currency } from "@prisma/client";
 import { convertAmount } from "./fx";
 import type { FxRateInput, TxnInput } from "./types";
+
+/** One dividend that could not be converted to the base currency. */
+export type MissingDividend = {
+  currency: Currency;
+  amount: number;
+  tradeDate: Date;
+  /** Which holding paid it, so the screen can name it. */
+  instrumentId?: string;
+};
 
 export type DividendIncome = {
   baseCurrency: Currency;
@@ -17,8 +31,30 @@ export type DividendIncome = {
   to: Date;
   complete: boolean;
   /** Dividends left out because no FX rate was available. */
-  missing: { currency: Currency; amount: number; tradeDate: Date }[];
+  missing: MissingDividend[];
 };
+
+/**
+ * Round to the money's own precision — OMR to 3 decimals (the baisa), every
+ * other currency to 2 — the same precision the screen shows.
+ */
+export function roundMoney(amount: number, currency: Currency): number {
+  const factor = currency === "OMR" ? 1000 : 100;
+  // toPrecision first so a value like 1.0005 (really 1.000499999…) rounds
+  // the way a person expects.
+  return Math.round(Number((amount * factor).toPrecision(12))) / factor;
+}
+
+/** Build a "missing" entry (instrumentId only when the dividend has one). */
+function missingEntry(txn: TxnInput, net: number): MissingDividend {
+  const entry: MissingDividend = {
+    currency: txn.currency,
+    amount: net,
+    tradeDate: txn.tradeDate,
+  };
+  if (txn.instrumentId) entry.instrumentId = txn.instrumentId;
+  return entry;
+}
 
 /**
  * Sum of DIVIDEND transactions in the trailing window (default 12 months),
@@ -39,9 +75,11 @@ export function computeTrailingDividendIncome(
   const from = new Date(to);
   from.setMonth(from.getMonth() - months);
 
-  let total = 0;
+  // Add up per holding first, round each holding's figure, THEN sum the
+  // rounded figures — the headline equals the per-holding rows exactly.
+  const perHolding = new Map<string, number>();
   let count = 0;
-  const missing: DividendIncome["missing"] = [];
+  const missing: MissingDividend[] = [];
 
   for (const txn of transactions) {
     if (txn.type !== "DIVIDEND") continue;
@@ -50,16 +88,19 @@ export function computeTrailingDividendIncome(
     const net = txn.amount - txn.fee;
     const converted = convertAmount(net, txn.currency, baseCurrency, fxRates);
     if (converted.ok) {
-      total += converted.value;
+      const key = txn.instrumentId ?? "";
+      perHolding.set(key, (perHolding.get(key) ?? 0) + converted.value);
       count += 1;
     } else {
-      missing.push({
-        currency: txn.currency,
-        amount: net,
-        tradeDate: txn.tradeDate,
-      });
+      missing.push(missingEntry(txn, net));
     }
   }
+
+  let total = 0;
+  for (const value of perHolding.values()) {
+    total += roundMoney(value, baseCurrency);
+  }
+  total = roundMoney(total, baseCurrency);
 
   return {
     baseCurrency,
@@ -94,7 +135,7 @@ export type MonthlyDividends = {
   /** Exactly `months` buckets, oldest first, newest (current month) last. */
   buckets: MonthlyDividendBucket[];
   complete: boolean;
-  missing: DividendIncome["missing"];
+  missing: MissingDividend[];
 };
 
 const MONTH_LABELS = [
@@ -132,7 +173,7 @@ export function computeMonthlyDividends(
     buckets.push({ year, month, label: MONTH_LABELS[month - 1], total: 0 });
   }
 
-  const missing: DividendIncome["missing"] = [];
+  const missing: MissingDividend[] = [];
   for (const txn of transactions) {
     if (txn.type !== "DIVIDEND") continue;
     const key = `${txn.tradeDate.getFullYear()}-${txn.tradeDate.getMonth() + 1}`;
@@ -144,12 +185,13 @@ export function computeMonthlyDividends(
     if (converted.ok) {
       buckets[index].total += converted.value;
     } else {
-      missing.push({
-        currency: txn.currency,
-        amount: net,
-        tradeDate: txn.tradeDate,
-      });
+      missing.push(missingEntry(txn, net));
     }
+  }
+
+  // Show each bar at the money's own precision.
+  for (const bucket of buckets) {
+    bucket.total = roundMoney(bucket.total, baseCurrency);
   }
 
   return {
@@ -167,12 +209,13 @@ export type DividendsByHolding = {
   from: Date;
   to: Date;
   complete: boolean;
-  missing: DividendIncome["missing"];
+  missing: MissingDividend[];
 };
 
 /**
  * Trailing dividend income per instrument (default window 12 months),
  * for the "income by holding" list. Sorted by total, top payer first.
+ * Each row's total is rounded once; the headline adds these same values.
  */
 export function computeDividendsByHolding(
   transactions: TxnInput[],
@@ -190,7 +233,7 @@ export function computeDividendsByHolding(
   from.setMonth(from.getMonth() - months);
 
   const byInstrument = new Map<string, { total: number; count: number }>();
-  const missing: DividendIncome["missing"] = [];
+  const missing: MissingDividend[] = [];
 
   for (const txn of transactions) {
     if (txn.type !== "DIVIDEND") continue;
@@ -200,11 +243,7 @@ export function computeDividendsByHolding(
     const net = txn.amount - txn.fee;
     const converted = convertAmount(net, txn.currency, baseCurrency, fxRates);
     if (!converted.ok) {
-      missing.push({
-        currency: txn.currency,
-        amount: net,
-        tradeDate: txn.tradeDate,
-      });
+      missing.push(missingEntry(txn, net));
       continue;
     }
     const entry = byInstrument.get(txn.instrumentId) ?? { total: 0, count: 0 };
@@ -214,7 +253,11 @@ export function computeDividendsByHolding(
   }
 
   const rows = [...byInstrument.entries()]
-    .map(([instrumentId, entry]) => ({ instrumentId, ...entry }))
+    .map(([instrumentId, entry]) => ({
+      instrumentId,
+      total: roundMoney(entry.total, baseCurrency),
+      count: entry.count,
+    }))
     .sort((a, b) => b.total - a.total);
 
   return {

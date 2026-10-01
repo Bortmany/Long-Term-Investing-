@@ -102,12 +102,15 @@ export default async function SettingsPage({
       <div className="max-w-2xl space-y-6">
         <BaseCurrencyCard baseCurrency={baseCurrency} currencies={currencies} />
 
-        <FxRatesCard
-          rates={rates}
-          currencies={currencies}
-          baseCurrency={baseCurrency}
-          hasFmpKey={hasFmpKey}
-        />
+        {/* Anchor for the "Add an exchange rate" links on Dashboard/Portfolio. */}
+        <div id="exchange-rates" className="scroll-mt-4">
+          <FxRatesCard
+            rates={rates}
+            currencies={currencies}
+            baseCurrency={baseCurrency}
+            hasFmpKey={hasFmpKey}
+          />
+        </div>
 
         {/* Appearance — informational only; the theme toggle lives in the
             sidebar and isn't duplicated here. */}

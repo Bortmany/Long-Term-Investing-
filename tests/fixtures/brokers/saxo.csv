@@ -1,0 +1,8 @@
+Client ID,Trade Date,Value Date,Type,Instrument,Instrument ISIN,Instrument currency,Exchange Description,Instrument Symbol,Event,Amount,Order ID,Conversion Rate
+9000000,05-Jan-2026,05-Jan-2026,Cash Amount,,,USD,,,Deposit 5000 USD,"5.000,00",,1
+9000000,12-Jan-2026,14-Jan-2026,Trade,Apple Inc.,US0378331005,USD,NASDAQ,AAPL:xnas,Buy 10 @ 205.40 USD,"-2054,00",O0000001,1
+9000000,03-Feb-2026,05-Feb-2026,Trade,Microsoft Corp.,US5949181045,USD,NASDAQ,MSFT:xnas,Buy 5 @ 410.10 USD,"-2050,50",O0000002,1
+9000000,20-Feb-2026,24-Feb-2026,Trade,Coca-Cola Co,US1912161007,USD,New York Stock Exchange,KO:xnys,Buy 10 @ 60.00 USD,"-600,00",O0000003,1
+9000000,02-Mar-2026,04-Mar-2026,Trade,Apple Inc.,US0378331005,USD,NASDAQ,AAPL:xnas,Sell 4 @ 214.00 USD,"856,00",O0000004,1
+9000000,10-Mar-2026,12-Mar-2026,Trade,SAP SE,DE0007164600,EUR,Xetra,SAP:xetr,Buy 3 @ 150.00 EUR,"-450,00",O0000005,1
+9000000,20-May-2026,20-May-2026,Corporate Action,NVIDIA Corp,US67066G1040,USD,NASDAQ,NVDA:xnas,Stock split 10 for 1,"0,00",,1

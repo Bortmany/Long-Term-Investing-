@@ -97,7 +97,9 @@ export default async function PrivacyPage() {
             <li>
               <strong>Your portfolio:</strong> every transaction you record
               (purchases, sales, dividends, deposits, withdrawals, fees) —
-              amounts, dates, and the stock/ETF/REIT involved.
+              amounts, dates, and the stock/ETF/REIT involved. For trades you
+              import from a broker file, we also keep a reference so the same
+              trade is not added twice.
             </li>
             <li>
               <strong>Prices and exchange rates you enter by hand</strong> —
@@ -167,6 +169,13 @@ export default async function PrivacyPage() {
               <strong>Financial Modeling Prep</strong> — used to fetch live
               stock prices and company fundamentals. Only ticker symbols
               (e.g. &quot;AAPL&quot;) are sent — never anything about you personally.
+            </li>
+            <li>
+              <strong>Twelve Data</strong> — used to fetch share prices for
+              some Gulf markets, only if the app&apos;s operator has
+              configured a key. When it is, only ticker symbols (with the
+              exchange name) are sent — never anything about you personally.
+              No key configured means nothing is ever sent.
             </li>
             <li>
               <strong>Resend</strong> (email delivery) — sends your account

@@ -12,7 +12,7 @@ import {
   committeeOutputSchema,
   sellAnalysisSchema,
 } from "@/lib/ai/schemas";
-import { badgePropsForValueSource } from "@/components/source-badge";
+import { badgePropsForPrice } from "@/components/source-badge";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import { CommitteeResultPanel } from "@/components/committee/committee-result-panel";
@@ -170,10 +170,7 @@ export default async function CommitteeHistoryPage({
           ok: true,
           price: quoteResult.data.price,
           currency: quoteResult.data.currency,
-          badge: badgePropsForValueSource({
-            kind: quoteResult.data.source,
-            asOf: quoteResult.data.asOf,
-          }),
+          badge: badgePropsForPrice(quoteResult.data, instrument.market),
         }
       : { ok: false, reason: quoteResult.message ?? quoteResult.unavailable };
 

@@ -5,6 +5,10 @@
 
 export {
   convertAmount,
+  findRateWithHub,
+  FX_HUB_CURRENCY,
+  type FxLeg,
+  type FxViaHub,
   findRate,
   type ConversionMissing,
   type ConversionOk,
@@ -28,6 +32,8 @@ export {
   computeDividendsByHolding,
   computeMonthlyDividends,
   computeTrailingDividendIncome,
+  roundMoney,
+  type MissingDividend,
   type DividendIncome,
   type DividendsByHolding,
   type MonthlyDividendBucket,
@@ -45,6 +51,7 @@ export {
   type Allocation,
   type AllocationKey,
   type AllocationSlice,
+  type UnvaluedHolding,
 } from "./allocation";
 export {
   fromPrismaFxRate,
@@ -65,3 +72,17 @@ export {
   type HealthScoreHolding,
   type HealthScoreHoldingShare,
 } from "./health-inputs";
+export {
+  decideDividendCard,
+  dividendWarningTitle,
+  type DividendCardState,
+} from "./dividend-card";
+export {
+  collectUnvaluedItems,
+  describeUnvalued,
+  holdingsCount,
+  joinNames,
+  type UnvaluedItem,
+  type UnvaluedReason,
+  type UnvaluedSummary,
+} from "./unvalued";

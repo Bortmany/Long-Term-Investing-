@@ -34,9 +34,12 @@ Naming: files kebab-case (`market-data.ts`), types/components PascalCase, functi
 
 - Callers NEVER hit Financial Modeling Prep directly. All market data goes through `src/lib/data/market-data.ts` (`getQuote`, `getProfile`, `getFinancialStatements`, `getDividendHistory`, `getUpcomingDividends`, `getPriceHistory`).
 - Quote reads go through the `PriceCache` table with a **15-minute TTL**. Fundamentals reads go through `FundamentalsCache` with a **7-day TTL**. The TTL logic is the pure function `isCacheFresh` in `src/lib/data/cache.ts`.
-- Provider routing (`resolveProviderName`): US-market instrument + `FMP_API_KEY` set → FMP; everything else (MSX, TADAWUL, DFM, OTHER, or no key) → manual prices from `PriceCache`.
-- When FMP is unreachable, the layer serves the newest stored price with its honest badge and as-of date — or the typed unavailable result if nothing is stored.
-- Never log or return `FMP_API_KEY` (or any secret). Error messages must not contain request URLs (they carry the key).
+- Provider routing (`resolveProviderName`, in order): US-market instrument + `FMP_API_KEY` set → FMP; a market that is in the Twelve Data table (`src/lib/data/provider-info.ts`: TADAWUL, ADX, QSE, DFM) **and** named in `TWELVE_DATA_MARKETS` (default `TADAWUL,ADX,QSE`; DFM only when named) **and** `TWELVE_DATA_API_KEY` set → Twelve Data; everything else → manual prices from `PriceCache`. **MSX and OTHER never route to any provider** (no vendor exists), and with no Twelve Data key routing is exactly what it was before it existed (the connection is dormant: no request is ever made). Twelve Data gives quotes only; its stocks' history comes from stored prices.
+- Every `Quote` carries its true origin (`priceSource`) and, when served from the last stored copy because the provider did not answer, `fallback: true`. The source badge reads these to name the provider and how late the price is (`describePriceProvider`): Tadawul says "end of day" (never "Live"), a market with an unconfirmed delay says "delayed" with the price's own date and never a number of minutes. Only a market with a confirmed delay in the table may name minutes.
+- The wrong-stock guard: a Twelve Data reply is used only when its exchange and currency match the table and the price is a positive number; anything else is the typed unavailable result. The only thing the provider path writes to the shared `PriceCache` is a price labelled with the routed provider's own source (FMP or TWELVE_DATA). A user's typed-in price stays in the per-user table and never touches it.
+- `isPublicDisplayAllowed(priceSource)` is the one check for showing a vendor price on a signed-out page. It answers **no** by default (yes only with the matching `*_PUBLIC_DISPLAY_LICENSED="true"`; always no for MANUAL and SEED).
+- When the routed provider is unreachable, the layer serves the newest stored price with its honest badge and as-of date — or the typed unavailable result if nothing is stored.
+- Never log or return `FMP_API_KEY`, `TWELVE_DATA_API_KEY` (or any secret). Error messages must not contain request URLs or the text of a thrown error (both can carry the key). `TWELVE_DATA_BASE_URL` (a developer-only test server) is ignored when `NODE_ENV` is `production`.
 
 ## Database rules
 
@@ -93,7 +96,7 @@ Naming: files kebab-case (`market-data.ts`), types/components PascalCase, functi
   sits — and records an honest outcome instead ("Not checked — only sample
   data is available for this stock."). This is the golden rule applied to
   alerts specifically: a `Notification`'s `priceSource` can only ever be
-  `FMP` or `MANUAL`, never `SEED`, because a sample-sourced quote can never
+  `FMP`, `TWELVE_DATA` or `MANUAL`, never `SEED`, because a sample-sourced quote can never
   reach the code path that writes one. A `DAY_DROP` alert with no previous
   closing price on record is the same story — it stays honestly "not
   checked" rather than guessing a drop percentage. This is why the seeded

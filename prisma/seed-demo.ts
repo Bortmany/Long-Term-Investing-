@@ -37,9 +37,12 @@ const INSTRUMENT_DEFS = [
   { ticker: "2222.SR", name: "Saudi Aramco", market: "TADAWUL", currency: "SAR", type: "STOCK", sector: "Energy", country: "Saudi Arabia" },
   // Watchlist-only: JNJ is watched by the demo user but NOT held (no transactions).
   { ticker: "JNJ", name: "Johnson & Johnson", market: "US", currency: "USD", type: "STOCK", sector: "Healthcare", country: "United States" },
+  // Watchlist-only Gulf examples (no transactions, so the demo totals never change):
+  { ticker: "FAB", name: "First Abu Dhabi Bank", market: "ADX", currency: "AED", type: "STOCK", sector: "Banks", country: "United Arab Emirates" },
+  { ticker: "QNBK", name: "Qatar National Bank", market: "QSE", currency: "QAR", type: "STOCK", sector: "Banks", country: "Qatar" },
 ] as const;
 
-const SEED_PRICES: { ticker: string; price: number; currency: "USD" | "OMR" | "SAR"; asOf: string }[] = [
+const SEED_PRICES: { ticker: string; price: number; currency: "USD" | "OMR" | "SAR" | "AED" | "QAR"; asOf: string }[] = [
   { ticker: "AAPL", price: 218.4, currency: "USD", asOf: "2026-01-05" },
   { ticker: "AAPL", price: 232.5, currency: "USD", asOf: "2026-07-10" },
   { ticker: "MSFT", price: 512.0, currency: "USD", asOf: "2026-01-05" },
@@ -53,6 +56,10 @@ const SEED_PRICES: { ticker: string; price: number; currency: "USD" | "OMR" | "S
   { ticker: "2222.SR", price: 25.1, currency: "SAR", asOf: "2026-01-05" },
   { ticker: "2222.SR", price: 25.6, currency: "SAR", asOf: "2026-07-10" },
   { ticker: "JNJ", price: 168.3, currency: "USD", asOf: "2026-07-10" },
+  { ticker: "FAB", price: 17.2, currency: "AED", asOf: "2026-01-05" },
+  { ticker: "FAB", price: 17.8, currency: "AED", asOf: "2026-07-10" },
+  { ticker: "QNBK", price: 16.5, currency: "QAR", asOf: "2026-01-05" },
+  { ticker: "QNBK", price: 17.0, currency: "QAR", asOf: "2026-07-10" },
 ];
 
 const FX_AS_OF = new Date("2026-07-01");
@@ -60,6 +67,10 @@ const FX_RATES = [
   { base: "USD", quote: "OMR", rate: 0.385 },
   { base: "SAR", quote: "OMR", rate: 0.1027 },
   { base: "AED", quote: "OMR", rate: 0.1048 },
+  // QAR is pegged at 3.64 riyals to 1 US dollar, so 1 QAR = (USD->OMR) / 3.64
+  // = 0.385 / 3.64 = 0.10577, stored to 4 places like the other rows. Sample
+  // data, derived from the seeded USD->OMR row above — update both together.
+  { base: "QAR", quote: "OMR", rate: 0.1058 },
 ] as const;
 
 export type ReferenceDataSummary = {
@@ -198,16 +209,20 @@ export async function seedDemoDataForUser(
 
   await prisma.transaction.createMany({ data: transactions });
 
-  // --- Watchlist: the demo user watches JNJ, which the portfolio does NOT hold ---
-  await prisma.watchlistItem.upsert({
-    where: { userId_instrumentId: { userId, instrumentId: instruments["JNJ"] } },
-    create: {
-      userId,
-      instrumentId: instruments["JNJ"],
-      note: "Dividend aristocrat — waiting for a better entry price.",
-    },
-    update: { note: "Dividend aristocrat — waiting for a better entry price." },
-  });
+  // --- Watchlist: the demo user watches stocks the portfolio does NOT hold ---
+  // JNJ plus two Gulf examples (FAB on ADX, QNBK on QSE). None has a transaction.
+  const watched = [
+    { ticker: "JNJ", note: "Dividend aristocrat — waiting for a better entry price." },
+    { ticker: "FAB", note: "Sample Gulf bank on the Abu Dhabi exchange (ADX)." },
+    { ticker: "QNBK", note: "Sample Gulf bank on the Qatar exchange (QSE)." },
+  ];
+  for (const item of watched) {
+    await prisma.watchlistItem.upsert({
+      where: { userId_instrumentId: { userId, instrumentId: instruments[item.ticker] } },
+      create: { userId, instrumentId: instruments[item.ticker], note: item.note },
+      update: { note: item.note },
+    });
+  }
 
   // --- Thesis: one ACTIVE thesis on MSFT (Phase 4) ---
   const existingMsftThesis = await prisma.thesis.findFirst({

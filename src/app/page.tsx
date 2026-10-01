@@ -35,7 +35,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export const metadata: Metadata = {
   title: "InvestIQ AI — calm, honest long-term investing",
-  description: `${POSITIONING_LINE} Track portfolios across the US, Muscat, Tadawul and Dubai markets. Every number carries its source.`,
+  description: `${POSITIONING_LINE} Track portfolios across the US, Muscat, Saudi, Dubai, Abu Dhabi and Qatar markets. Every number carries its source.`,
 };
 
 // The interactive demo pulls in recharts, so it's lazy-loaded and never
@@ -71,6 +71,8 @@ const MARKETS = [
   { code: "MSX", country: "Oman", exchange: "Muscat Stock Exchange" },
   { code: "TASI", country: "Saudi Arabia", exchange: "Tadawul" },
   { code: "DFM", country: "UAE", exchange: "Dubai Financial Market" },
+  { code: "ADX", country: "UAE", exchange: "Abu Dhabi Securities Exchange" },
+  { code: "QSE", country: "Qatar", exchange: "Qatar Stock Exchange" },
 ];
 
 const COMMITTEE_SEATS = [
@@ -144,7 +146,7 @@ export default async function LandingPage() {
             Long-term investing, minus the noise.
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-pretty text-base text-slate-500 dark:text-slate-400 sm:text-lg">
-            Track portfolios across New York, Muscat, Tadawul and Dubai. Your cash and dividends
+            Track portfolios across New York, Muscat, Tadawul, Dubai, Abu Dhabi and Qatar. Your cash and dividends
             are worked out from what you actually did, and no number ever appears without saying
             where it came from.
           </p>
@@ -291,9 +293,9 @@ export default async function LandingPage() {
                 </p>
               </div>
             </Reveal>
-            <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {MARKETS.map((market, index) => (
-                <Reveal key={market.country} delay={index * 75}>
+                <Reveal key={market.code} delay={index * 75}>
                   <Card className="h-full">
                     <CardContent className="p-5">
                       <p className="inline-flex rounded-md border border-slate-200 px-2 py-1 font-mono text-xs font-medium text-slate-600 dark:border-slate-800 dark:text-slate-400">

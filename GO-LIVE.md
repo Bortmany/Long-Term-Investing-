@@ -20,7 +20,27 @@ Plain-English list of what to set up before this goes public. Full context lives
 - [ ] `ANTHROPIC_API_KEY` — Anthropic key for the AI features (health scores, committee, thesis checks, buy/sell analysis, weekly reviews). **This IS used by the app now** (`src/lib/ai/client.ts`, `src/lib/ai/analysis.ts`) — without it, every AI surface shows the honest "AI features are turned off" notice instead of a made-up analysis; nothing breaks, AI just stays dormant. Three caps stop a surprise bill, checked in this order: an app-wide daily cap (`GLOBAL_AI_DAILY_CAP`, default 100 new analyses a day across everyone; set `0` to pause AI for everybody — pick a number you'd be happy to pay for on a bad day), then a per-person daily cap (Free 2, Pro 10), then a Pro monthly cap (150). All reset on UTC days/months. Plans and limits live in `src/lib/plans.ts`.
 - [ ] `CRON_SECRET` — a long random bearer secret for the two scheduled endpoints, `POST /api/cron/weekly-review` and `POST /api/cron/check-alerts`. Leave it unset and both endpoints answer a dormant `503` and do nothing — no scheduling happens. Set it to turn scheduling on, then call either endpoint with `Authorization: Bearer <CRON_SECRET>` (see `.github/workflows/weekly-review.yml.example` and `check-alerts.yml.example`). If it's set but shorter than 16 characters, the app logs a warning at startup (not a hard failure — this only weakens an optional feature) — generate it the same way as `BETTER_AUTH_SECRET`.
 - [ ] `RESEND_API_KEY` / `RESEND_FROM` — **required on the live site for sign-ups and password reset** (see "Set up email" above). They also turn on the optional weekly-review email, sent to a user's own address each time their weekly review finishes. Leave either blank and nothing changes — no network call is ever made. `/api/health`'s `email` field reports `"configured"` or `"dormant"`.
+- [ ] `TWELVE_DATA_API_KEY` — see "Gulf live prices (Twelve Data)" above; `/api/health`'s `twelveData` field reports `"configured"` or `"dormant"`.
 - [ ] `PRIVACY_CONTACT_EMAIL` — the address shown as a mailto link on `/privacy` and `/terms` for questions. Leave it unset and the pages show the owner's own address (`naeljam@hotmail.com`); set it to route those questions to a different inbox.
+
+## Gulf live prices (Twelve Data) — built, switched OFF
+The connection to Twelve Data for Saudi (Tadawul), Abu Dhabi (ADX) and Qatar (QSE) prices is built but **dormant**: with no `TWELVE_DATA_API_KEY` nothing is ever sent to Twelve Data and Gulf prices stay typed-in or sample, exactly as before. **Muscat (MSX) has no data vendor anywhere, so it stays typed-in whatever you do.** It was tested only with made-up sample replies shaped like the vendor's (`tests/fixtures/twelve-data/`) — nobody has seen a real reply yet.
+
+### New environment variables (all optional; unset means off)
+- [ ] `TWELVE_DATA_API_KEY` — turns the connection on. **Do NOT put a paid key on the live site until Twelve Data confirms in writing that showing prices to signed-in users of an open-sign-up app is licensed.** The free key is non-commercial: your own Mac only, never the live site. Never logged.
+- [ ] `TWELVE_DATA_MARKETS` — which markets to send, comma-separated. Default `TADAWUL,ADX,QSE`. Dubai (DFM) needs their dearer plan, so it is left out; add `DFM` only once bought.
+- [ ] `TWELVE_DATA_PUBLIC_DISPLAY_LICENSED` — leave unset until the licence explicitly allows showing their prices signed-out (the future public stock pages read this).
+- [ ] `FMP_PUBLIC_DISPLAY_LICENSED` — same idea for FMP prices; FMP's display terms are not verified, so leave unset.
+- [ ] `TWELVE_DATA_BASE_URL` — developer-only (points at `scripts/fake-twelve-data.mjs`); the app ignores it in production. Never set it on the live site.
+
+### Owner checklist (in order)
+1. [ ] Get the written Twelve Data quote and licence (decision 1.2). Confirm it covers **signed-in users of a public app**, not just public web pages, and which markets and delay each plan gives.
+2. [ ] Before setting the paid key on the live site: make one real call per market, replace the made-up sample replies in `tests/fixtures/twelve-data/` with the real recorded replies, and **correct the market table** in `src/lib/data/provider-info.ts` (exchange codes, ticker suffixes, delay wording — every row is marked "UNVERIFIED until first real call"). Re-run the tests.
+3. [ ] Set `TWELVE_DATA_API_KEY` (and `TWELVE_DATA_MARKETS` if DFM is bought). Sign in and check `/api/health` shows `twelveData: "configured"`.
+4. [ ] Keep `TWELVE_DATA_PUBLIC_DISPLAY_LICENSED` unset until the licence explicitly allows public display.
+5. [ ] Never use the free key on the live site.
+6. [ ] Check the plan's credit allowance against the number of Gulf stocks people track: each tracked stock costs at most about 96 calls a day (one per 15 minutes), shared by everyone; after a "rate limit" answer the app pauses for 60 seconds.
+7. [ ] To try it on your own Mac with no key: `node scripts/fake-twelve-data.mjs`, then set `TWELVE_DATA_API_KEY=fake-key` and `TWELVE_DATA_BASE_URL=http://127.0.0.1:4010` in your local `.env`. Stop the stand-in server to see the "provider not responding" wording; clear the key to go back to typed-in prices.
 
 ## Data rights (built in — nothing to set up)
 - **Download my data**: any signed-in user can download a complete JSON export of everything the app stores about their account from Settings → "Your data" (`GET /api/account/export`, rate-limited to 5/hour per user).

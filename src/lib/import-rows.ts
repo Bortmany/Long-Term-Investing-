@@ -12,6 +12,7 @@ import {
   toTransactionRecord,
   type TransactionInput,
 } from "./transaction-schema";
+import { currencyListText } from "./markets";
 
 /** One CSV row after column mapping — everything still raw text. */
 export type MappedImportRow = {
@@ -168,7 +169,7 @@ export function validateMappedRow(
   // --- Currency (fall back to the instrument's own currency when omitted) ---
   const currency = cell(row.currency)?.toUpperCase() ?? instrument?.currency;
   if (!currency) {
-    issues.push("Missing currency (OMR, USD, SAR or AED).");
+    issues.push(`Missing currency (${currencyListText()}).`);
   }
 
   if (issues.length > 0) {

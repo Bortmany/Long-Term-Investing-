@@ -4,6 +4,7 @@
 
 import type { Currency, Market, TransactionType } from "@prisma/client";
 import type { ValueSource } from "@/lib/portfolio";
+import type { ProviderBadgeDetail } from "@/lib/data/provider-info";
 
 /** One row of the Holdings table, fully valued (or honestly not) server-side. */
 export type HoldingRowData = {
@@ -17,7 +18,14 @@ export type HoldingRowData = {
   avgCost: number | null;
   /** Latest known price for the instrument, in its own currency. */
   price:
-    | { ok: true; value: number; currency: Currency; source: ValueSource }
+    | {
+        ok: true;
+        value: number;
+        currency: Currency;
+        source: ValueSource;
+        /** Provider + delay wording for a Twelve Data price (badge text). */
+        detail?: ProviderBadgeDetail;
+      }
     | { ok: false };
   /** Market value in the portfolio base currency. */
   valuation:

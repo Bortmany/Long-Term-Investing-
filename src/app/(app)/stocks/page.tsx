@@ -2,12 +2,13 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { ChartLine } from "lucide-react";
-import { Market } from "@prisma/client";
+import { MARKET_VALUES } from "@/lib/markets";
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getPriceHistory, getQuote } from "@/lib/data";
 import {
+  badgePropsForPrice,
   badgePropsForValueSource,
   SourceBadge,
 } from "@/components/source-badge";
@@ -52,7 +53,7 @@ export default async function StocksPage() {
     redirect("/sign-in");
   }
   const userId = session.user.id;
-  const markets = Object.values(Market);
+  const markets = [...MARKET_VALUES];
 
   const [portfolio, watchlistRows] = await Promise.all([
     prisma.portfolio.findFirst({
@@ -117,10 +118,7 @@ export default async function StocksPage() {
             ok: true,
             value: quoteResult.data.price,
             currency: quoteResult.data.currency,
-            badge: badgePropsForValueSource({
-              kind: quoteResult.data.source,
-              asOf: quoteResult.data.asOf,
-            }),
+            badge: badgePropsForPrice(quoteResult.data, instrument.market),
           }
         : { ok: false };
 

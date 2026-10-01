@@ -15,7 +15,7 @@ import {
   type CommitteeOutput,
   type SellAnalysisOutput,
 } from "@/lib/ai/schemas";
-import { badgePropsForValueSource } from "@/components/source-badge";
+import { badgePropsForPrice } from "@/components/source-badge";
 import {
   computeHoldings,
   fromPrismaTransaction,
@@ -150,10 +150,7 @@ export default async function CommitteePage({
           ok: true,
           price: quoteResult.data.price,
           currency: quoteResult.data.currency,
-          badge: badgePropsForValueSource({
-            kind: quoteResult.data.source,
-            asOf: quoteResult.data.asOf,
-          }),
+          badge: badgePropsForPrice(quoteResult.data, instrument.market),
         }
       : { ok: false, reason: quoteResult.message ?? quoteResult.unavailable };
 

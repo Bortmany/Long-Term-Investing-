@@ -10,6 +10,7 @@
 import * as React from "react";
 import { LoaderCircle, Plus } from "lucide-react";
 import type { Currency, Market } from "@prisma/client";
+import { defaultCurrencyForMarket, marketLabel, sortMarkets } from "@/lib/markets";
 
 import { addToWatchlist } from "@/app/actions/stocks";
 import {
@@ -27,37 +28,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, type SelectOption } from "@/components/ui/select";
-
-function marketLabel(market: Market): string {
-  switch (market) {
-    case "US":
-      return "US";
-    case "MSX":
-      return "MSX (Muscat)";
-    case "TADAWUL":
-      return "Tadawul (Saudi)";
-    case "DFM":
-      return "DFM (Dubai)";
-    case "OTHER":
-      return "Other";
-  }
-}
-
-/** A sensible default currency per market — overridden by FMP prefill when it succeeds. */
-function defaultCurrencyForMarket(market: Market): Currency {
-  switch (market) {
-    case "US":
-      return "USD";
-    case "MSX":
-      return "OMR";
-    case "TADAWUL":
-      return "SAR";
-    case "DFM":
-      return "AED";
-    case "OTHER":
-      return "USD";
-  }
-}
 
 export function TrackStockDialog({ markets }: { markets: Market[] }) {
   const [open, setOpen] = React.useState(false);
@@ -149,7 +119,7 @@ export function TrackStockDialog({ markets }: { markets: Market[] }) {
     });
   }
 
-  const marketOptions: SelectOption[] = markets.map((m) => ({
+  const marketOptions: SelectOption[] = sortMarkets(markets).map((m) => ({
     value: m,
     label: marketLabel(m),
   }));

@@ -156,6 +156,7 @@ export function HoldingsTable({
                         <SourceBadge
                           size="sm"
                           {...badgePropsForValueSource(row.price.source)}
+                          detail={row.price.detail}
                         />
                       </span>
                     ) : (

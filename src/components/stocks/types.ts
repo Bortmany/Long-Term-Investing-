@@ -19,7 +19,7 @@ export type StockListRow = {
         ok: true;
         value: number;
         currency: Currency;
-        badge: Pick<SourceBadgeProps, "variant" | "date">;
+        badge: Pick<SourceBadgeProps, "variant" | "date" | "detail">;
       }
     | { ok: false };
   change:

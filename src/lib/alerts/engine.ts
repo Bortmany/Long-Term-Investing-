@@ -270,7 +270,12 @@ function isPriceKind(kind: AlertKind): kind is PriceAlertKind {
   return kind !== "THESIS_REVIEW_DUE";
 }
 
-/** The reverse of src/lib/data's badgeForPriceSource — only ever called with "live"/"manual" (see the guarantee in ./evaluate.ts). */
+/**
+ * The reverse of src/lib/data's badgeForPriceSource — only ever called with
+ * "live"/"manual" (see the guarantee in ./evaluate.ts). This is the OLD
+ * mapping, kept only for a quote that does not say where it came from: it
+ * can only guess "live" means FMP, which is wrong for any other provider.
+ */
 function priceSourceFromBadge(source: SourceBadge): PriceSource {
   switch (source) {
     case "live":
@@ -280,6 +285,16 @@ function priceSourceFromBadge(source: SourceBadge): PriceSource {
     case "sample":
       return "SEED";
   }
+}
+
+/**
+ * The true provider behind a quote, for the notification's price snapshot.
+ * A quote carries its real origin (FMP, TWELVE_DATA, …); only an old-style
+ * quote without one falls back to the badge mapping above. This is what
+ * stops a Twelve Data price being recorded as "FMP".
+ */
+function priceSourceForQuote(quote: Quote): PriceSource {
+  return quote.priceSource ?? priceSourceFromBadge(quote.source);
 }
 
 /**
@@ -373,7 +388,7 @@ export async function sweepAlerts(
         price: {
           amount: quoteResult.data.price,
           currency: quoteResult.data.currency,
-          source: priceSourceFromBadge(quoteResult.data.source),
+          source: priceSourceForQuote(quoteResult.data),
           asOf: quoteResult.data.asOf,
         },
       });

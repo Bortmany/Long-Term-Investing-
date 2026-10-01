@@ -7,6 +7,7 @@
 // by hand instead.
 
 import { Prisma, Currency, InstrumentType, Market } from "@prisma/client";
+import { currencyListSentence, marketListSentence } from "@/lib/markets";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
@@ -43,8 +44,8 @@ const createInstrumentSchema = z.object({
     .trim()
     .min(1, "Enter the company or fund name.")
     .max(200, "Names are limited to 200 characters."),
-  market: z.enum(Market, { error: "Pick a market (US, MSX, TADAWUL, DFM or OTHER)." }),
-  currency: z.enum(Currency, { error: "Pick a valid currency (OMR, USD, SAR or AED)." }),
+  market: z.enum(Market, { error: marketListSentence() }),
+  currency: z.enum(Currency, { error: currencyListSentence() }),
   type: z.enum(InstrumentType, { error: "Pick a type (Stock, ETF or REIT)." }),
   sector: z.string().trim().max(100).optional(),
   country: z.string().trim().max(100).optional(),

@@ -12,6 +12,7 @@ import { isPro } from "@/lib/plan-access";
 import { isBillingEnabled } from "@/lib/billing/config";
 import { thesisCheckSchema } from "@/lib/ai/schemas";
 import {
+  badgePropsForPrice,
   badgePropsForValueSource,
   SourceBadge,
 } from "@/components/source-badge";
@@ -216,10 +217,7 @@ export default async function ThesisDetailPage({
             </span>
             <SourceBadge
               size="sm"
-              {...badgePropsForValueSource({
-                kind: quoteResult.data.source,
-                asOf: quoteResult.data.asOf,
-              })}
+              {...badgePropsForPrice(quoteResult.data, instrument.market)}
             />
           </span>
         ) : (

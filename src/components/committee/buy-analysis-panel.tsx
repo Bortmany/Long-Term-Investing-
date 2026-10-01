@@ -21,7 +21,7 @@ import { formatMoney, formatPercent } from "@/lib/format";
 import type { BuyAnalysisOutput } from "@/lib/ai/schemas";
 
 export type CurrentPriceInfo =
-  | { ok: true; price: number; currency: string; badge: Pick<SourceBadgeProps, "variant" | "date"> }
+  | { ok: true; price: number; currency: string; badge: Pick<SourceBadgeProps, "variant" | "date" | "detail"> }
   | { ok: false; reason: string };
 
 const SKELETON = (

@@ -75,7 +75,7 @@ async function main() {
   console.log(`  user:         ${DEMO_EMAIL} (email confirmed; password: the SEED_DEMO_PASSWORD you set)`);
   console.log(`  portfolio:    ${demo.portfolioName} (base OMR)`);
   console.log(`  transactions: ${demo.transactionCount}`);
-  console.log(`  watchlist:    1 item (JNJ — watched, not held)`);
+  console.log(`  watchlist:    3 items (JNJ, FAB, QNBK — watched, not held)`);
   console.log(`  theses:       1 active (MSFT)`);
   console.log(`  alerts:       1 paused (AAPL price alert — sample data, honestly ignored)`);
 }

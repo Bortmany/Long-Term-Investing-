@@ -5,7 +5,7 @@
 
 import type { Currency } from "@prisma/client";
 import { badgeForPriceSource } from "@/lib/data/provider";
-import { convertAmount, type ConversionResult } from "./fx";
+import { convertAmount, type ConversionResult, type FxViaHub } from "./fx";
 import {
   computeCashBalances,
   computeHoldings,
@@ -26,6 +26,8 @@ export type HoldingValuation =
       source: ValueSource;
       /** As-of date of the FX rate applied; null when no conversion was needed. */
       fxRateAsOf: Date | null;
+      /** Set when the rate was worked out through the rial (both legs + dates). */
+      fxViaHub?: FxViaHub;
     }
   | { ok: false; reason: "missing_price" }
   | { ok: false; reason: "missing_fx_rate"; from: Currency; to: Currency };
@@ -133,6 +135,7 @@ export function computePortfolioValue(input: {
         priceCurrency: price.currency,
         source,
         fxRateAsOf: converted.rateAsOf,
+        ...(converted.viaHub ? { fxViaHub: converted.viaHub } : {}),
       },
     };
   });

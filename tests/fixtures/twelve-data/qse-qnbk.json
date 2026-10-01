@@ -1,0 +1,19 @@
+{
+  "symbol": "QNBK",
+  "name": "Qatar National Bank (MADE-UP SAMPLE REPLY)",
+  "exchange": "DSMD",
+  "mic_code": "DSMD",
+  "currency": "QAR",
+  "datetime": "2026-09-28 12:30:00",
+  "timestamp": 1790587800,
+  "open": "17.70",
+  "high": "17.95",
+  "low": "17.65",
+  "close": "17.85",
+  "volume": "2100000",
+  "previous_close": "17.75",
+  "change": "0.10",
+  "percent_change": "0.56338",
+  "average_volume": "2000000",
+  "is_market_open": true
+}

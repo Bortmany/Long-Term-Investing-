@@ -42,6 +42,17 @@ describe("resolveProviderName", () => {
     expect(resolveProviderName("DFM", "some-key")).toBe("manual");
     expect(resolveProviderName("OTHER", "some-key")).toBe("manual");
   });
+  it("routes the new Gulf markets to manual when no Twelve Data key is given", () => {
+    expect(resolveProviderName("ADX", "some-key")).toBe("manual");
+    expect(resolveProviderName("QSE", "some-key")).toBe("manual");
+  });
+  it("adds Twelve Data only when it has a key and the market is switched on", () => {
+    expect(resolveProviderName("TADAWUL", null, { apiKey: "td-key" })).toBe("twelve-data");
+    expect(resolveProviderName("TADAWUL", null, { apiKey: null })).toBe("manual");
+    expect(resolveProviderName("MSX", null, { apiKey: "td-key" })).toBe("manual");
+    // US + an FMP key still goes to FMP, whatever Twelve Data is set to.
+    expect(resolveProviderName("US", "some-key", { apiKey: "td-key" })).toBe("fmp");
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -74,6 +74,7 @@ describe("/api/health caller-aware shape", () => {
       signups: "paused",
       signupsReason: "SIGNUPS_PAUSED",
       billing: "dormant",
+      twelveData: "dormant",
     });
   });
 
@@ -99,8 +100,48 @@ describe("/api/health caller-aware shape", () => {
     getSession.mockResolvedValue({ user: { id: "u1" } });
     const body = await (await GET(request())).json();
     expect(Object.keys(body).sort()).toEqual(
-      ["billing", "cron", "db", "email", "sentry", "signups", "signupsReason", "status"].sort(),
+      [
+        "billing",
+        "cron",
+        "db",
+        "email",
+        "sentry",
+        "signups",
+        "signupsReason",
+        "status",
+        "twelveData",
+      ].sort(),
     );
+  });
+
+  it("signed-in view reports twelveData dormant with no key, configured with one", async () => {
+    getSession.mockResolvedValue({ user: { id: "u1" } });
+    const originalKey = process.env.TWELVE_DATA_API_KEY;
+    try {
+      delete process.env.TWELVE_DATA_API_KEY;
+      expect((await (await GET(request())).json()).twelveData).toBe("dormant");
+
+      process.env.TWELVE_DATA_API_KEY = "fake-health-key-123";
+      const body = await (await GET(request())).json();
+      expect(body.twelveData).toBe("configured");
+      // Only the yes/no answer is shown — never the key.
+      expect(JSON.stringify(body)).not.toContain("fake-health-key-123");
+    } finally {
+      if (originalKey === undefined) delete process.env.TWELVE_DATA_API_KEY;
+      else process.env.TWELVE_DATA_API_KEY = originalKey;
+    }
+  });
+
+  it("anonymous callers never see twelveData, even when a key is set", async () => {
+    const originalKey = process.env.TWELVE_DATA_API_KEY;
+    process.env.TWELVE_DATA_API_KEY = "fake-health-key-123";
+    try {
+      const body = await (await GET(request())).json();
+      expect(body).toEqual({ status: "ok", db: true });
+    } finally {
+      if (originalKey === undefined) delete process.env.TWELVE_DATA_API_KEY;
+      else process.env.TWELVE_DATA_API_KEY = originalKey;
+    }
   });
 
   it("with no CRON_SECRET set, any bearer token is still anonymous", async () => {

@@ -4,15 +4,19 @@ import { Currency, InstrumentType, Market, TransactionType } from "@prisma/clien
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { badgeForPriceSource, resolveProviderName } from "@/lib/data";
+import { badgeForPriceSource, describePriceProvider, resolveProviderName } from "@/lib/data";
 import {
+  collectUnvaluedItems,
+  computeTrailingDividendIncome,
   convertAmount,
+  describeUnvalued,
   fromPrismaTransaction,
   type PriceInput,
 } from "@/lib/portfolio";
 import { loadPortfolioComputation } from "@/lib/portfolio-market-data";
 import { badgePropsForValueSources } from "@/components/source-badge";
 import { PortfolioView } from "@/components/portfolio/portfolio-view";
+import { UnvaluedBanner } from "@/components/portfolio/unvalued-banner";
 import type {
   HoldingRowData,
   InstrumentOptionData,
@@ -83,7 +87,7 @@ export default async function PortfolioPage() {
     );
   }
 
-  const { portfolio, transactionRows, prices, fxRates, portfolioValue } =
+  const { portfolio, transactionRows, transactions, prices, fxRates, portfolioValue } =
     computation;
   const base = portfolio.baseCurrency;
 
@@ -115,6 +119,16 @@ export default async function PortfolioPage() {
             kind: badgeForPriceSource(latestPrice.source),
             asOf: latestPrice.asOf,
           },
+          // Twelve Data prices say who supplied them and how late ("end of
+          // day", "delayed"); every other source keeps its usual badge.
+          detail:
+            (instrument &&
+              describePriceProvider({
+                priceSource: latestPrice.source,
+                market: instrument.market,
+                asOf: latestPrice.asOf,
+              })) ||
+            undefined,
         }
       : { ok: false };
 
@@ -174,6 +188,20 @@ export default async function PortfolioPage() {
     return bv - av;
   });
 
+  // Banner (same amber box and words as the Dashboard): names every holding,
+  // cash balance or dividend that could not be valued. Null = nothing missing.
+  const dividendIncome = computeTrailingDividendIncome(transactions, {
+    baseCurrency: base,
+    fxRates,
+  });
+  const unvaluedSummary = describeUnvalued(
+    collectUnvaluedItems({
+      portfolioMissing: portfolioValue.missing,
+      dividendMissing: dividendIncome.missing,
+      labelFor: (id) => instrumentById.get(id)?.ticker ?? "Unknown instrument",
+    }),
+  );
+
   const transactionData: TransactionRowData[] = transactionRows.map((t) => ({
     ...fromPrismaTransaction(t),
     id: t.id,
@@ -201,6 +229,7 @@ export default async function PortfolioPage() {
     <>
       <PortfolioView
         baseCurrency={base}
+        banner={<UnvaluedBanner summary={unvaluedSummary} priceHref="#holdings" className="mb-4" />}
         holdings={holdings}
         holdingsBadge={badgePropsForValueSources(portfolioValue.sources)}
         weightsNote={

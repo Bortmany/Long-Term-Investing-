@@ -17,6 +17,7 @@ import {
 import { getAiClient } from "@/lib/ai/client";
 import { newsSummarySchema, stockScoreSchema } from "@/lib/ai/schemas";
 import {
+  badgePropsForPrice,
   badgePropsForValueSource,
   SourceBadge,
 } from "@/components/source-badge";
@@ -403,10 +404,7 @@ export default async function StockDetailPage({
           <div className="mt-1 sm:flex sm:justify-end">
             {quoteResult.ok ? (
               <SourceBadge
-                {...badgePropsForValueSource({
-                  kind: quoteResult.data.source,
-                  asOf: quoteResult.data.asOf,
-                })}
+                {...badgePropsForPrice(quoteResult.data, instrument.market)}
               />
             ) : null}
           </div>

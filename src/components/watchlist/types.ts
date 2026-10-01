@@ -13,7 +13,7 @@ export type WatchlistInstrumentRow = {
   name: string;
   market: Market;
   quote:
-    | { ok: true; value: number; currency: Currency; badge: Pick<SourceBadgeProps, "variant" | "date"> }
+    | { ok: true; value: number; currency: Currency; badge: Pick<SourceBadgeProps, "variant" | "date" | "detail"> }
     | { ok: false };
   held: boolean;
   watched: boolean;

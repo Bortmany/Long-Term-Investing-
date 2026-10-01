@@ -29,7 +29,12 @@ import { Label } from "@/components/ui/label";
 import { Select, type SelectOption } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { formatMoney } from "@/lib/format";
-import type { TransactionInput } from "@/lib/transaction-schema";
+import {
+  FUTURE_TRADE_DATE_MESSAGE,
+  isTradeDateInFuture,
+  type TransactionInput,
+} from "@/lib/transaction-schema";
+import { defaultCurrencyForMarket, marketLabel, sortCurrencies, sortMarkets } from "@/lib/markets";
 import { transactionTypeLabel, type InstrumentOptionData, type TransactionRowData } from "./types";
 
 const NEW_INSTRUMENT_VALUE = "__new__";
@@ -50,21 +55,6 @@ function toDateInputValue(date: Date): string {
   const month = String(date.getUTCMonth() + 1).padStart(2, "0");
   const day = String(date.getUTCDate()).padStart(2, "0");
   return `${date.getUTCFullYear()}-${month}-${day}`;
-}
-
-function marketLabel(market: Market): string {
-  switch (market) {
-    case "US":
-      return "US";
-    case "MSX":
-      return "MSX (Muscat)";
-    case "TADAWUL":
-      return "Tadawul (Saudi)";
-    case "DFM":
-      return "DFM (Dubai)";
-    case "OTHER":
-      return "Other";
-  }
 }
 
 function instrumentTypeLabel(type: InstrumentType): string {
@@ -258,6 +248,9 @@ export function TransactionDialog({
 
     if (!tradeDate) {
       errors.tradeDate = "Enter a trade date.";
+    } else if (isTradeDateInFuture(new Date(tradeDate))) {
+      // Same shared rule the server enforces (src/lib/transaction-schema.ts).
+      errors.tradeDate = FUTURE_TRADE_DATE_MESSAGE;
     }
     if (typeRequiresInstrument(type) && !instrumentId) {
       errors.instrumentId = `Pick an instrument for ${typeLabel} transactions.`;
@@ -352,8 +345,8 @@ export function TransactionDialog({
     { value: NEW_INSTRUMENT_VALUE, label: "+ Track a new instrument…" },
   ];
 
-  const currencyOptions: SelectOption[] = currencies.map((c) => ({ value: c, label: c }));
-  const marketOptions: SelectOption[] = markets.map((m) => ({ value: m, label: marketLabel(m) }));
+  const currencyOptions: SelectOption[] = sortCurrencies(currencies).map((c) => ({ value: c, label: c }));
+  const marketOptions: SelectOption[] = sortMarkets(markets).map((m) => ({ value: m, label: marketLabel(m) }));
   const instrumentTypeOptions: SelectOption[] = instrumentTypes.map((t) => ({
     value: t,
     label: instrumentTypeLabel(t),
@@ -442,7 +435,13 @@ export function TransactionDialog({
                       <Select
                         id="new-inst-market"
                         value={newMarket}
-                        onValueChange={(value) => setNewMarket(value as Market)}
+                        onValueChange={(value) => {
+                          // Picking a market pre-selects its usual currency (still changeable).
+                          const nextMarket = value as Market;
+                          setNewMarket(nextMarket);
+                          const suggested = defaultCurrencyForMarket(nextMarket);
+                          if (currencies.includes(suggested)) setNewCurrency(suggested);
+                        }}
                         options={marketOptions}
                       />
                     </div>
@@ -726,6 +725,8 @@ export function TransactionDialog({
               id="tx-trade-date"
               type="date"
               value={tradeDate}
+              aria-invalid={fieldErrors.tradeDate ? true : undefined}
+              className={fieldErrors.tradeDate ? "h-11 border-red-600 dark:border-red-400" : "h-11"}
               onChange={(event) => setTradeDate(event.target.value)}
             />
             {fieldErrors.tradeDate ? (

@@ -7,7 +7,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getQuote } from "@/lib/data";
 import { savedAlertRule } from "@/lib/alerts/describe";
-import { badgePropsForValueSource } from "@/components/source-badge";
+import { badgePropsForPrice } from "@/components/source-badge";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import { WatchlistView } from "@/components/watchlist/watchlist-view";
@@ -124,10 +124,7 @@ export default async function WatchlistPage() {
             ok: true,
             value: quoteResult.data.price,
             currency: quoteResult.data.currency,
-            badge: badgePropsForValueSource({
-              kind: quoteResult.data.source,
-              asOf: quoteResult.data.asOf,
-            }),
+            badge: badgePropsForPrice(quoteResult.data, instrument.market),
           }
         : { ok: false };
 

@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { auth, getSignUpStatus } from "@/lib/auth";
 import { isEmailConfigured } from "@/lib/email/send";
 import { getBillingMode } from "@/lib/billing/config";
+import { isTwelveDataConfigured } from "@/lib/data/provider-info";
 
 // Always answers 200. `db` tells you whether the database is reachable.
 //
@@ -80,5 +81,8 @@ export async function GET(request: NextRequest) {
             signUpStatus.reason === "paused" ? "SIGNUPS_PAUSED" : "email_not_configured",
         }),
     billing: getBillingMode(),
+    // Twelve Data (Gulf live prices) is off unless a key is set. Only the
+    // yes/no answer is shown — never the key itself.
+    twelveData: isTwelveDataConfigured() ? "configured" : "dormant",
   });
 }
