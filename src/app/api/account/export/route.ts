@@ -41,6 +41,7 @@ export async function GET(request: NextRequest): Promise<Response> {
       email: true,
       createdAt: true,
       plan: true,
+      shariaScreenEnabled: true,
       // The billing record: provider reference ids and state only.
       subscription: {
         select: {
@@ -63,7 +64,7 @@ export async function GET(request: NextRequest): Promise<Response> {
     return NextResponse.json({ message: "Account not found." }, { status: 404 });
   }
 
-  const [accounts, sessions, portfolios, watchlist, theses, aiAnalyses, weeklyReviews, alerts, notifications, manualPrices, manualFxRates] =
+  const [accounts, sessions, portfolios, watchlist, theses, aiAnalyses, weeklyReviews, alerts, notifications, manualPrices, manualFxRates, brokerConnections, brokerSyncRuns] =
     await Promise.all([
       prisma.account.findMany({
         where: { userId },
@@ -159,10 +160,50 @@ export async function GET(request: NextRequest): Promise<Response> {
         },
         orderBy: { createdAt: "asc" },
       }),
+      // Broker connection: an explicit field list that leaves the token (and
+      // its encrypted form) out. Sync history likewise.
+      prisma.brokerConnection.findMany({
+        where: { userId },
+        select: {
+          provider: true,
+          queryId: true,
+          accountId: true,
+          status: true,
+          tokenExpiresOn: true,
+          lastAttemptAt: true,
+          lastSuccessAt: true,
+          lastFailureMessage: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: "asc" },
+      }),
+      prisma.brokerSyncRun.findMany({
+        where: { userId },
+        select: {
+          id: true,
+          startedAt: true,
+          finishedAt: true,
+          trigger: true,
+          status: true,
+          rowsSeen: true,
+          rowsAdded: true,
+          rowsAlready: true,
+          rowsSkipped: true,
+          rowsRejected: true,
+          message: true,
+        },
+        orderBy: { startedAt: "asc" },
+      }),
     ]);
 
   const exportData = buildAccountExport({
-    user: { name: user.name, email: user.email, createdAt: user.createdAt, plan: user.plan },
+    user: {
+      name: user.name,
+      email: user.email,
+      createdAt: user.createdAt,
+      plan: user.plan,
+      shariaScreenEnabled: user.shariaScreenEnabled,
+    },
     subscription: user.subscription,
     accounts,
     sessions,
@@ -175,6 +216,8 @@ export async function GET(request: NextRequest): Promise<Response> {
     notifications,
     manualPrices,
     manualFxRates,
+    brokerConnections,
+    brokerSyncRuns,
   });
 
   logger.info("Account data export downloaded", { userId });

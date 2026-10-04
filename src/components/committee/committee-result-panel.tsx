@@ -100,7 +100,7 @@ export function CommitteeResultPanel({
             <TableHeader>
               <TableRow>
                 <TableHead>Persona</TableHead>
-                <TableHead>Recommendation</TableHead>
+                <TableHead>View</TableHead>
                 <TableHead className="text-right">Confidence</TableHead>
                 <TableHead>Strongest Point</TableHead>
               </TableRow>

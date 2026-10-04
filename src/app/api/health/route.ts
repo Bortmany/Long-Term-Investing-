@@ -6,6 +6,8 @@ import { auth, getSignUpStatus } from "@/lib/auth";
 import { isEmailConfigured } from "@/lib/email/send";
 import { getBillingMode } from "@/lib/billing/config";
 import { isTwelveDataConfigured } from "@/lib/data/provider-info";
+import { isShariaConfigured } from "@/lib/sharia/config";
+import { isBrokerConnectionEnabled } from "@/lib/broker/config";
 
 // Always answers 200. `db` tells you whether the database is reachable.
 //
@@ -84,5 +86,10 @@ export async function GET(request: NextRequest) {
     // Twelve Data (Gulf live prices) is off unless a key is set. Only the
     // yes/no answer is shown — never the key itself.
     twelveData: isTwelveDataConfigured() ? "configured" : "dormant",
+    // Sharia screening is off unless the supplier key is set (yes/no only).
+    sharia: isShariaConfigured() ? "configured" : "dormant",
+    // Broker connection is off unless the broker encryption key is valid. Only the
+    // yes/no answer is shown, never the key.
+    brokerConnection: isBrokerConnectionEnabled() ? "configured" : "dormant",
   });
 }

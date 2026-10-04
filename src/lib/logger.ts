@@ -13,7 +13,7 @@
 type LogLevel = "debug" | "info" | "warn" | "error";
 
 const SECRET_KEY_PATTERN =
-  /(secret|token|password|passwd|api[-_]?key|apikey|authorization|cookie|dsn|session|credential)/i;
+  /(secret|token|password|passwd|api[-_]?key|apikey|authorization|cookie|dsn|session|credential|encrypted|ciphertext)/i;
 
 const REDACTED = "[redacted]";
 

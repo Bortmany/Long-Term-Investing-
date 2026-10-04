@@ -90,7 +90,7 @@ export function HealthScoreContent({
 
       {output.recommendations.length > 0 ? (
         <div>
-          <h3 className="text-sm font-semibold">Recommendations</h3>
+          <h3 className="text-sm font-semibold">Points to consider</h3>
           <div className="mt-2">
             <EvidenceList items={recommendationItems} />
           </div>

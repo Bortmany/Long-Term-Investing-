@@ -73,7 +73,10 @@ const CHECK_FAILED = "We couldn't check your file. Please try again.";
 
 export function ImportWizard({
   instruments,
+  brokerLink = null,
 }: {
+  /** "Connect instead" link on the Interactive Brokers screen; null hides it. */
+  brokerLink?: "pro" | "available" | null;
   /** The stocks and funds InvestIQ already tracks (ticker and market). */
   instruments: TrackedInstrument[];
 }) {
@@ -450,6 +453,7 @@ export function ImportWizard({
               </h2>
               <FileStep
                 choice={choice}
+                brokerLink={choice === "ibkr" ? brokerLink : null}
                 tab={tab}
                 onTabChange={setTab}
                 pasteText={pasteText}

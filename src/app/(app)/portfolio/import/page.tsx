@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { loadImportBrokerLink } from "@/lib/broker/import-link";
 import { ImportWizard } from "@/components/import/import-wizard";
 
 export const metadata = { title: "Import transactions — InvestIQ AI" };
@@ -26,11 +27,14 @@ export default async function ImportPage() {
     orderBy: { ticker: "asc" },
   });
 
+  const brokerLink = await loadImportBrokerLink(session.user.id);
+
   return (
     <>
       <h1 className="mb-6 text-2xl font-semibold">Import transactions</h1>
       <ImportWizard
         instruments={instruments.map((i) => ({ ticker: i.ticker, market: i.market }))}
+        brokerLink={brokerLink}
       />
     </>
   );

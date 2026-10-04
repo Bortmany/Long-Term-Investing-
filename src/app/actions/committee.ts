@@ -1,6 +1,6 @@
 "use server";
 
-// Committee, Buy Analysis and Sell Analysis server actions (BUILD-PLAN.md
+// Committee, Upside check and Downside check server actions (BUILD-PLAN.md
 // Phase 5), always scoped to the signed-in user. Same skeleton as
 // src/app/actions/theses.ts / stocks.ts: session → rate limit → zod parse →
 // existence check → build input from the SAME src/lib/data barrel calls +
@@ -252,14 +252,14 @@ export async function conveneCommittee(
 // ---------------------------------------------------------------------------
 
 const BUY_ANALYSIS_INSTRUCTIONS =
-  "Produce a BUY_ANALYSIS for an investor considering a NEW purchase of this " +
-  "instrument. Give: a buy score (0-100), a fair value estimate with its " +
+  "Produce an upside check (stored as BUY_ANALYSIS) that researches the upside " +
+  "case for this instrument. Give: an opportunity score (0-100), a fair value estimate with its " +
   "plain-English assumptions stated explicitly (e.g. \"DCF with 8% discount " +
   "rate, 3% terminal growth\"), the margin of safety as a signed percent " +
   "(fair value vs current price), an upside case and a downside case (each a " +
-  "signed percent), a suggested position size as a percent of the whole " +
-  "portfolio, your confidence, and 2-3 alternative tickers worth considering " +
-  "instead with a one-line reason each.";
+  "signed percent), your confidence, and 2-3 similar companies " +
+  "worth comparing with a one-line reason each. Do NOT suggest a position " +
+  "size or an amount to buy — give the same view you would give any reader.";
 
 async function buildBuyAnalysisInput(
   instrument: Instrument,
@@ -323,15 +323,16 @@ export async function runBuyAnalysis(
 // ---------------------------------------------------------------------------
 
 const SELL_ANALYSIS_INSTRUCTIONS =
-  "Produce a SELL_ANALYSIS for an investor deciding whether to sell an " +
-  "existing position in this instrument. Weigh: valuation excess (is the " +
+  "Produce a downside check (stored as SELL_ANALYSIS) that researches the " +
+  "warning signs for this instrument. Weigh: valuation excess (is the " +
   "price now stretched versus fundamentals), whether any recorded thesis for " +
   "this stock (thesisChecks below, if any — most recent first) has weakened " +
   "or broken, deterioration in management execution, debt or profitability, " +
   "whether a clearly better alternative exists, and concentration risk (this " +
-  "position's size within the portfolio, if known). Give a sellScore (0-100, " +
-  "higher means a stronger case to sell), your reasons to sell (each with " +
-  "its own supporting evidence), the strongest counterarguments to selling " +
+  "position's size within the portfolio, if known). Give a sellScore (the " +
+  "warning-signs score, 0-100, higher means more or stronger warning signs), " +
+  "your reasons for concern (each with its own supporting evidence), the " +
+  "strongest counterarguments to those concerns " +
   "(each with its own evidence), and your confidence.";
 
 async function buildSellAnalysisInput(

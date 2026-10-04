@@ -11,7 +11,7 @@ import { readBillingEnabledSafely } from "@/components/landing/landing-copy";
 
 export const metadata = { title: "Privacy Policy — InvestIQ AI" };
 
-const LAST_UPDATED = "September 30, 2026";
+const LAST_UPDATED = "October 4, 2026";
 
 export default async function PrivacyPage() {
   // Wait for a real request so the payments sentence and the contact address
@@ -105,11 +105,37 @@ export default async function PrivacyPage() {
               deleted with your account.
             </li>
             <li>
+              <strong>Your Interactive Brokers connection, only if you connect
+              it:</strong> your read-only IBKR token (stored scrambled with
+              strong encryption and never shown to you again), your Query ID,
+              your IBKR account number (only its last four characters are ever
+              shown on screen), the optional token expiry date you type in, a
+              history of each sync (when it ran, how many trades were added,
+              already there or skipped, and a short message), and a &quot;From
+              broker&quot; tag on the trades a sync brings in. We never save
+              IBKR&apos;s report itself; only the trades we add to your
+              portfolio. The token can only download reports: InvestIQ has no
+              ability to place trades or move money.
+            </li>
+            <li>
               <strong>Prices and exchange rates you enter by hand</strong> —
               when you record a manual price for a stock, or a currency
               exchange rate, we store it against your account. These are yours
               alone: they are only ever used to value your own portfolio, never
               shown to or mixed with anyone else&apos;s.
+            </li>
+            <li>
+              <strong>Your Sharia screen choice</strong> — whether you
+              switched the optional Sharia screen badge on. It is off unless
+              you turn it on. Switching it on says something about your
+              beliefs, so we keep it to a simple on/off choice on your
+              account, use it only to decide whether to show you the badge,
+              and never share it with anyone.
+            </li>
+            <li>
+              <strong>Sharia screening results</strong> for stocks — shared
+              reference data from our screening supplier (verdict, method,
+              date). Not linked to any person.
             </li>
             <li>
               <strong>Your watchlist</strong> — the stocks you&apos;re tracking
@@ -198,6 +224,20 @@ export default async function PrivacyPage() {
                 : "Payments are not turned on yet, so nothing is sent to Stripe."}
             </li>
             <li>
+              <strong>Interactive Brokers</strong> — only if you connect
+              it. We send your token and Query ID to IBKR&apos;s report
+              service over an encrypted connection (that is how IBKR knows
+              whose report to give us). IBKR does not receive anything else
+              about you or your InvestIQ portfolio. If the connection is not
+              switched on for this server, nothing is ever sent.
+            </li>
+            <li>
+              <strong>Musaffa</strong> (Sharia screening data) — only if the
+              operator has turned it on. Our server asks it about company
+              ticker symbols and exchange names. Nothing about you, and not
+              whether you use the badge, is sent.
+            </li>
+            <li>
               <strong>Sentry</strong> (error tracking) — only if the
               operator has configured it. When it is, details about server
               errors (not your portfolio data) help fix bugs faster.
@@ -228,6 +268,11 @@ export default async function PrivacyPage() {
               contains no personal data.
             </li>
           </ul>
+          <p className="mt-3">
+            <strong>Public stock pages:</strong> to block abuse we count
+            requests per visitor address in memory for about a minute; we do
+            not save it and we set no cookie on those pages.
+          </p>
         </section>
 
         <section>
@@ -247,6 +292,15 @@ export default async function PrivacyPage() {
             analyses, plan and billing details with no undo. If you have an
             active Pro subscription, it is cancelled first, so you are never
             charged again for an account that no longer exists.
+          </p>
+          <p className="mt-2">
+            If you connected Interactive Brokers: pressing Disconnect deletes
+            your saved token immediately, and deleting your account deletes the
+            connection, the token and the sync history. The data download
+            includes your connection details and sync history but never the
+            token. We can&apos;t cancel a token inside IBKR; to be sure it can
+            never be used, also delete it in IBKR&apos;s Flex Web Service
+            settings.
           </p>
           <p className="mt-2">
             If InvestIQ AI is used from Oman, these rights are consistent

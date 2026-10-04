@@ -15,6 +15,8 @@
     "test:e2e": "playwright test",
     "format": "prettier --write .",
     "plan:set": "tsx scripts/set-plan.ts",
+    "dev:fake-ibkr": "tsx tests/support/fake-ibkr-flex-server.ts",
+    "catalogue:sync": "tsx scripts/sync-public-catalogue.ts",
     "verify": "prisma migrate deploy && prisma generate && npm run lint && npm run typecheck && npm run build && npm test",
     "prepare": "husky || true"
   },

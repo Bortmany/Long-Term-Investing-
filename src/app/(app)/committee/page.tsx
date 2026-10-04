@@ -39,9 +39,9 @@ function parseMode(raw: string | undefined): CommitteeMode {
 }
 
 // /committee — one workspace for three related AI analyses on a chosen
-// instrument (ui-spec §6.1): the full committee debate, a Buy Analysis, or a
-// Sell Analysis. Reads `?instrument=&mode=` from the URL (set by the
-// Portfolio holdings row's "Sell analysis" link) to pre-select both.
+// instrument (ui-spec §6.1): the full committee debate, an Upside check, or a
+// Downside check. Reads `?instrument=&mode=` from the URL (set by the
+// Portfolio holdings row's "Downside check" link) to pre-select both.
 export default async function CommitteePage({
   searchParams,
 }: {

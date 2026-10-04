@@ -134,6 +134,11 @@ export default async function TermsPage() {
             always labels which, but you&apos;re responsible for confirming
             anything important before acting on it.
           </p>
+          <p className="mt-2">
+            Nothing in InvestIQ is tailored to your personal circumstances or
+            goals. We don&apos;t manage money or place trades. Consider
+            speaking to a licensed adviser before acting.
+          </p>
           <p className="mt-2">{TERMS_POSITIONING_SENTENCE}</p>
         </section>
 

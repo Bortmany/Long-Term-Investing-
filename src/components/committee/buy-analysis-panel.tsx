@@ -1,6 +1,6 @@
 "use client";
 
-// The Buy Analysis AiPanel (ui-spec §6.3, BUY_ANALYSIS). Current Price is the
+// The "Upside check" AiPanel (ui-spec §6.3, stored type BUY_ANALYSIS). Current Price is the
 // ONE figure in this panel that is real market data, not an AI output — it
 // alone carries a SourceBadge; every other number here is an AI judgment and
 // (per §2.5's caption rule) carries none.
@@ -8,8 +8,8 @@
 // DECISION: AiPanel (built once in Phase 3, reused unchanged everywhere) only
 // renders its `children` once a stored `analysis` exists — before that it
 // shows its own "No analysis yet" placeholder. Current Price is real market
-// data that should be visible immediately, independent of whether a Buy
-// Analysis has ever been run, so it's rendered as its own small block ABOVE
+// data that should be visible immediately, independent of whether an Upside
+// check has ever been run, so it's rendered as its own small block ABOVE
 // the AiPanel (not inside its gated children) rather than modifying the
 // shared component for this one screen.
 import { runBuyAnalysis } from "@/app/actions/committee";
@@ -78,8 +78,8 @@ export function BuyAnalysisPanel({
       </div>
 
       <AiPanel
-        title="Buy Analysis"
-        actionLabel="Run Buy Analysis"
+        title="Upside check"
+        actionLabel="Run Upside check"
         pendingLabel="Analyzing…"
         analysis={analysis}
         hasKey={hasKey}
@@ -91,21 +91,21 @@ export function BuyAnalysisPanel({
           <div className="space-y-6">
             <div>
               <p className="inline-flex items-center gap-1 text-sm text-slate-500 dark:text-slate-400">
-                Buy Score <ExplainerTip term="buy-score" />
+                Opportunity score <ExplainerTip term="buy-score" />
               </p>
               <p className="mt-1 text-5xl font-semibold tabular-nums">{output.score}</p>
             </div>
 
             <div>
               <p className="inline-flex items-center gap-1 text-sm text-slate-500 dark:text-slate-400">
-                Fair Value <ExplainerTip term="fair-value" />
+                AI fair-value estimate <ExplainerTip term="fair-value" />
               </p>
               <p className="mt-1 text-2xl font-semibold tabular-nums">
                 {formatMoney(output.fairValueEstimate.value, instrumentCurrency)}
               </p>
               {output.fairValueEstimate.assumptions.length > 0 ? (
                 <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                  {output.fairValueEstimate.assumptions.join(" · ")}
+                  Assumptions: {output.fairValueEstimate.assumptions.join(" · ")}
                 </p>
               ) : null}
             </div>
@@ -144,20 +144,9 @@ export function BuyAnalysisPanel({
               </div>
             </div>
 
-            <p className="text-sm">
-              <span className="inline-flex items-center gap-1">
-                Suggested position size <ExplainerTip term="suggested-allocation" />
-              </span>
-              :{" "}
-              <span className="font-medium tabular-nums">
-                {formatPercent(output.suggestedAllocationPct)}
-              </span>{" "}
-              of the portfolio.
-            </p>
-
             {output.alternatives.length > 0 ? (
               <div>
-                <h3 className="mb-2 text-sm font-semibold">Alternatives</h3>
+                <h3 className="mb-2 text-sm font-semibold">Similar companies to compare</h3>
                 <ul className="space-y-1.5">
                   {output.alternatives.map((alt, index) => (
                     <li key={index} className="text-sm">

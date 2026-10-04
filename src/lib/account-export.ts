@@ -36,6 +36,8 @@ export type ExportUserRow = {
   createdAt: Date;
   /** Free or Pro, as stored. */
   plan: "FREE" | "PRO";
+  /** Whether the optional Sharia screen badge is switched on (off by default). */
+  shariaScreenEnabled: boolean;
 };
 
 /**
@@ -178,6 +180,37 @@ export type ExportManualFxRateRow = {
   createdAt: Date;
 };
 
+/**
+ * A saved broker connection. The token, in any form (plain or encrypted), is
+ * DELIBERATELY NOT part of this type: the export can only ever carry the
+ * connection's details.
+ */
+export type ExportBrokerConnectionRow = {
+  provider: string;
+  queryId: string;
+  accountId: string | null;
+  status: "ACTIVE" | "NEEDS_RECONNECT";
+  tokenExpiresOn: Date | null;
+  lastAttemptAt: Date | null;
+  lastSuccessAt: Date | null;
+  lastFailureMessage: string | null;
+  createdAt: Date;
+};
+
+export type ExportBrokerSyncRunRow = {
+  id: string;
+  startedAt: Date;
+  finishedAt: Date | null;
+  trigger: string;
+  status: "RUNNING" | "SUCCEEDED" | "FAILED" | "NEEDS_RECONNECT";
+  rowsSeen: number;
+  rowsAdded: number;
+  rowsAlready: number;
+  rowsSkipped: number;
+  rowsRejected: number;
+  message: string | null;
+};
+
 export type AccountExportRows = {
   user: ExportUserRow;
   subscription: ExportSubscriptionRow | null;
@@ -192,6 +225,8 @@ export type AccountExportRows = {
   notifications: ExportNotificationRow[];
   manualPrices: ExportManualPriceRow[];
   manualFxRates: ExportManualFxRateRow[];
+  brokerConnections: ExportBrokerConnectionRow[];
+  brokerSyncRuns: ExportBrokerSyncRunRow[];
 };
 
 // ---------------------------------------------------------------------------
@@ -203,6 +238,10 @@ export type ExportedTransaction = TxnInput & {
   instrumentTicker: string | null;
   /** Broker's own transaction id or a fingerprint, kept to avoid double imports. Null if typed by hand. */
   importReference: string | null;
+  /** Set only for trades a broker sync brought in (for example "ibkr_flex"). */
+  syncedFrom: string | null;
+  /** The sync run that brought it in (empty once that history row is pruned). */
+  syncRunId: string | null;
 };
 
 export type ExportedPortfolio = {
@@ -264,6 +303,8 @@ export type ExportedManualFxRate = {
 export type AccountExport = {
   exportedAt: Date;
   profile: { name: string; email: string; createdAt: Date };
+  /** Your own settings choices. (The shared screening results are not yours and are not included.) */
+  preferences: { shariaScreenEnabled: boolean };
   /** Your plan and, if you ever paid through Stripe, your subscription's state. */
   plan: { plan: "FREE" | "PRO"; subscription: ExportSubscriptionRow | null };
   accounts: ExportAccountRow[];
@@ -278,6 +319,9 @@ export type AccountExport = {
   /** Prices and FX rates this user entered by hand (their own overrides). */
   manualPrices: ExportedManualPrice[];
   manualFxRates: ExportedManualFxRate[];
+  /** Your broker connection details and sync history. Never the token. */
+  brokerConnections: ExportBrokerConnectionRow[];
+  brokerSyncRuns: ExportBrokerSyncRunRow[];
 };
 
 // Runtime whitelists for the two models that can carry a credential
@@ -310,12 +354,46 @@ function toExportedSubscription(s: ExportSubscriptionRow): ExportSubscriptionRow
   };
 }
 
+// Field-by-field, like the others: the token (plain or encrypted) is not named
+// here, so it can never ride along even if a query over-selects.
+function toExportedBrokerConnection(c: ExportBrokerConnectionRow): ExportBrokerConnectionRow {
+  return {
+    provider: c.provider,
+    queryId: c.queryId,
+    accountId: c.accountId,
+    status: c.status,
+    tokenExpiresOn: c.tokenExpiresOn,
+    lastAttemptAt: c.lastAttemptAt,
+    lastSuccessAt: c.lastSuccessAt,
+    lastFailureMessage: c.lastFailureMessage,
+    createdAt: c.createdAt,
+  };
+}
+
+function toExportedBrokerSyncRun(r: ExportBrokerSyncRunRow): ExportBrokerSyncRunRow {
+  return {
+    id: r.id,
+    startedAt: r.startedAt,
+    finishedAt: r.finishedAt,
+    trigger: r.trigger,
+    status: r.status,
+    rowsSeen: r.rowsSeen,
+    rowsAdded: r.rowsAdded,
+    rowsAlready: r.rowsAlready,
+    rowsSkipped: r.rowsSkipped,
+    rowsRejected: r.rowsRejected,
+    message: r.message,
+  };
+}
+
 function toExportedTransaction(t: ExportTransactionRow): ExportedTransaction {
   return {
     ...fromPrismaTransaction(t),
     id: t.id,
     instrumentTicker: t.instrument?.ticker ?? null,
     importReference: t.importReference ?? null,
+    syncedFrom: t.syncedFrom ?? null,
+    syncRunId: t.syncRunId ?? null,
   };
 }
 
@@ -366,6 +444,7 @@ export function buildAccountExport(rows: AccountExportRows, now: Date = new Date
       email: rows.user.email,
       createdAt: rows.user.createdAt,
     },
+    preferences: { shariaScreenEnabled: rows.user.shariaScreenEnabled },
     plan: {
       plan: rows.user.plan,
       subscription: rows.subscription ? toExportedSubscription(rows.subscription) : null,
@@ -402,5 +481,7 @@ export function buildAccountExport(rows: AccountExportRows, now: Date = new Date
       asOf: r.asOf,
       createdAt: r.createdAt,
     })),
+    brokerConnections: rows.brokerConnections.map(toExportedBrokerConnection),
+    brokerSyncRuns: rows.brokerSyncRuns.map(toExportedBrokerSyncRun),
   };
 }

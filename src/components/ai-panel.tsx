@@ -2,7 +2,7 @@
 
 // AiPanel (ui-spec-phases-2-6.md §2.5) — the one container every persisted
 // AiAnalysis result renders through. Built once in Phase 3; Phases 4, 5 and
-// 6 import it unchanged for Committee, Thesis Check, Buy/Sell Analysis and
+// 6 import it unchanged for Committee, Thesis Check, Upside/Downside check and
 // Weekly Review.
 //
 // THE AI RULE (docs/CONVENTIONS.md): this panel never generates anything on

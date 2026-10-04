@@ -5,6 +5,7 @@ import { after } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { AppShell } from "@/components/app-shell";
+import { ToastProvider } from "@/components/ui/toast";
 import { NotificationBell, type NotificationBellItem } from "@/components/notification-bell";
 import { describeFiredAlert, savedAlertRule } from "@/lib/alerts/describe";
 import { sweepAlertsForUserThrottled } from "@/lib/alerts/engine";
@@ -71,6 +72,7 @@ export default async function AuthenticatedLayout({
   }));
 
   return (
+    <ToastProvider>
     <AppShell
       email={session.user.email}
       notificationBellSidebar={
@@ -90,5 +92,6 @@ export default async function AuthenticatedLayout({
     >
       {children}
     </AppShell>
+    </ToastProvider>
   );
 }

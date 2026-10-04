@@ -24,6 +24,8 @@ import {
 } from "@/components/source-badge";
 import { EmptyState } from "@/components/empty-state";
 import { Badge } from "@/components/ui/badge";
+import { ShariaBadge } from "@/components/sharia/sharia-badge";
+import { getShariaBadgeData } from "@/lib/sharia/badge-data";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -356,6 +358,13 @@ export default async function StockDetailPage({
         }))
     : [];
 
+  // Sharia screen badge: null (nothing rendered) unless this person has the
+  // switch on AND is on Pro. Database reads only; never an outside call.
+  const shariaData = await getShariaBadgeData(userId, [
+    { id: instrument.id, ticker: instrument.ticker, name: instrument.name, market: instrument.market },
+  ]);
+  const shariaBadge = shariaData?.[instrument.id] ?? null;
+
   return (
     <div className="space-y-6">
       {/* Jump links — the page is long, so the sections are reachable in one tap. */}
@@ -381,6 +390,7 @@ export default async function StockDetailPage({
             {instrument.country ? (
               <Badge variant="secondary">{instrument.country}</Badge>
             ) : null}
+            {shariaBadge ? <ShariaBadge data={shariaBadge} /> : null}
           </div>
         </div>
         <div className="sm:text-right">

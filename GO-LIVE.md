@@ -42,6 +42,13 @@ The connection to Twelve Data for Saudi (Tadawul), Abu Dhabi (ADX) and Qatar (QS
 6. [ ] Check the plan's credit allowance against the number of Gulf stocks people track: each tracked stock costs at most about 96 calls a day (one per 15 minutes), shared by everyone; after a "rate limit" answer the app pauses for 60 seconds.
 7. [ ] To try it on your own Mac with no key: `node scripts/fake-twelve-data.mjs`, then set `TWELVE_DATA_API_KEY=fake-key` and `TWELVE_DATA_BASE_URL=http://127.0.0.1:4010` in your local `.env`. Stop the stand-in server to see the "provider not responding" wording; clear the key to go back to typed-in prices.
 
+## Public stock pages and the sitemap (Google can find them)
+- [ ] `BETTER_AUTH_URL` must be the real public address — the sitemap and each page's "official address" tag are built from it.
+- [ ] After each deploy that changes the public list (`src/lib/public-catalogue.ts`), run `npm run catalogue:sync` once against the live database. It only creates or corrects the listed stock rows; it touches no user data and is safe to repeat. A stock only gets a page and a sitemap entry once its row exists with the listed currency.
+- [ ] Keep `TWELVE_DATA_PUBLIC_DISPLAY_LICENSED` and `FMP_PUBLIC_DISPLAY_LICENSED` unset until a written licence allows showing prices to signed-out visitors. While unset, every public page says "Sign in to see prices".
+- [ ] Review the public list's names, sectors and countries before launch — they become public.
+- [ ] After launch, submit `/sitemap.xml` in Google Search Console (owner action).
+
 ## Data rights (built in — nothing to set up)
 - **Download my data**: any signed-in user can download a complete JSON export of everything the app stores about their account from Settings → "Your data" (`GET /api/account/export`, rate-limited to 5/hour per user).
 - **Keep payments switched on until every active subscription is cancelled** — deleting an account only cancels the Stripe subscription while billing is on.
@@ -64,6 +71,26 @@ Use `--plan FREE` to put them back. If the person has a Stripe subscription the 
 
 ### Before deploying
 - [ ] **Take a database backup before deploying the migration that carries this change** (the plans and billing tables). Confirm the backup exists first.
+
+## Broker connection (Interactive Brokers, optional)
+Dormant until you set `BROKER_TOKEN_KEY` — nothing is broken without it; Settings just says it isn't switched on.
+- [ ] Make a key with `openssl rand -base64 32` and set it as `BROKER_TOKEN_KEY` on the host. Never reuse `BETTER_AUTH_SECRET`.
+- [ ] **Keep a copy of that key somewhere safe, separate from the database.** Lose it and every saved token becomes unreadable (nobody loses trades; everyone just reconnects).
+- [ ] Take a database backup before deploying the migration that adds the broker tables.
+- [ ] Optional: try it yourself once with an IBKR **paper** account (you create the token and paste it; never an agent).
+- [ ] When ready to announce it, flip `broker-connection` to `available` in `src/lib/plans.ts` (it stays "coming soon" until you do). Set the key first.
+- [ ] `/privacy` now covers the broker token, Query ID, account number, sync history and Interactive Brokers as an outside service; it still needs the lawyer review listed above.
+
+## Sharia screen badge (optional, Pro) — built, switched OFF
+Dormant until you set `MUSAFFA_API_KEY`: every badge honestly says "Not screened", the daily refresh answers "dormant" and nothing is ever sent to Musaffa. It was built and tested with **made-up sample replies only**. Nobody has seen a real Musaffa reply, so every field the app reads from one is marked `UNVERIFIED AGAINST THE REAL API` in `src/lib/sharia/musaffa.ts` (address, key header name, exchange codes, status words, method name and date fields). `/api/health` shows `sharia: "configured"` or `"dormant"`.
+- [ ] Email Musaffa for a written quote and **written permission to show their verdicts to our users inside the app**. Neither vendor's public pages state display terms.
+- [ ] Choose the plan that covers **US, Saudi and UAE**. Get the covered exchanges in writing and tell a builder if the list in `src/lib/sharia/coverage.ts` is wrong. Muscat (MSX) and Qatar (QSE) stocks will say "Not screened".
+- [ ] Have a builder check each `UNVERIFIED AGAINST THE REAL API` item in `src/lib/sharia/musaffa.ts` against Musaffa's published docs or sandbox (`MUSAFFA_API_BASE_URL`). Also confirm what method name Musaffa reports; a reply with no method name is never shown as a verdict.
+- [ ] Put the key in the host's settings as `MUSAFFA_API_KEY` and confirm `CRON_SECRET` is already set. **Do NOT set the key on the live site before the written permission above.**
+- [ ] Add a daily schedule (for example 03:00 UTC) that sends `POST /api/cron/sharia-refresh` with `Authorization: Bearer <CRON_SECRET>`, next to the other two schedules. It asks about at most 500 stocks a run, only for people who switched the badge on.
+- [ ] Check two or three stocks against Musaffa's own site (for example Aramco and one US stock).
+- [ ] When ready to announce it, change the `sharia-badge` row in `src/lib/plans.ts` from `coming_soon` to `available` (ask a session; it was deliberately left alone).
+- [ ] Take a database backup before deploying the migration that adds the Sharia screen table and the new preference column. `/privacy` now covers the Sharia choice, the shared results and Musaffa; it still needs the lawyer review listed above.
 
 ## Backups & recovery (engineering-standards.md §8)
 - [ ] **Turn on automatic backups at the hosting/database provider** before real users' data exists there, and confirm it's actually on from the provider's dashboard — don't assume a database has backups by default.

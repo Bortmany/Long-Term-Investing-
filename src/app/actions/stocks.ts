@@ -187,8 +187,9 @@ const STOCK_SCORE_INSTRUCTIONS =
   "concentration risk within this company), dividendQuality (sustainability and " +
   "coverage of its dividend, if any), risk (volatility, leverage, sector/macro " +
   "risk), cash (balance-sheet liquidity and cash generation). Then list concrete " +
-  "strengths and evidence-backed recommendations for an investor considering or " +
-  "holding this stock.";
+  "strengths and evidence-backed points to consider when researching this " +
+  "stock (put them in the `recommendations` field, but phrase them as points to " +
+  "consider, never as instructions to buy, sell or hold).";
 
 async function buildStockScoreInput(
   instrument: Instrument,

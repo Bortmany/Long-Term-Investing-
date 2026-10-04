@@ -19,12 +19,10 @@ import {
 import {
   MAX_IMPORT_REFERENCE_LENGTH,
   applyOversellProjection,
-  findImportOversell,
-  toTransactionRecord,
   validateMappedRows,
 } from "@/lib/import-rows";
 import { computeHoldings, fromPrismaTransaction } from "@/lib/portfolio";
-import { lockPortfolioForWrite } from "@/lib/portfolio-lock";
+import { commitImportRows, loadKnownInstruments } from "@/lib/import-commit";
 // TYPE-ONLY import (import type), so these symbols are ERASED from the compiled
 // server bundle. In a "use server" file a value-level import/re-export of a
 // type is a runtime landmine: the server-action transform can emit a real
@@ -34,10 +32,9 @@ import { lockPortfolioForWrite } from "@/lib/portfolio-lock";
 // live only in @/lib/import-rows; UI code imports them straight from there.
 import type {
   ImportValidationReport,
-  KnownInstrument,
   MappedImportRow,
 } from "@/lib/import-rows";
-import { getOrCreatePortfolio, getSessionUserId } from "@/lib/user-portfolio";
+import { getSessionUserId } from "@/lib/user-portfolio";
 import {
   IMPORT_RATE_LIMIT,
   rateLimit,
@@ -103,13 +100,6 @@ function argsErrorMessage(error: z.ZodError): string {
     return `Row ${rowIndex + 1}: ${issue.message} Shorten it or leave that row out, then try again.`;
   }
   return `Row ${rowIndex + 1} isn't in the expected format. Refresh the page and try again.`;
-}
-
-async function loadKnownInstruments(): Promise<KnownInstrument[]> {
-  const rows = await prisma.instrument.findMany({
-    select: { id: true, ticker: true, market: true, currency: true },
-  });
-  return rows;
 }
 
 /**
@@ -197,86 +187,9 @@ export async function importTransactions(
     return actionError("There are no rows to import.");
   }
 
-  const instruments = await loadKnownInstruments();
-  const report = validateMappedRows(rows, instruments);
-
-  const failed = report.results.filter((r) => !r.ok);
-  if (failed.length > 0) {
-    const first = failed[0];
-    const firstIssue = first.ok ? "" : first.issues[0];
-    return actionError(
-      `Nothing was imported: ${failed.length} of ${report.total} row${
-        report.total === 1 ? "" : "s"
-      } ${failed.length === 1 ? "has" : "have"} problems (first: row ${first.row} — ${firstIssue}). Fix them or leave them out, then try again.`,
-    );
-  }
-
-  const portfolio = await getOrCreatePortfolio(userId);
-  // Validated rows in order, each with its (optional) import reference.
-  const okResults = report.results.flatMap((result) => (result.ok ? [result] : []));
-
-  // One transaction that does BOTH the oversell check and the write while
-  // holding a lock on this portfolio — so it's atomic:
-  //   1. Lock the portfolio row (concurrent imports/sells wait their turn).
-  //   2. Re-read the existing holdings INSIDE the lock (never a stale read).
-  //   3. Walk the batch in order and reject any SELL that exceeds what's held
-  //      at that point (existing shares + earlier BUYs in this same file) —
-  //      the same guard the single-transaction path runs. A missed SELL here
-  //      would invent cash the account never earned (golden rule).
-  //   4. Only if every row is within its position, write them all — one
-  //      failure imports nothing.
-  const outcome = await prisma.$transaction(async (tx) => {
-    await lockPortfolioForWrite(tx, portfolio.id);
-
-    const existing = await tx.transaction.findMany({
-      where: { portfolioId: portfolio.id },
-    });
-    const startingQuantities = new Map<string, number>();
-    for (const holding of computeHoldings(existing.map(fromPrismaTransaction))) {
-      startingQuantities.set(holding.instrumentId, holding.quantity);
-    }
-
-    // References already in THIS portfolio (read inside the lock, so a row
-    // that appeared a moment ago is seen). Rows with a known reference — or a
-    // repeat of one earlier in this same upload — are left out, not an error.
-    const knownReferences = new Set<string>();
-    for (const row of existing) {
-      if (row.importReference) knownReferences.add(row.importReference);
-    }
-    const keptResults: typeof okResults = [];
-    let alreadyImportedCount = 0;
-    for (const result of okResults) {
-      const reference = result.reference;
-      if (reference) {
-        if (knownReferences.has(reference)) {
-          alreadyImportedCount += 1;
-          continue;
-        }
-        knownReferences.add(reference);
-      }
-      keptResults.push(result);
-    }
-
-    // The oversell walk sees only the rows that will really be written.
-    const oversell = findImportOversell(keptResults, startingQuantities);
-    if (oversell) {
-      return {
-        ok: false as const,
-        error: `Nothing was imported: ${oversell.message}`,
-      };
-    }
-
-    if (keptResults.length > 0) {
-      await tx.transaction.createMany({
-        data: keptResults.map((result) => ({
-          ...toTransactionRecord(result.parsed),
-          importReference: result.reference ?? null,
-          portfolioId: portfolio.id,
-        })),
-      });
-    }
-    return { ok: true as const, imported: keptResults.length, alreadyImportedCount };
-  });
+  // Validation, the portfolio lock, the oversell guard and the write all live
+  // in the shared commit path (also used by the broker sync).
+  const outcome = await commitImportRows(userId, rows);
 
   if (!outcome.ok) return actionError(outcome.error);
 

@@ -1,5 +1,5 @@
-// Past Runs table (ui-spec §6.5) — every Committee / Buy Analysis / Sell
-// Analysis run for the currently-selected instrument, newest first.
+// Past Runs table (ui-spec §6.5) — every Committee / Upside check / Downside
+// check run for the currently-selected instrument, newest first.
 // Server-renderable (no client state needed) — each row's cells are wrapped
 // in a Link to /committee/history/[id] so the whole row reads as clickable.
 import Link from "next/link";
@@ -34,8 +34,8 @@ export type PastRunRow = {
 
 const TYPE_LABELS: Record<PastRunType, string> = {
   COMMITTEE: "Committee",
-  BUY_ANALYSIS: "Buy Analysis",
-  SELL_ANALYSIS: "Sell Analysis",
+  BUY_ANALYSIS: "Upside check",
+  SELL_ANALYSIS: "Downside check",
 };
 
 function ResultCell({ type, output }: { type: PastRunType; output: unknown }) {

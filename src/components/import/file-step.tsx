@@ -6,11 +6,13 @@
 // too big, not a CSV, wrong broker). The file is read in the browser only.
 
 import * as React from "react";
+import Link from "next/link";
 import {
   CircleCheck,
   Download,
   FileSpreadsheet,
   Info,
+  Link2,
   LoaderCircle,
   Plus,
   TriangleAlert,
@@ -87,6 +89,7 @@ const TEMPLATE_HEADERS = ["Date", "Ticker", "Type", "Quantity", "Price"];
 
 export function FileStep({
   choice,
+  brokerLink = null,
   tab,
   onTabChange,
   pasteText,
@@ -104,6 +107,8 @@ export function FileStep({
   onChooseAnother,
 }: {
   choice: PresetId | "other";
+  /** Offer "Connect instead" (Interactive Brokers screen only); null hides it. */
+  brokerLink?: "pro" | "available" | null;
   tab: string;
   onTabChange: (tab: string) => void;
   pasteText: string;
@@ -222,6 +227,20 @@ export function FileStep({
         <p className="flex items-start gap-2 text-xs text-slate-500 dark:text-slate-400">
           <Info className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
           {card.fixedCurrencyNote}
+        </p>
+      ) : null}
+
+      {brokerLink ? (
+        <p className="text-sm text-slate-600 dark:text-slate-400">
+          <Link
+            href="/settings#broker-connection"
+            className="inline-flex min-h-11 items-center gap-2 underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Link2 className="size-4 shrink-0" aria-hidden="true" />
+            {brokerLink === "pro"
+              ? "Want this automatic? Connect Interactive Brokers instead (Pro)"
+              : "Want this automatic? Connect Interactive Brokers instead"}
+          </Link>
         </p>
       ) : null}
 

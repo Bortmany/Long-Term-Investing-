@@ -217,7 +217,7 @@ export default async function ReviewDetailPage({
 
           {output.suggestedActions.length > 0 ? (
             <div>
-              <h3 className="text-sm font-semibold">Suggested Actions</h3>
+              <h3 className="text-sm font-semibold">Questions to ask yourself</h3>
               <ul className="mt-2 space-y-1.5">
                 {output.suggestedActions.map((action, index) => (
                   <li key={index} className="flex items-start gap-2 text-sm">

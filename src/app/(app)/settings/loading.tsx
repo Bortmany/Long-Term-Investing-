@@ -41,6 +41,19 @@ export default function SettingsLoading() {
           </CardContent>
         </Card>
 
+        {/* Sharia screen: title, label, control, two paragraph lines. */}
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-5 w-32" />
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Skeleton className="h-4 w-64 max-w-full" />
+            <Skeleton className="h-11 w-44 rounded-md" />
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-3/4" />
+          </CardContent>
+        </Card>
+
         {/* Appearance */}
         <Card>
           <CardHeader>
@@ -78,6 +91,19 @@ export default function SettingsLoading() {
                 ))}
               </div>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Broker connection: title + badge, a heading, two lines, a button. */}
+        <Card>
+          <CardHeader className="flex-row items-center justify-between">
+            <Skeleton className="h-5 w-36" />
+            <Skeleton className="h-6 w-20 rounded-full" />
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Skeleton className="h-5 w-64 max-w-full" />
+            <Skeleton className="h-4 w-full max-w-md" />
+            <Skeleton className="h-11 w-full sm:w-56" />
           </CardContent>
         </Card>
       </div>

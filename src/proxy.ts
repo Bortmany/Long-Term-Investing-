@@ -2,44 +2,15 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getSessionCookie } from "better-auth/cookies";
 import { isSameOrigin } from "@/lib/request-origin";
 import { isActionBodyDecodable, NEXT_ACTION_HEADER } from "@/lib/action-body";
+import { isPublicPath } from "@/lib/public-paths";
+import {
+  checkPublicRateLimit,
+  tooManyRequestsPage,
+  tooManyRequestsText,
+} from "@/lib/public-limit";
 
-// Routes anyone may visit without being signed in.
-// /api/cron is public here because it does its OWN auth (a bearer secret
-// checked against CRON_SECRET, see src/app/api/cron/weekly-review/route.ts)
-// rather than the session cookie every other route needs.
-const PUBLIC_PATHS = [
-  "/sign-in",
-  "/sign-up",
-  // Account-access screens reached from emails or by signed-out visitors:
-  // "check your inbox", the verify-email result page, and password reset.
-  "/check-email",
-  "/verify-email",
-  "/forgot-password",
-  "/reset-password",
-  "/privacy",
-  "/terms",
-  "/api/auth",
-  "/api/health",
-  "/api/cron",
-];
-
-// Public on the EXACT path only (no prefix match). The Stripe webhook does its
-// own authentication (Stripe's signature, checked with STRIPE_WEBHOOK_SECRET)
-// instead of a session cookie. Nothing else under /api/billing is public.
-const PUBLIC_EXACT_PATHS = ["/api/billing/webhook"];
-
-function isPublic(pathname: string): boolean {
-  // The landing page at "/" is public (exact match only — it can't go in
-  // PUBLIC_PATHS or the prefix check would make every route public).
-  // Signed-in visitors still end up on /dashboard: src/app/page.tsx checks
-  // the session server-side and redirects them.
-  if (pathname === "/" || PUBLIC_EXACT_PATHS.includes(pathname)) {
-    return true;
-  }
-  return PUBLIC_PATHS.some(
-    (path) => pathname === path || pathname.startsWith(`${path}/`),
-  );
-}
+// Which addresses are public lives in src/lib/public-paths.ts (so tests can
+// check it).
 
 // Next.js 16 renamed Middleware to Proxy — same behavior, new file name.
 // This is an optimistic redirect based on the presence of the session
@@ -82,7 +53,30 @@ export async function proxy(request: NextRequest) {
     );
   }
 
-  if (isPublic(pathname)) {
+  if (isPublicPath(pathname)) {
+    // Public stock pages, the sitemap and robots: a per-visitor request limit
+    // (in memory, no cookie, no stored address). Only plain page/file reads.
+    if (method === "GET" || method === "HEAD") {
+      const denial = checkPublicRateLimit(pathname, request.headers);
+      if (denial) {
+        const isPage = denial.kind === "page";
+        return new NextResponse(
+          isPage
+            ? tooManyRequestsPage(denial.retryAfterSeconds)
+            : tooManyRequestsText(denial.retryAfterSeconds),
+          {
+            status: 429,
+            headers: {
+              "Content-Type": isPage
+                ? "text/html; charset=utf-8"
+                : "text/plain; charset=utf-8",
+              "Retry-After": String(denial.retryAfterSeconds),
+              "Cache-Control": "no-store",
+            },
+          },
+        );
+      }
+    }
     return NextResponse.next();
   }
 

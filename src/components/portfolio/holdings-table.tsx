@@ -3,7 +3,7 @@
 // Holdings card (UI spec §3.2): every figure carries its source badge, rows
 // that can't be valued say so in plain amber text (golden rule — never a
 // fake number), and the kebab menu offers Update price (manual-priced
-// instruments only), Sell analysis and View details.
+// instruments only), Downside check and View details.
 import Link from "next/link";
 import { EllipsisVertical, Inbox } from "lucide-react";
 import type { Currency } from "@prisma/client";
@@ -26,6 +26,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { ResponsiveRows } from "@/components/ui/responsive-rows";
+import { RowCard, ROW_CARD_LINK } from "@/components/ui/row-card";
 import { EmptyState } from "@/components/empty-state";
 import { ExplainerTip } from "@/components/explainer-tip";
 import {
@@ -33,7 +35,13 @@ import {
   badgePropsForValueSource,
   type SourceBadgeProps,
 } from "@/components/source-badge";
-import { formatMoney, formatPercent, formatQuantity } from "@/lib/format";
+import {
+  formatMoney,
+  formatPercent,
+  formatQuantity,
+  formatQuantityCompact,
+} from "@/lib/format";
+import { ShariaBadge } from "@/components/sharia/sharia-badge";
 import { FxViaHubHint } from "./fx-via-hub-hint";
 import type { HoldingRowData } from "./types";
 
@@ -58,6 +66,184 @@ const UNAVAILABLE_TEXT = {
 // Same look as DropdownMenuItem, but a real link (so open-in-new-tab works).
 const MENU_LINK_CLASS =
   "block w-full px-3 py-2 text-left text-sm outline-none transition-colors hover:bg-slate-100 focus-visible:bg-slate-100 dark:hover:bg-slate-800 dark:focus-visible:bg-slate-800";
+
+/**
+ * One holding as a phone/tablet card (shown below 1280px). Same figures, same
+ * source badges and the same honest amber words as the table row; nothing is
+ * dropped and nothing is cut off (only the company name may be shortened).
+ */
+function HoldingCard({
+  row,
+  baseCurrency,
+  onUpdatePrice,
+}: {
+  row: HoldingRowData;
+  baseCurrency: Currency;
+  onUpdatePrice: (row: HoldingRowData) => void;
+}) {
+  return (
+    <RowCard
+      chevron
+      identity={
+        <Link href={`/stocks/${row.instrumentId}`} className={ROW_CARD_LINK}>
+          {row.ticker}
+        </Link>
+      }
+      name={row.name}
+      badges={row.sharia ? <ShariaBadge data={row.sharia} /> : undefined}
+      headline={
+        <>
+          {row.valuation.ok ? (
+            <div>
+              <span className="inline-flex flex-wrap items-center gap-1.5">
+                <span className="text-base font-semibold tabular-nums">
+                  {formatMoney(row.valuation.marketValue, baseCurrency)}
+                </span>
+                <SourceBadge
+                  size="sm"
+                  {...badgePropsForValueSource(row.valuation.source)}
+                  detail={row.valuation.detail}
+                />
+              </span>
+              <FxViaHubHint note={row.valuation.fxNote} />
+            </div>
+          ) : (
+            <span className="text-sm text-amber-700 dark:text-amber-400">
+              {UNAVAILABLE_TEXT[row.valuation.reason]}
+            </span>
+          )}
+          {row.gainLoss.ok ? (
+            <span
+              className={`text-right text-sm tabular-nums ${gainLossColor(row.gainLoss.amount)}`}
+            >
+              {signedMoney(row.gainLoss.amount, baseCurrency)}
+              {row.gainLoss.pct !== null ? (
+                <span className="block font-medium">
+                  ({formatPercent(row.gainLoss.pct, { signed: true })})
+                </span>
+              ) : null}
+            </span>
+          ) : (
+            <span className="text-sm text-amber-700 dark:text-amber-400">
+              {UNAVAILABLE_TEXT[row.gainLoss.reason]}
+            </span>
+          )}
+        </>
+      }
+      details={[
+        {
+          label: "Quantity",
+          // Short form only for huge numbers; the exact value is in the hover/label text.
+          value: (
+            <span className="tabular-nums" aria-label={`${formatQuantity(row.quantity)} shares`}>
+              {formatQuantityCompact(row.quantity)}
+            </span>
+          ),
+          title: `${formatQuantity(row.quantity)} shares`,
+        },
+        {
+          label: "Weight",
+          value:
+            row.weightPct === null ? (
+              <span className="text-slate-400">—</span>
+            ) : (
+              <span className="tabular-nums">{formatPercent(row.weightPct)}</span>
+            ),
+        },
+        {
+          label: "Avg Cost",
+          value:
+            row.avgCost === null ? (
+              <span className="text-slate-400">—</span>
+            ) : (
+              <span className="inline-flex flex-wrap items-center gap-1.5">
+                <span className="tabular-nums">{formatMoney(row.avgCost, row.currency)}</span>
+                <SourceBadge size="sm" variant="derived" />
+              </span>
+            ),
+        },
+        {
+          label: "Current Price",
+          value: row.price.ok ? (
+            <span className="inline-flex flex-wrap items-center gap-1.5">
+              <span className="tabular-nums">
+                {formatMoney(row.price.value, row.price.currency)}
+              </span>
+              <SourceBadge
+                size="sm"
+                {...badgePropsForValueSource(row.price.source)}
+                detail={row.price.detail}
+              />
+            </span>
+          ) : (
+            <span className="text-amber-700 dark:text-amber-400">
+              {UNAVAILABLE_TEXT.missing_price}
+            </span>
+          ),
+        },
+      ]}
+      action={
+        <HoldingActions row={row} onUpdatePrice={onUpdatePrice} buttonClassName="size-11" />
+      }
+    />
+  );
+}
+
+/** The three-dot actions menu, shared by the table row and the phone card. */
+function HoldingActions({
+  row,
+  onUpdatePrice,
+  buttonClassName = "size-9",
+}: {
+  row: HoldingRowData;
+  onUpdatePrice: (row: HoldingRowData) => void;
+  buttonClassName?: string;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger>
+        <Tooltip>
+          <TooltipTrigger>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className={buttonClassName}
+              aria-label={`Actions for ${row.ticker}`}
+            >
+              <EllipsisVertical aria-hidden="true" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="left">{`Actions for ${row.ticker}`}</TooltipContent>
+        </Tooltip>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent>
+        {row.manualPricing ? (
+          // Only manually-priced instruments get this action;
+          // live-priced holdings update themselves.
+          <DropdownMenuItem onClick={() => onUpdatePrice(row)}>
+            Update price
+          </DropdownMenuItem>
+        ) : null}
+        <Link
+          role="menuitem"
+          href={`/committee?instrument=${row.instrumentId}&mode=sell`}
+          className={MENU_LINK_CLASS}
+        >
+          Downside check
+        </Link>
+        <DropdownMenuSeparator />
+        <Link
+          role="menuitem"
+          href={`/stocks/${row.instrumentId}`}
+          className={MENU_LINK_CLASS}
+        >
+          View details
+        </Link>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
 
 export function HoldingsTable({
   rows,
@@ -89,6 +275,18 @@ export function HoldingsTable({
             className="min-h-48"
           />
         ) : (
+          <ResponsiveRows
+            breakpoint="xl"
+            listLabel="Holdings"
+            cards={rows.map((row) => (
+              <HoldingCard
+                key={row.instrumentId}
+                row={row}
+                baseCurrency={baseCurrency}
+                onUpdatePrice={onUpdatePrice}
+              />
+            ))}
+            table={
           <Table>
             <TableHeader>
               <TableRow>
@@ -130,7 +328,10 @@ export function HoldingsTable({
                     </Link>
                   </TableCell>
                   <TableCell className="text-slate-600 dark:text-slate-400">
-                    {row.name}
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span>{row.name}</span>
+                      {row.sharia ? <ShariaBadge data={row.sharia} /> : null}
+                    </div>
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
                     {formatQuantity(row.quantity)}
@@ -213,53 +414,14 @@ export function HoldingsTable({
                     )}
                   </TableCell>
                   <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger>
-                        <Tooltip>
-                          <TooltipTrigger>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="size-9"
-                              aria-label={`Actions for ${row.ticker}`}
-                            >
-                              <EllipsisVertical aria-hidden="true" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent side="left">{`Actions for ${row.ticker}`}</TooltipContent>
-                        </Tooltip>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent>
-                        {row.manualPricing ? (
-                          // Only manually-priced instruments get this action;
-                          // live-priced holdings update themselves.
-                          <DropdownMenuItem onClick={() => onUpdatePrice(row)}>
-                            Update price
-                          </DropdownMenuItem>
-                        ) : null}
-                        <Link
-                          role="menuitem"
-                          href={`/committee?instrument=${row.instrumentId}&mode=sell`}
-                          className={MENU_LINK_CLASS}
-                        >
-                          Sell analysis
-                        </Link>
-                        <DropdownMenuSeparator />
-                        <Link
-                          role="menuitem"
-                          href={`/stocks/${row.instrumentId}`}
-                          className={MENU_LINK_CLASS}
-                        >
-                          View details
-                        </Link>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    <HoldingActions row={row} onUpdatePrice={onUpdatePrice} />
                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
+            }
+          />
         )}
         {/* Honest note: weights are a share of TOTAL value, so when cash is
             negative the holdings alone can add up to more than 100%. Say why

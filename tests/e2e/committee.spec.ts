@@ -38,7 +38,7 @@ test("the picker is honest about no API key, and a mode+instrument URL pre-selec
   await expect(page.getByText("AI features are turned off").first()).toBeVisible();
 
   // Pull the real instrument id InvestIQ just navigated to, then visit the
-  // exact deep link the Portfolio holdings row's "Sell analysis" action uses
+  // exact deep link the Portfolio holdings row's "Downside check" action uses
   // (?instrument=<id>&mode=sell) and confirm both arrive pre-selected.
   const url = new URL(page.url());
   const instrumentId = url.searchParams.get("instrument");
@@ -46,7 +46,7 @@ test("the picker is honest about no API key, and a mode+instrument URL pre-selec
 
   await page.goto(`/committee?instrument=${instrumentId}&mode=sell`);
   await expect(page).toHaveURL(new RegExp(`instrument=${instrumentId}&mode=sell`));
-  await expect(page.getByRole("heading", { name: "Sell Analysis" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Downside check" })).toBeVisible();
   // Still an honest no-key state on this deep-linked mode too.
   await expect(page.getByText("AI features are turned off").first()).toBeVisible();
 });

@@ -15,8 +15,11 @@ import {
   type PriceInput,
 } from "@/lib/portfolio";
 import { loadPortfolioComputation } from "@/lib/portfolio-market-data";
+import { getShariaBadgeData } from "@/lib/sharia/badge-data";
 import { badgePropsForHoldingValue, badgePropsForValueSources } from "@/components/source-badge";
 import { PortfolioView } from "@/components/portfolio/portfolio-view";
+import { BrokerReconnectNotice } from "@/components/portfolio/broker-reconnect-notice";
+import { loadBrokerPortfolioInfo } from "@/lib/broker/transaction-tags";
 import { UnvaluedBanner } from "@/components/portfolio/unvalued-banner";
 import type {
   HoldingRowData,
@@ -195,6 +198,19 @@ export default async function PortfolioPage() {
     return bv - av;
   });
 
+  // Sharia screen badges: nothing at all unless the person has the switch on
+  // and is on Pro. Database reads only.
+  const shariaData = await getShariaBadgeData(
+    session.user.id,
+    holdings.flatMap((h) => {
+      const i = instrumentById.get(h.instrumentId);
+      return i ? [{ id: i.id, ticker: i.ticker, name: i.name, market: i.market }] : [];
+    }),
+  );
+  if (shariaData) {
+    for (const h of holdings) h.sharia = shariaData[h.instrumentId] ?? null;
+  }
+
   // Banner (same amber box and words as the Dashboard): names every holding,
   // cash balance or dividend that could not be valued. Null = nothing missing.
   const dividendIncome = computeTrailingDividendIncome(transactions, {
@@ -209,6 +225,12 @@ export default async function PortfolioPage() {
     }),
   );
 
+  // "From broker" tags + the reconnect notice (user-scoped; no token read).
+  const brokerInfo = await loadBrokerPortfolioInfo(
+    session.user.id,
+    [...new Set(transactionRows.map((t) => t.syncRunId).filter((id): id is string => !!id))],
+  );
+
   const transactionData: TransactionRowData[] = transactionRows.map((t) => ({
     ...fromPrismaTransaction(t),
     id: t.id,
@@ -216,6 +238,8 @@ export default async function PortfolioPage() {
       ? (instrumentById.get(t.instrumentId)?.ticker ?? null)
       : null,
     note: t.note,
+    syncedFrom: t.syncedFrom,
+    syncedOn: t.syncRunId ? (brokerInfo.runDates.get(t.syncRunId) ?? null) : null,
   }));
 
   // Health Score: read whatever is already stored — this page never
@@ -234,8 +258,10 @@ export default async function PortfolioPage() {
 
   return (
     <>
+      <BrokerReconnectNotice show={brokerInfo.needsReconnect} />
       <PortfolioView
         baseCurrency={base}
+        brokerConnected={brokerInfo.connected}
         banner={<UnvaluedBanner summary={unvaluedSummary} priceHref="#holdings" className="mb-4" />}
         holdings={holdings}
         holdingsBadge={badgePropsForValueSources(portfolioValue.sources)}

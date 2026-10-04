@@ -10,6 +10,7 @@ import { LoaderCircle, Star, StarOff } from "lucide-react";
 import { addToWatchlist, removeFromWatchlist } from "@/app/actions/stocks";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useToast } from "@/components/ui/toast";
 
 export function WatchToggleButton({
   instrumentId,
@@ -25,6 +26,7 @@ export function WatchToggleButton({
 }) {
   const [watched, setWatched] = React.useState(initialWatched);
   const [isPending, startTransition] = React.useTransition();
+  const { toast } = useToast();
 
   function handleClick() {
     if (isPending) return;
@@ -34,8 +36,39 @@ export function WatchToggleButton({
         ? await addToWatchlist(instrumentId)
         : await removeFromWatchlist(instrumentId);
       // Optimistic only on success — a failure (rare: session lapsed, rate
-      // limited) leaves the star showing the true, unchanged state.
-      if (result.ok) setWatched(next);
+      // limited) leaves the star showing the true, unchanged state, and now
+      // says so instead of failing silently.
+      if (!result.ok) {
+        toast({
+          tone: "error",
+          message: result.error.includes("Too many")
+            ? "Too many requests. Wait a moment, then try again."
+            : "Couldn't update your watchlist. Please try again.",
+        });
+        return;
+      }
+      setWatched(next);
+      if (!next) {
+        // Un-watching offers an Undo that uses the same (rate-limited) action.
+        toast({
+          message: `${ticker} removed from your watchlist`,
+          action: {
+            label: "Undo",
+            ariaLabel: `Undo removing ${ticker}`,
+            run: async () => {
+              const back = await addToWatchlist(instrumentId);
+              if (back.ok) {
+                setWatched(true);
+                return { message: `${ticker} is back on your watchlist` };
+              }
+              return {
+                tone: "error",
+                message: `Couldn't put ${ticker} back. Try Track a Stock to add it again.`,
+              };
+            },
+          },
+        });
+      }
     });
   }
 
@@ -47,6 +80,7 @@ export function WatchToggleButton({
         type="button"
         variant="outline"
         size="sm"
+        className="h-11"
         disabled={isPending}
         onClick={handleClick}
       >
@@ -72,7 +106,7 @@ export function WatchToggleButton({
           type="button"
           variant="ghost"
           size="icon"
-          className="size-9"
+          className="size-11"
           disabled={isPending}
           onClick={handleClick}
           aria-label={label}

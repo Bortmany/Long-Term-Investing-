@@ -284,7 +284,7 @@ export function AppShell({
         {/* Persistent disclaimer shown under every authenticated page. */}
         <footer className="mx-auto w-full max-w-6xl px-4 pb-4 sm:px-6 lg:px-8">
           <p className="text-center text-xs text-slate-500 dark:text-slate-400">
-            Analysis to support your own decisions — not financial advice.
+            AI-generated research for education only, not a personal recommendation.
             {" · "}
             <Link
               href="/privacy"

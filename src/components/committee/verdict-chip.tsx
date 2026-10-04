@@ -1,6 +1,8 @@
-// Neutral BUY / HOLD / SELL chip — never green/red on a verdict word
-// (ui-spec §2.6 color rule), distinguished only by icon: BUY -> TrendingUp,
-// HOLD -> Minus, SELL -> TrendingDown, all slate. Two sizes: "lg" for the
+// Neutral "Committee view" chip — never green/red on a verdict word
+// (ui-spec §2.6 color rule), distinguished only by icon. Stored values stay
+// BUY / HOLD / SELL (old AiAnalysis rows); they are DISPLAYED as
+// Positive / Neutral / Negative (docs/decisions/advice-wording.md).
+// BUY -> TrendingUp, HOLD -> Minus, SELL -> TrendingDown, all slate. Two sizes: "lg" for the
 // Committee panel's verdict header (§6.2), "sm" (default) for the committee
 // table's per-persona chip and the Past Runs table.
 import { Minus, TrendingDown, TrendingUp } from "lucide-react";
@@ -14,6 +16,13 @@ const ICONS: Record<Verdict, typeof TrendingUp> = {
   BUY: TrendingUp,
   HOLD: Minus,
   SELL: TrendingDown,
+};
+
+/** Display label for a stored verdict value. */
+export const VERDICT_LABELS: Record<Verdict, string> = {
+  BUY: "Positive",
+  HOLD: "Neutral",
+  SELL: "Negative",
 };
 
 export function VerdictChip({
@@ -36,7 +45,8 @@ export function VerdictChip({
       )}
     >
       <Icon className={size === "lg" ? undefined : "size-3.5"} aria-hidden="true" />
-      {verdict}
+      {size === "lg" ? "Committee view: " : null}
+      {VERDICT_LABELS[verdict]}
     </Badge>
   );
 }

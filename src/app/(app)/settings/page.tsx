@@ -6,6 +6,11 @@ import { auth } from "@/lib/auth";
 import { getLegalContactEmail } from "@/lib/legal-contact";
 import { loadPlansCardData } from "@/lib/billing/plans-card-data";
 import { PlansCard } from "@/components/settings/plans-card";
+import { ShariaScreenCard } from "@/components/settings/sharia-screen-card";
+import { loadShariaCardState } from "@/lib/sharia/card-state";
+import { BrokerConnectionCard } from "@/components/settings/broker-connection-card";
+import { loadBrokerCardState } from "@/lib/broker/card-state";
+import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
 import { badgeForPriceSource } from "@/lib/data";
 import { findRateWithHub, fromPrismaFxRate } from "@/lib/portfolio";
@@ -129,6 +134,17 @@ export default async function SettingsPage({
   // while billing is on, and it never grants Pro by itself.
   const plansData = await loadPlansCardData(session.user.id);
   const { billing } = await searchParams;
+
+  // Broker connection card state (read-only Interactive Brokers sync). A
+  // read failure shows the card's own error state, never a guessed one.
+  const brokerState = await loadBrokerCardState(session.user.id).catch((error: unknown) => {
+    logger.error("Could not load the broker connection card", {
+      errorName: error instanceof Error ? error.name : "unknown",
+    });
+    return null;
+  });
+  // Sharia screen card state (yes/no answers only; never the supplier key).
+  const shariaState = await loadShariaCardState(session.user.id);
   const checkoutReturn = billing === "success" || billing === "cancelled" ? billing : null;
 
   return (
@@ -147,6 +163,8 @@ export default async function SettingsPage({
             missingRateCurrencies={missingRateCurrencies}
           />
         </div>
+
+        <ShariaScreenCard state={shariaState} />
 
         {/* Appearance — informational only; the theme toggle lives in the
             sidebar and isn't duplicated here. */}
@@ -168,6 +186,22 @@ export default async function SettingsPage({
           checkoutReturn={checkoutReturn}
           contactEmail={getLegalContactEmail()}
         />
+
+        {/* Broker connection — read-only Interactive Brokers sync (Step 4b). */}
+        {brokerState ? (
+          <BrokerConnectionCard state={brokerState} />
+        ) : (
+          <Card id="broker-connection">
+            <CardHeader>
+              <CardTitle>Broker connection</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                We couldn&apos;t load this just now. Refresh the page to try again.
+              </p>
+            </CardContent>
+          </Card>
+        )}
 
         <YourDataCard />
 

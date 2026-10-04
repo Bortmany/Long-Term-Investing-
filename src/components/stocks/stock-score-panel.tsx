@@ -119,7 +119,7 @@ export function StockScorePanel({
 
           {output.recommendations.length > 0 ? (
             <div>
-              <h3 className="mb-2 text-sm font-semibold">Recommendations</h3>
+              <h3 className="mb-2 text-sm font-semibold">Points to consider</h3>
               {/* EvidenceList only has room for point + evidence[] (ui-spec §2.5);
                   the schema's extra `reasoning` field is folded into the evidence
                   list as its first line so none of the AI's stated content is

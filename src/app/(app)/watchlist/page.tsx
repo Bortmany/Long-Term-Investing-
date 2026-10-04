@@ -6,6 +6,7 @@ import { Eye } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getQuote } from "@/lib/data";
+import { getShariaBadgeData } from "@/lib/sharia/badge-data";
 import { savedAlertRule } from "@/lib/alerts/describe";
 import { badgePropsForPrice } from "@/components/source-badge";
 import { EmptyState } from "@/components/empty-state";
@@ -140,6 +141,16 @@ export default async function WatchlistPage() {
       };
     }),
   );
+
+  // Sharia screen badges: nothing unless the switch is on and the person is
+  // on Pro. Database reads only.
+  const shariaData = await getShariaBadgeData(
+    userId,
+    instruments.map((i) => ({ id: i.id, ticker: i.ticker, name: i.name, market: i.market })),
+  );
+  if (shariaData) {
+    for (const row of rows) row.sharia = shariaData[row.instrumentId] ?? null;
+  }
 
   const alertRows: AlertRowData[] = alerts.map((alert) => ({
     id: alert.id,

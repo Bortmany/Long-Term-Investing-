@@ -345,3 +345,28 @@ export const EMAIL_SEND_RATE_LIMIT: RateLimitOptions = { limit: 5, windowMs: 60 
 // itself is never blocked.
 export const BILLING_ACTION_RATE_LIMIT: RateLimitOptions = { limit: 5, windowMs: 60_000 };
 // --- end chunk B ------------------------------------------------------------
+
+// --- Public stock pages (Step 7) --------------------------------------------
+// Per anonymous visitor address, counted in the proxy (before the page cache):
+// at most 60 public stock pages a minute, and at most 10 sitemap/robots
+// requests a minute. Kept in memory for the current minute only.
+export const PUBLIC_PAGE_RATE_LIMIT: RateLimitOptions = { limit: 60, windowMs: 60_000 };
+export const PUBLIC_FILE_RATE_LIMIT: RateLimitOptions = { limit: 10, windowMs: 60_000 };
+// --- end public stock pages -------------------------------------------------
+
+// --- Broker connection (Step 4b) --------------------------------------------
+// Connect calls Interactive Brokers with a user-supplied token: 5 an hour per
+// user, so nobody can use us as a token-guessing proxy. Sync now calls IBKR
+// twice: 6 an hour per user (plus a 60-second cooldown and a one-at-a-time
+// claim in src/lib/broker/sync.ts). Disconnect uses WRITE_ACTION_RATE_LIMIT.
+export const BROKER_CONNECT_RATE_LIMIT: RateLimitOptions = { limit: 5, windowMs: 60 * 60_000 };
+export const BROKER_SYNC_RATE_LIMIT: RateLimitOptions = { limit: 6, windowMs: 60 * 60_000 };
+// --- end broker connection --------------------------------------------------
+
+// --- Sharia screen (Step 5) -------------------------------------------------
+// The background fetch started when someone switches the badge on calls the
+// screening supplier: 3 an hour per user (userKey "sharia-refresh"), at most
+// 25 stocks a run. The daily cron route uses the same 5-a-minute-per-IP
+// limit as the other cron routes. The switch itself uses WRITE_ACTION_RATE_LIMIT.
+export const SHARIA_REFRESH_RATE_LIMIT: RateLimitOptions = { limit: 3, windowMs: 60 * 60_000 };
+// --- end Sharia screen ------------------------------------------------------

@@ -5,6 +5,7 @@
 import type { AlertKind, AlertStatus, Currency, Market } from "@prisma/client";
 import type { SourceBadgeProps } from "@/components/source-badge";
 import type { AlertRule } from "@/lib/alerts/describe";
+import type { ShariaBadgeData } from "@/lib/sharia/types";
 
 /** One row of the watched/held instruments table. */
 export type WatchlistInstrumentRow = {
@@ -19,6 +20,8 @@ export type WatchlistInstrumentRow = {
   watched: boolean;
   /** Count of this instrument's alerts currently in ACTIVE status. */
   activeAlertCount: number;
+  /** Sharia screen badge data; absent when the person has the switch off (or is not on Pro). */
+  sharia?: ShariaBadgeData | null;
 };
 
 /** One row of the Alerts card. */

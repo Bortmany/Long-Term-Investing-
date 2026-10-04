@@ -37,9 +37,13 @@ describe("/api/health caller-aware shape", () => {
     process.env.CRON_SECRET = "a-long-test-cron-secret-value";
     signUpStatus = { open: false, reason: "paused" };
     billingMode = "dormant";
+    delete process.env.BROKER_TOKEN_KEY;
+    delete process.env.MUSAFFA_API_KEY;
+    delete process.env.SHARIA_VENDOR;
   });
 
   afterEach(() => {
+    delete process.env.BROKER_TOKEN_KEY;
     if (originalSecret === undefined) delete process.env.CRON_SECRET;
     else process.env.CRON_SECRET = originalSecret;
   });
@@ -75,6 +79,8 @@ describe("/api/health caller-aware shape", () => {
       signupsReason: "SIGNUPS_PAUSED",
       billing: "dormant",
       twelveData: "dormant",
+      brokerConnection: "dormant",
+      sharia: "dormant",
     });
   });
 
@@ -102,16 +108,31 @@ describe("/api/health caller-aware shape", () => {
     expect(Object.keys(body).sort()).toEqual(
       [
         "billing",
+        "brokerConnection",
         "cron",
         "db",
         "email",
         "sentry",
+        "sharia",
         "signups",
         "signupsReason",
         "status",
         "twelveData",
       ].sort(),
     );
+  });
+
+  it("signed-in view reports sharia dormant with no key, configured with one (never the key)", async () => {
+    getSession.mockResolvedValue({ user: { id: "u1" } });
+    expect((await (await GET(request())).json()).sharia).toBe("dormant");
+    process.env.MUSAFFA_API_KEY = "fake-key-for-test-only";
+    try {
+      const body = await (await GET(request())).json();
+      expect(body.sharia).toBe("configured");
+      expect(JSON.stringify(body)).not.toContain("fake-key-for-test-only");
+    } finally {
+      delete process.env.MUSAFFA_API_KEY;
+    }
   });
 
   it("signed-in view reports twelveData dormant with no key, configured with one", async () => {
@@ -142,6 +163,23 @@ describe("/api/health caller-aware shape", () => {
       if (originalKey === undefined) delete process.env.TWELVE_DATA_API_KEY;
       else process.env.TWELVE_DATA_API_KEY = originalKey;
     }
+  });
+
+  it("signed-in view reports brokerConnection dormant without a valid key, configured with one, never the key", async () => {
+    getSession.mockResolvedValue({ user: { id: "u1" } });
+    expect((await (await GET(request())).json()).brokerConnection).toBe("dormant");
+
+    const key = Buffer.alloc(32, 7).toString("base64");
+    process.env.BROKER_TOKEN_KEY = key;
+    const body = await (await GET(request())).json();
+    expect(body.brokerConnection).toBe("configured");
+    expect(JSON.stringify(body)).not.toContain(key);
+  });
+
+  it("anonymous callers never see brokerConnection, even when the key is set", async () => {
+    process.env.BROKER_TOKEN_KEY = Buffer.alloc(32, 7).toString("base64");
+    const body = await (await GET(request())).json();
+    expect(body).toEqual({ status: "ok", db: true });
   });
 
   it("with no CRON_SECRET set, any bearer token is still anonymous", async () => {

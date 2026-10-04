@@ -9,7 +9,8 @@ import { describe, expect, it } from "vitest";
 import { AiPanel } from "@/components/ai-panel";
 import { ProFeatureNotice } from "@/components/pro-feature-notice";
 
-const DISCLAIMER = "This is analysis to support your own decision, not financial advice.";
+const DISCLAIMER =
+  "AI-generated research for education only, not a personal recommendation. It doesn&#x27;t know your full finances and can be wrong. InvestIQ is not licensed to give investment advice in Oman, Saudi Arabia, the US or elsewhere.";
 const stored = {
   createdAt: new Date("2026-09-01T10:00:00Z"),
   model: "claude-test-model",

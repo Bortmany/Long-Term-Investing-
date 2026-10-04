@@ -103,7 +103,21 @@ export const COMMITTEE_PERSONAS = [
 ] as const;
 export type CommitteePersona = (typeof COMMITTEE_PERSONAS)[number];
 
-const committeeRecommendationSchema = z.enum(["BUY", "HOLD", "SELL"]);
+// Stored values stay BUY / HOLD / SELL (old AiAnalysis rows, consensus.ts and
+// the Past Runs table all use them). The AI is now asked for its "view" as
+// POSITIVE / NEUTRAL / NEGATIVE (docs/decisions/advice-wording.md); the
+// preprocess step maps those onto the stored values so both old and new
+// shaped data parse. Display labels live in verdict-chip.tsx.
+const NEW_VIEW_TO_STORED: Record<string, string> = {
+  POSITIVE: "BUY",
+  NEUTRAL: "HOLD",
+  NEGATIVE: "SELL",
+};
+const committeeRecommendationSchema = z.preprocess(
+  (value) =>
+    typeof value === "string" ? (NEW_VIEW_TO_STORED[value.toUpperCase()] ?? value) : value,
+  z.enum(["BUY", "HOLD", "SELL"]),
+);
 
 /**
  * What ONE persona call returns (src/lib/ai/committee.ts makes six of these
@@ -120,9 +134,12 @@ export const personaVoteSchema = z.object({
   counterarguments: z.array(z.string().min(1)),
 });
 export type PersonaVoteOutput = z.infer<typeof personaVoteSchema>;
-export const personaVoteJsonSchema = z.toJSONSchema(personaVoteSchema, {
-  target: "draft-2020-12",
-});
+// The schema SENT to the model asks for POSITIVE / NEUTRAL / NEGATIVE; the
+// parser above accepts those AND the old BUY / HOLD / SELL.
+export const personaVoteJsonSchema = z.toJSONSchema(
+  personaVoteSchema.extend({ recommendation: z.enum(["POSITIVE", "NEUTRAL", "NEGATIVE"]) }),
+  { target: "draft-2020-12" },
+);
 
 /** A persisted vote is the persona's own output plus which persona cast it. */
 export const committeeVoteSchema = personaVoteSchema.extend({
@@ -184,21 +201,24 @@ export const buyAnalysisSchema = z.object({
   score: scoreSchema,
   fairValueEstimate: z.object({
     value: z.number(),
-    // Plain-English assumptions string, shown verbatim under Fair Value
+    // Plain-English assumptions string, shown verbatim under "AI fair-value estimate"
     // (ui-spec §6.3), e.g. "DCF with 8% discount rate, 3% terminal growth".
     assumptions: z.array(z.string().min(1)),
   }),
   marginOfSafetyPct: z.number(),
   upsidePct: z.number(),
   downsidePct: z.number(),
-  suggestedAllocationPct: z.number().min(0).max(100),
+  // Retired field (advice-wording decision): no longer asked of the AI or shown,
+  // but old stored rows still carry it, so it is tolerated and ignored.
+  suggestedAllocationPct: z.number().optional(),
   confidence: scoreSchema,
   alternatives: z.array(
     z.object({ ticker: z.string().min(1), why: z.string().min(1) }),
   ),
 });
 export type BuyAnalysisOutput = z.infer<typeof buyAnalysisSchema>;
-export const buyAnalysisJsonSchema = z.toJSONSchema(buyAnalysisSchema, {
+// The model is never asked for the retired suggestedAllocationPct field.
+export const buyAnalysisJsonSchema = z.toJSONSchema(buyAnalysisSchema.omit({ suggestedAllocationPct: true }), {
   target: "draft-2020-12",
 });
 

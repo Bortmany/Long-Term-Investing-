@@ -24,9 +24,9 @@ const HISTORY_TYPES = ["COMMITTEE", "BUY_ANALYSIS", "SELL_ANALYSIS"] as const;
 
 /** Plain-English name for each kind of saved run, used in the record header. */
 const KIND_LABELS: Record<(typeof HISTORY_TYPES)[number], string> = {
-  COMMITTEE: "Investment Committee decision",
-  BUY_ANALYSIS: "Buy analysis",
-  SELL_ANALYSIS: "Sell analysis",
+  COMMITTEE: "Investment Committee view",
+  BUY_ANALYSIS: "Upside check",
+  SELL_ANALYSIS: "Downside check",
 };
 
 export async function generateMetadata({
@@ -63,7 +63,7 @@ function notFound() {
 }
 
 /**
- * Read-only view of ONE past Committee / Buy Analysis / Sell Analysis run,
+ * Read-only view of ONE past Committee / Upside check / Downside check run,
  * by AiAnalysis id (ui-spec §6.5). Ownership-checked — a client-supplied id
  * is never trusted on its own — and honestly "not found" for anything that
  * doesn't belong to the signed-in user, was never one of these three types,

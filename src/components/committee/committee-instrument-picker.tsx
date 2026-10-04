@@ -1,7 +1,7 @@
 "use client";
 
 // The /committee instrument-picker card (ui-spec §6.1): instrument Select
-// (all instruments — Buy Analysis is explicitly for stocks not yet owned),
+// (all instruments — the Upside check is explicitly for stocks not yet owned),
 // optional position context, auto-attached-thesis notice, and a mode
 // switcher. Changing the instrument or mode navigates to a new
 // `?instrument=&mode=` URL — the server page re-renders with fresh data for
@@ -11,7 +11,7 @@
 // The mode switcher is built as a Tabs component (rather than three loose
 // buttons) so the currently active mode is always visually obvious; its
 // three values carry ui-spec §6.1's exact button copy ("Convene Committee" /
-// "Run Buy Analysis" / "Run Sell Analysis"). Selecting a mode doesn't
+// "Run Upside check" / "Run Downside check"). Selecting a mode doesn't
 // generate anything by itself — it just reveals that mode's AiPanel below,
 // whose OWN button (same label, ui-spec §6.2-§6.4) is the actual "generate"
 // trigger — so arriving via a `?mode=` URL and clicking the matching tab
@@ -40,8 +40,8 @@ export type CommitteePosition = {
 
 const MODE_LABELS: Record<CommitteeMode, string> = {
   committee: "Convene Committee",
-  buy: "Run Buy Analysis",
-  sell: "Run Sell Analysis",
+  buy: "Run Upside check",
+  sell: "Run Downside check",
 };
 
 export function CommitteeInstrumentPicker({
@@ -127,7 +127,7 @@ export function CommitteeInstrumentPicker({
         ) : null}
 
         {/* The mode tabs are navigation, not generation — they stay usable
-            without an API key so already-saved Committee / Buy / Sell results
+            without an API key so already-saved Committee / Upside / Downside results
             can still be opened. The notice only takes over when there is no
             stock selected, since then there is no panel below to carry it. */}
         {!hasAiKey && !selectedInstrumentId ? (

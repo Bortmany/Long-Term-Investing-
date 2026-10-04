@@ -9,6 +9,7 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { SourceBadge } from "@/components/source-badge";
+import { ShariaBadge } from "@/components/sharia/sharia-badge";
 import { WatchToggleButton } from "@/components/stocks/watch-toggle-button";
 import { formatMoney } from "@/lib/format";
 import { AlertsCard } from "./alerts-card";
@@ -63,7 +64,12 @@ export function WatchlistView({
                       {row.ticker}
                     </Link>
                   </TableCell>
-                  <TableCell className="text-slate-600 dark:text-slate-400">{row.name}</TableCell>
+                  <TableCell className="text-slate-600 dark:text-slate-400">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span>{row.name}</span>
+                      {row.sharia ? <ShariaBadge data={row.sharia} /> : null}
+                    </div>
+                  </TableCell>
                   <TableCell className="text-right">
                     {row.quote.ok ? (
                       <span className="inline-flex items-center justify-end gap-1.5">

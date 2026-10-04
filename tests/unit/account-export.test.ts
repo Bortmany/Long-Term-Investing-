@@ -4,6 +4,7 @@ import {
   buildAccountExport,
   type AccountExportRows,
   type ExportAccountRow,
+  type ExportBrokerConnectionRow,
   type ExportSessionRow,
 } from "@/lib/account-export";
 
@@ -12,7 +13,7 @@ const now = new Date("2026-07-19T12:00:00Z");
 /** Every table populated with one row, so "includes rows from every table" is provable. */
 function fullRows(): AccountExportRows {
   return {
-    user: { name: "Ada Lovelace", email: "ada@example.com", createdAt: now, plan: "PRO" },
+    user: { name: "Ada Lovelace", email: "ada@example.com", createdAt: now, plan: "PRO", shariaScreenEnabled: false },
     subscription: null,
     accounts: [{ providerId: "credential", createdAt: now, updatedAt: now }],
     sessions: [{ createdAt: now, ipAddress: "203.0.113.5", userAgent: "Mozilla/5.0" }],
@@ -38,6 +39,8 @@ function fullRows(): AccountExportRows {
             tradeDate: now,
             note: null,
             importReference: "trading212:abc123",
+            syncedFrom: null,
+            syncRunId: null,
             createdAt: now,
           },
         ],
@@ -127,6 +130,8 @@ function fullRows(): AccountExportRows {
         createdAt: now,
       },
     ],
+    brokerConnections: [],
+    brokerSyncRuns: [],
   };
 }
 
@@ -263,10 +268,82 @@ describe("buildAccountExport", () => {
     expect(serialized).not.toContain("4242424242424242");
   });
 
+  // Step 5: the Sharia screen choice is the user's own data and is exported;
+  // the shared screening results are not.
+  it("exports the Sharia screen preference and no screening results", () => {
+    const rows = fullRows();
+    rows.user.shariaScreenEnabled = true;
+    const result = buildAccountExport(rows, now);
+    expect(result.preferences).toEqual({ shariaScreenEnabled: true });
+    expect(Object.keys(result)).not.toContain("shariaScreens");
+  });
+
   it("a user who never paid exports their plan with no subscription", () => {
     const rows = fullRows();
     rows.user.plan = "FREE";
     const result = buildAccountExport(rows, now);
     expect(result.plan).toEqual({ plan: "FREE", subscription: null });
+  });
+
+  // Step 4b: the broker connection's details and sync history are in the
+  // download — and the token, in ANY form, never is, even if a query
+  // over-selects and the secret rides along in memory.
+  it("exports broker connection details and sync history but never the token", () => {
+    const rows = fullRows();
+    rows.brokerConnections = [
+      {
+        provider: "ibkr_flex",
+        queryId: "123456",
+        accountId: "U0000000",
+        status: "ACTIVE",
+        tokenExpiresOn: now,
+        lastAttemptAt: now,
+        lastSuccessAt: now,
+        lastFailureMessage: null,
+        createdAt: now,
+        // Smuggled in memory: must never reach the file.
+        token: "PLAINTEXT-BROKER-TOKEN-9999",
+        encryptedToken: "v1:SECRETIV:SECRETTAG:SECRETCIPHERTEXT",
+      } as unknown as ExportBrokerConnectionRow,
+    ];
+    rows.brokerSyncRuns = [
+      {
+        id: "run-1",
+        startedAt: now,
+        finishedAt: now,
+        trigger: "manual",
+        status: "SUCCEEDED",
+        rowsSeen: 5,
+        rowsAdded: 3,
+        rowsAlready: 0,
+        rowsSkipped: 2,
+        rowsRejected: 0,
+        message: "3 trades added, 2 skipped",
+      },
+    ];
+    rows.portfolios[0].transactions[0].syncedFrom = "ibkr_flex";
+    rows.portfolios[0].transactions[0].syncRunId = "run-1";
+
+    const result = buildAccountExport(rows, now);
+    expect(result.brokerConnections).toHaveLength(1);
+    expect(result.brokerConnections[0]).toMatchObject({ provider: "ibkr_flex", queryId: "123456", accountId: "U0000000" });
+    expect(result.brokerSyncRuns[0].rowsAdded).toBe(3);
+    expect(result.portfolios[0].transactions[0]).toMatchObject({ syncedFrom: "ibkr_flex", syncRunId: "run-1" });
+
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain("PLAINTEXT-BROKER-TOKEN-9999");
+    expect(serialized).not.toContain("SECRETCIPHERTEXT");
+    expect(serialized).not.toContain("SECRETIV");
+    expect(serialized).not.toContain("encryptedToken");
+    expect(serialized).not.toMatch(/"token"/i);
+  });
+
+  it("the export route's broker queries leave the token out", async () => {
+    const { readFileSync } = await import("node:fs");
+    const route = readFileSync("src/app/api/account/export/route.ts", "utf8");
+    const start = route.indexOf("prisma.brokerConnection.findMany");
+    const block = route.slice(start, route.indexOf("prisma.brokerSyncRun.findMany"));
+    expect(block).toContain("select:");
+    expect(block).not.toMatch(/encryptedToken/);
   });
 });

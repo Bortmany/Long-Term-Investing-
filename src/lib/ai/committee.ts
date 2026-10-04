@@ -151,6 +151,11 @@ async function callPersona(
   }
 }
 
+const VIEW_LABELS: Record<string, string> = { BUY: "POSITIVE", HOLD: "NEUTRAL", SELL: "NEGATIVE" };
+function viewLabel(stored: string): string {
+  return VIEW_LABELS[stored] ?? stored;
+}
+
 /** The synthesis call's prose parts, or null on any failure (same discipline as callPersona). */
 async function callSynthesis(
   client: AiMessagesClient,
@@ -177,8 +182,10 @@ async function callSynthesis(
           content: stableStringify({
             instructions: COMMITTEE_SYNTHESIS_INSTRUCTIONS,
             snapshot,
-            votes,
-            consensus: { verdict: consensus.verdict, consensusScore: consensus.score },
+            // Stored BUY/HOLD/SELL are shown to the model as the new wording
+            // (advice-wording decision) so its prose uses the same labels.
+            votes: votes.map((v) => ({ ...v, recommendation: viewLabel(v.recommendation) })),
+            consensus: { view: viewLabel(consensus.verdict), consensusScore: consensus.score },
             thesisAttached: hasThesis,
           }),
         },

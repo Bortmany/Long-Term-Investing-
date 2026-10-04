@@ -28,6 +28,16 @@ import { WatchToggleButton } from "@/components/stocks/watch-toggle-button";
 import type { StockListRow } from "@/components/stocks/types";
 import { computeChangePercent } from "@/lib/stocks/ratios";
 import { formatMoney, formatPercent } from "@/lib/format";
+import {
+  buildStockSearchWhere,
+  normalizeSearchQuery,
+  SEARCH_MAX_RESULTS,
+} from "@/lib/stocks/catalogue-search";
+import {
+  StockSearchBox,
+  StockSearchResults,
+  type StockSearchRow,
+} from "@/components/stocks/stock-search";
 
 export const metadata = { title: "Stocks — InvestIQ AI" };
 
@@ -47,7 +57,11 @@ function changeColor(percent: number): string {
 // one table, the jump-off point to each stock's detail page. Everything is
 // loaded server-side, scoped to the signed-in user; the golden rule applies
 // to every quote/change figure (typed unavailable, never a fake number).
-export default async function StocksPage() {
+export default async function StocksPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string | string[] }>;
+}) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) {
     redirect("/sign-in");
@@ -76,17 +90,55 @@ export default async function StocksPage() {
   }
   const watchedIds = new Set(watchlistRows.map((w) => w.instrumentId));
   const instrumentIds = [...new Set([...heldIds, ...watchedIds])];
+  const query = normalizeSearchQuery((await searchParams).q);
+
+  // Search: the public list plus THIS user's own held/watched stocks, matched
+  // on ticker or name. No quotes are fetched, so a search never calls a price
+  // provider. Other people's typed-in tickers are never in scope.
+  if (query) {
+    const found = await prisma.instrument.findMany({
+      where: buildStockSearchWhere(query, instrumentIds),
+      orderBy: { ticker: "asc" },
+      take: SEARCH_MAX_RESULTS,
+    });
+    const searchRows: StockSearchRow[] = found.map((instrument) => ({
+      instrumentId: instrument.id,
+      ticker: instrument.ticker,
+      name: instrument.name,
+      market: instrument.market,
+      held: heldIds.has(instrument.id),
+      watched: watchedIds.has(instrument.id),
+    }));
+    return (
+      <>
+        <div className="mb-6 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h1 className="text-2xl font-semibold">Stocks</h1>
+          <TrackStockDialog markets={markets} />
+        </div>
+        <StockSearchBox query={query} />
+        <StockSearchResults rows={searchRows} query={query} />
+      </>
+    );
+  }
 
   // Zero held + zero watched: the whole page is one empty state (same
   // pattern as /portfolio's zero-transactions case).
   if (instrumentIds.length === 0) {
     return (
-      <EmptyState
-        icon={ChartLine}
-        heading="Stocks"
-        sentence="Add a holding or track a stock to see it here."
-        action={<TrackStockDialog markets={markets} />}
-      />
+      <>
+        <div className="mb-6 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h1 className="text-2xl font-semibold">Stocks</h1>
+          <TrackStockDialog markets={markets} />
+        </div>
+        <StockSearchBox query={null} />
+        <EmptyState
+          icon={ChartLine}
+          heading="No stocks yet"
+          headingLevel={2}
+          sentence="Search for a stock above, or use Track a Stock. Anything you hold or watch will show up here."
+          className="min-h-48"
+        />
+      </>
     );
   }
 
@@ -160,6 +212,7 @@ export default async function StocksPage() {
         <h1 className="text-2xl font-semibold">Stocks</h1>
         <TrackStockDialog markets={markets} />
       </div>
+      <StockSearchBox query={null} />
 
       <Table>
         <TableHeader>

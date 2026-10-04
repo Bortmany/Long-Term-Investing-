@@ -36,6 +36,7 @@ export function PortfolioView({
   markets,
   instrumentTypes,
   transactionTypes,
+  brokerConnected = false,
 }: {
   baseCurrency: Currency;
   /** Amber "couldn't be valued" banner, built on the server; null/absent when nothing is missing. */
@@ -51,6 +52,8 @@ export function PortfolioView({
   markets: Market[];
   instrumentTypes: InstrumentType[];
   transactionTypes: TransactionType[];
+  /** The user has a saved broker connection (chooses the "From broker" wording). */
+  brokerConnected?: boolean;
 }) {
   // Which dialogs are open. The transaction dialog is one component for both
   // Add (editing = null) and Edit (editing = the row).
@@ -92,6 +95,7 @@ export function PortfolioView({
       {deleteTarget ? (
         <DeleteTransactionDialog
           transaction={deleteTarget}
+          brokerConnected={brokerConnected}
           onClose={() => setDeleteTarget(null)}
         />
       ) : null}
@@ -148,6 +152,7 @@ export function PortfolioView({
       <TransactionsTable
         rows={transactions}
         transactionTypes={transactionTypes}
+        brokerConnected={brokerConnected}
         onAdd={openAdd}
         onEdit={(row) => setTxDialog({ open: true, editing: row })}
         onDelete={setDeleteTarget}
