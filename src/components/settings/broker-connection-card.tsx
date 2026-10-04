@@ -181,16 +181,22 @@ export function BrokerConnectionCard({ state }: { state: BrokerCardState }) {
               <CircleCheck aria-hidden="true" />
               <AlertDescription className="flex items-start justify-between gap-2">
                 <span>{notice.text}</span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  title="Dismiss"
-                  onClick={() => setNotice(null)}
-                >
-                  <X aria-hidden="true" />
-                  <span className="sr-only">Dismiss</span>
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger tabIndex={-1}>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setNotice(null)}
+                    >
+                      <X aria-hidden="true" />
+                      <span className="sr-only">Dismiss</span>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="left" aria-hidden="true">
+                    Hide this message
+                  </TooltipContent>
+                </Tooltip>
               </AlertDescription>
             </Alert>
           </div>

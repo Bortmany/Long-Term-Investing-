@@ -113,7 +113,7 @@ export const onRequestError: Instrumentation.onRequestError = async (
     path: request.path,
     method: request.method,
     routeType: context.routeType,
-  });
+  }, { alert: false }); // Sentry gets this one below, with the full request.
 
   if (!process.env.SENTRY_DSN) return;
   try {

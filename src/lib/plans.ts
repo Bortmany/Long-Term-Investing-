@@ -33,7 +33,7 @@ export const PLAN_FEATURES: readonly PlanFeature[] = [
   { key: "tracking", label: "Portfolio tracking, dashboard and stock pages", plan: "FREE", status: "available" },
   { key: "source-badges", label: "Every number shows where it came from", plan: "FREE", status: "available" },
   { key: "csv-import", label: "CSV import", plan: "FREE", status: "available" },
-  { key: "broker-presets", label: "Ready-made broker file formats", plan: "FREE", status: "coming_soon" },
+  { key: "broker-presets", label: "Ready-made broker file formats", plan: "FREE", status: "available" },
   { key: "price-alerts", label: "Price alerts", plan: "FREE", status: "available" },
   { key: "data-rights", label: "Download your data or delete your account", plan: "FREE", status: "available" },
   { key: "ai-free", label: "2 new AI analyses a day", plan: "FREE", status: "available" },

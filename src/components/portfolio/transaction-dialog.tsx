@@ -43,6 +43,7 @@ import {
   PREFILL_HINT,
   useAutoChangeRing,
 } from "@/components/stocks/dialog-hints";
+import { currencyMismatchMessage } from "@/lib/instrument-currency";
 import { cn } from "@/lib/utils";
 import { transactionTypeLabel, type InstrumentOptionData, type TransactionRowData } from "./types";
 
@@ -270,6 +271,14 @@ export function TransactionDialog({
     const gross = qty * price;
     return type === "SELL" ? gross - feeNum : gross + feeNum;
   }, [type, quantity, pricePerUnit, fee]);
+
+  // A buy or sell must be in the stock's own currency; the server refuses
+  // anything else, so say so before they press Save.
+  const chosenInstrument = localInstruments.find((i) => i.id === instrumentId);
+  const currencyHint =
+    chosenInstrument && typeIsTrade(type)
+      ? currencyMismatchMessage({ type, currency }, chosenInstrument)
+      : null;
 
   function validate(): Record<string, string> {
     const errors: Record<string, string> = {};
@@ -666,6 +675,11 @@ export function TransactionDialog({
                   />
                 </div>
               </div>
+              {currencyHint ? (
+                <p role="status" className="text-xs text-amber-700 dark:text-amber-400">
+                  {currencyHint}
+                </p>
+              ) : null}
               {/* Amount is NEVER a separate input — always computed here, and
                   independently re-derived server-side, so it can never drift.
                   Shown in the transaction's OWN currency (matching the

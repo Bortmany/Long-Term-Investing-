@@ -226,16 +226,22 @@ export function PlansCard({
           <AlertDescription>
             <p>You&apos;re on Pro. Thank you!</p>
           </AlertDescription>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="absolute top-0 right-0"
-            aria-label="Dismiss"
-            onClick={() => setThanksDismissed(true)}
-          >
-            <X aria-hidden="true" />
-          </Button>
+          <Tooltip className="absolute top-0 right-0">
+            <TooltipTrigger tabIndex={-1}>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label="Dismiss"
+                onClick={() => setThanksDismissed(true)}
+              >
+                <X aria-hidden="true" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="left" aria-hidden="true">
+              Hide this message
+            </TooltipContent>
+          </Tooltip>
         </Alert>
       ) : null}
 

@@ -46,6 +46,8 @@ Naming: files kebab-case (`market-data.ts`), types/components PascalCase, functi
 - Schema changes ONLY via `npx prisma migrate dev` — numbered migrations in `prisma/migrations/`. Never `db push`, never hand-edited SQL outside a migration.
 - Money and quantities are `Decimal` columns. Convert to numbers at the edge with the `fromPrisma*` adapters in `src/lib/portfolio/types.ts`.
 - A portfolio's cash balance is DERIVED from transactions (`computeCashBalances`) and never stored.
+- A BUY or SELL must be in the tracked stock's own stored currency: the server (`createTransaction`, `updateTransaction`, and file-import row checks) refuses a mismatch with a plain-English message (`src/lib/instrument-currency.ts`), and the Add Transaction dialog shows the same sentence before Save.
+- `logger.error` also raises a Sentry alert when `SENTRY_DSN` is set (secret-named values blanked first), so handled failures (webhook, broker sync, Sharia refresh) are not silent.
 - Every query for user-owned data (portfolios, transactions, watchlist) is scoped to the signed-in user's id, taken from the server session (`auth.api.getSession`) — never from client input.
 
 ## AI rules (Phase 3+)

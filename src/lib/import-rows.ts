@@ -13,6 +13,7 @@ import {
   type TransactionInput,
 } from "./transaction-schema";
 import { currencyListText } from "./markets";
+import { currencyMismatchMessage } from "./instrument-currency";
 import { shortHash } from "./import-presets/shared";
 
 /** Longest import reference the server accepts (also the zod cap in the action). */
@@ -223,6 +224,12 @@ export function validateMappedRow(
   if (!parsed.success) {
     const messages = [...new Set(parsed.error.issues.map((issue) => issue.message))];
     return { row: rowNumber, ok: false, issues: messages };
+  }
+  // A buy or sell must use the tracked stock's own currency (same rule as the
+  // Add Transaction form), so a file can't store a trade under the wrong code.
+  if (instrument) {
+    const mismatch = currencyMismatchMessage(parsed.data, instrument);
+    if (mismatch) return { row: rowNumber, ok: false, issues: [mismatch] };
   }
   const reference = cell(row.reference);
   return {

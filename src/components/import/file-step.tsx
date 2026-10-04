@@ -429,7 +429,7 @@ export function FileStep({
                           <X aria-hidden="true" />
                         </Button>
                       </TooltipTrigger>
-                      <TooltipContent side="left">Remove this file</TooltipContent>
+                      <TooltipContent side="left" aria-hidden="true">Remove this file</TooltipContent>
                     </Tooltip>
                   </li>
                 ))}

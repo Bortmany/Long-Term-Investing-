@@ -19,6 +19,7 @@ import {
   transactionInputSchema,
   type TransactionInput,
 } from "@/lib/transaction-schema";
+import { currencyMismatchMessage } from "@/lib/instrument-currency";
 import { computeHoldings, fromPrismaTransaction } from "@/lib/portfolio";
 import { lockPortfolioForWrite } from "@/lib/portfolio-lock";
 import { getOrCreatePortfolio, getSessionUserId } from "@/lib/user-portfolio";
@@ -49,13 +50,22 @@ function writeRateLimitError(
   return result.ok ? null : actionError(rateLimitMessage(result.retryAfterSeconds));
 }
 
-/** Instrument-carrying inputs must point at an instrument that exists. */
-async function instrumentExists(input: TransactionInput): Promise<boolean> {
-  if (!("instrumentId" in input) || !input.instrumentId) return true;
-  const count = await prisma.instrument.count({
+/**
+ * Instrument-carrying inputs must point at an instrument that exists, and a
+ * buy or sell must use that instrument's own stored currency.
+ */
+async function instrumentProblem(
+  input: TransactionInput,
+  notTrackedMessage: string,
+): Promise<{ ok: false; error: string } | null> {
+  if (!("instrumentId" in input) || !input.instrumentId) return null;
+  const instrument = await prisma.instrument.findUnique({
     where: { id: input.instrumentId },
+    select: { ticker: true, currency: true },
   });
-  return count > 0;
+  if (!instrument) return actionError(notTrackedMessage);
+  const mismatch = currencyMismatchMessage(input, instrument);
+  return mismatch ? actionError(mismatch) : null;
 }
 
 // A hair of tolerance so floating-point noise on a legitimate "sell
@@ -119,11 +129,11 @@ export async function createTransaction(
   const parsed = transactionInputSchema.safeParse(input);
   if (!parsed.success) return actionError(firstIssueMessage(parsed.error));
 
-  if (!(await instrumentExists(parsed.data))) {
-    return actionError(
-      "That instrument isn't tracked yet — track it first, then add the transaction.",
-    );
-  }
+  const instrumentIssue = await instrumentProblem(
+    parsed.data,
+    "That instrument isn't tracked yet — track it first, then add the transaction.",
+  );
+  if (instrumentIssue) return instrumentIssue;
 
   const portfolio = await getOrCreatePortfolio(userId);
   const record = toTransactionRecord(parsed.data);
@@ -176,11 +186,11 @@ export async function updateTransaction(
     return actionError("That transaction could not be found in your portfolio.");
   }
 
-  if (!(await instrumentExists(parsed.data))) {
-    return actionError(
-      "That instrument isn't tracked yet — track it first, then update the transaction.",
-    );
-  }
+  const instrumentIssue = await instrumentProblem(
+    parsed.data,
+    "That instrument isn't tracked yet — track it first, then update the transaction.",
+  );
+  if (instrumentIssue) return instrumentIssue;
 
   const record = toTransactionRecord(parsed.data);
 
