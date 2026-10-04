@@ -37,6 +37,7 @@ function fullRows(): AccountExportRows {
             fee: new Prisma.Decimal("0.5"),
             tradeDate: now,
             note: null,
+            importReference: "trading212:abc123",
             createdAt: now,
           },
         ],
@@ -147,6 +148,15 @@ describe("buildAccountExport", () => {
     expect(result.notifications).toHaveLength(1);
     expect(result.manualPrices).toHaveLength(1);
     expect(result.manualFxRates).toHaveLength(1);
+  });
+
+  it("includes each transaction's import reference (null when typed by hand)", () => {
+    const rows = fullRows();
+    const typedByHand = { ...rows.portfolios[0].transactions[0], id: "txn-2", importReference: null };
+    rows.portfolios[0].transactions.push(typedByHand);
+    const txns = buildAccountExport(rows, now).portfolios[0].transactions;
+    expect(txns[0].importReference).toBe("trading212:abc123");
+    expect(txns[1].importReference).toBeNull();
   });
 
   it("converts every Decimal field to a plain number", () => {

@@ -98,8 +98,11 @@ export default async function PrivacyPage() {
               <strong>Your portfolio:</strong> every transaction you record
               (purchases, sales, dividends, deposits, withdrawals, fees) —
               amounts, dates, and the stock/ETF/REIT involved. For trades you
-              import from a broker file, we also keep a reference so the same
-              trade is not added twice.
+              import from a broker file, we also keep an import reference —
+              your broker&apos;s own transaction id, or a short fingerprint of
+              the line when the file has no id. It is stored only so the same
+              trade is not added twice, appears in your data download, and is
+              deleted with your account.
             </li>
             <li>
               <strong>Prices and exchange rates you enter by hand</strong> —

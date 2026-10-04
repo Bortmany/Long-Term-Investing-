@@ -1,3 +1,4 @@
+import { SamplePriceCaption } from "@/components/stocks/sample-price-caption";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -408,6 +409,11 @@ export default async function StockDetailPage({
               />
             ) : null}
           </div>
+          {quoteResult.ok ? (
+            <SamplePriceCaption
+              variant={badgePropsForPrice(quoteResult.data, instrument.market).variant}
+            />
+          ) : null}
         </div>
       </section>
 

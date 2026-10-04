@@ -104,6 +104,13 @@ Naming: files kebab-case (`market-data.ts`), types/components PascalCase, functi
   sit forever saying "not checked," which is honest but not a useful demo
   state.
 
+## Importing trades: broker presets and no double imports
+
+- The import screen starts with "Which broker?". Pick a broker preset (`src/lib/import-presets/`, pure code, one file per broker) or "Other" (the column-by-column mapping). The broker file is read in the browser; only the interpreted rows reach the server.
+- **A preset never guesses a row.** Each row is ready, skipped with a plain reason (split, option, unsupported currency, unrecognised word) or cannot-read. Skipped rows never leave the browser and are never stored. A file from the wrong broker is refused.
+- **Every imported row can carry an `importReference`** (`Transaction.importReference`, optional, not unique): `<preset>:<broker id>` or a fingerprint (`fingerprintRow` in `src/lib/import-rows.ts` for "Other"). `getKnownImportReferences` lets the screen show repeats as "Already imported"; `importTransactions` re-checks inside the portfolio lock and leaves out repeats (counted in `alreadyImportedCount`, not an error). Hand-typed rows and rows imported before this feature have no reference and cannot be recognised.
+- The server still re-validates every row (shared schema, future dates, oversell) whatever the browser says. The reference is personal financial data: it is in the "Your data" download and on `/privacy`.
+
 ## Privacy page stays in sync (Phase 8)
 
 - **Any diff that stores a NEW personal field updates `/privacy` in the same

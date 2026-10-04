@@ -38,8 +38,8 @@ model User {
 
   // Free or Pro (Step 2). Free by default. Changed only by the billing
   // webhook or the owner's `npm run plan:set` command — never by the user.
-  plan           Plan          @default(FREE)
-  subscription   Subscription?
+  plan         Plan          @default(FREE)
+  subscription Subscription?
 
   @@unique([email])
   @@map("user")
@@ -215,36 +215,41 @@ model Instrument {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  transactions       Transaction[]
-  priceCache         PriceCache[]
-  fundamentalsCache  FundamentalsCache[]
-  theses             Thesis[]
-  watchlistItems     WatchlistItem[]
-  alerts             Alert[]
-  manualPrices       ManualPrice[]
+  transactions      Transaction[]
+  priceCache        PriceCache[]
+  fundamentalsCache FundamentalsCache[]
+  theses            Thesis[]
+  watchlistItems    WatchlistItem[]
+  alerts            Alert[]
+  manualPrices      ManualPrice[]
 
   @@unique([ticker, market])
 }
 
 model Transaction {
-  id           String          @id @default(cuid())
-  portfolioId  String
-  portfolio    Portfolio       @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  id              String          @id @default(cuid())
+  portfolioId     String
+  portfolio       Portfolio       @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
   // Nullable: cash-only rows (DEPOSIT / WITHDRAWAL / standalone FEE) have no instrument.
-  instrumentId String?
-  instrument   Instrument?     @relation(fields: [instrumentId], references: [id])
-  type         TransactionType
-  quantity     Decimal?        @db.Decimal(20, 8)
-  pricePerUnit Decimal?        @db.Decimal(20, 8)
-  amount       Decimal         @db.Decimal(20, 8)
-  currency     Currency
-  fee          Decimal         @default(0) @db.Decimal(20, 8)
-  tradeDate    DateTime
-  note         String?
-  createdAt    DateTime        @default(now())
+  instrumentId    String?
+  instrument      Instrument?     @relation(fields: [instrumentId], references: [id])
+  type            TransactionType
+  quantity        Decimal?        @db.Decimal(20, 8)
+  pricePerUnit    Decimal?        @db.Decimal(20, 8)
+  amount          Decimal         @db.Decimal(20, 8)
+  currency        Currency
+  fee             Decimal         @default(0) @db.Decimal(20, 8)
+  tradeDate       DateTime
+  note            String?
+  // Where an imported row came from: "<preset>:<broker id>" or a fingerprint.
+  // Used only to stop the same line being imported twice. NOT unique (older
+  // and hand-typed rows have none). Deleted with the portfolio (cascade).
+  importReference String?
+  createdAt       DateTime        @default(now())
 
   @@index([portfolioId, tradeDate])
   @@index([instrumentId])
+  @@index([portfolioId, importReference])
 }
 
 // ---------------------------------------------------------------------------
@@ -425,9 +430,9 @@ model WeeklyReview {
 // ---------------------------------------------------------------------------
 
 model Alert {
-  id     String      @id @default(cuid())
+  id     String    @id @default(cuid())
   userId String
-  user   User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   kind   AlertKind
 
   // PRICE_ABOVE / PRICE_BELOW / DAY_DROP only.
@@ -439,7 +444,7 @@ model Alert {
 
   // Price in the instrument's own currency for PRICE_ABOVE/PRICE_BELOW; a
   // positive percent for DAY_DROP. Null for THESIS_REVIEW_DUE.
-  threshold Decimal? @db.Decimal(20, 8)
+  threshold    Decimal? @db.Decimal(20, 8)
   // THESIS_REVIEW_DUE only: how many days between reviews.
   intervalDays Int?
 
@@ -459,9 +464,9 @@ model Alert {
 }
 
 model Notification {
-  id      String @id @default(cuid())
+  id      String  @id @default(cuid())
   userId  String
-  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   alertId String?
   alert   Alert?  @relation(fields: [alertId], references: [id], onDelete: SetNull)
 

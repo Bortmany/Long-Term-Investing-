@@ -8,7 +8,7 @@ import { loadPlansCardData } from "@/lib/billing/plans-card-data";
 import { PlansCard } from "@/components/settings/plans-card";
 import { prisma } from "@/lib/prisma";
 import { badgeForPriceSource } from "@/lib/data";
-import { fromPrismaFxRate } from "@/lib/portfolio";
+import { findRateWithHub, fromPrismaFxRate } from "@/lib/portfolio";
 import { formatShortDate } from "@/lib/format";
 import { badgePropsForValueSource } from "@/components/source-badge";
 import { BaseCurrencyCard } from "@/components/settings/base-currency-card";
@@ -85,6 +85,41 @@ export default async function SettingsPage({
     })),
   ];
 
+  // Currencies the user holds or tracks that have NO usable rate into the base
+  // currency (direct, inverse or through the rial). The rates card says so in
+  // words instead of ever showing a made-up rate (golden rule).
+  const [heldCurrencies, trackedCurrencies] = await Promise.all([
+    portfolio
+      ? prisma.transaction.findMany({
+          where: { portfolioId: portfolio.id },
+          select: { currency: true, instrument: { select: { currency: true } } },
+          distinct: ["currency", "instrumentId"],
+        })
+      : Promise.resolve([]),
+    prisma.watchlistItem.findMany({
+      where: { userId: session.user.id },
+      select: { instrument: { select: { currency: true } } },
+    }),
+  ]);
+  const usedCurrencies = new Set<Currency>();
+  for (const t of heldCurrencies) {
+    usedCurrencies.add(t.currency);
+    if (t.instrument) usedCurrencies.add(t.instrument.currency);
+  }
+  for (const w of trackedCurrencies) usedCurrencies.add(w.instrument.currency);
+  const rateInputs = rates.map((r) => ({
+    base: r.base,
+    quote: r.quote,
+    rate: r.rate,
+    asOf: r.asOf,
+  }));
+  const missingRateCurrencies = Object.values(Currency).filter(
+    (c) =>
+      usedCurrencies.has(c) &&
+      c !== baseCurrency &&
+      findRateWithHub(c, baseCurrency, rateInputs) === null,
+  );
+
   // Boolean only — never the key itself.
   const hasFmpKey = Boolean(process.env.FMP_API_KEY);
   const currencies = Object.values(Currency);
@@ -109,6 +144,7 @@ export default async function SettingsPage({
             currencies={currencies}
             baseCurrency={baseCurrency}
             hasFmpKey={hasFmpKey}
+            missingRateCurrencies={missingRateCurrencies}
           />
         </div>
 

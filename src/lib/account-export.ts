@@ -201,6 +201,8 @@ export type AccountExportRows = {
 export type ExportedTransaction = TxnInput & {
   id: string;
   instrumentTicker: string | null;
+  /** Broker's own transaction id or a fingerprint, kept to avoid double imports. Null if typed by hand. */
+  importReference: string | null;
 };
 
 export type ExportedPortfolio = {
@@ -313,6 +315,7 @@ function toExportedTransaction(t: ExportTransactionRow): ExportedTransaction {
     ...fromPrismaTransaction(t),
     id: t.id,
     instrumentTicker: t.instrument?.ticker ?? null,
+    importReference: t.importReference ?? null,
   };
 }
 

@@ -17,6 +17,7 @@ import {
   type ActionResult,
 } from "@/lib/action-result";
 import {
+  MAX_IMPORT_REFERENCE_LENGTH,
   applyOversellProjection,
   findImportOversell,
   toTransactionRecord,
@@ -62,6 +63,11 @@ const importArgsSchema = z
       fee: z.string().optional(),
       tradeDate: z.string().optional(),
       note: z.string().optional(),
+      // Broker-preset / fingerprint reference, stored only to stop the same
+      // line being imported twice. Length-capped; `line` is for messages and
+      // is never stored.
+      reference: z.string().max(MAX_IMPORT_REFERENCE_LENGTH).optional(),
+      line: z.number().int().optional(),
     }),
   )
   .max(2000, "That's more rows than one import allows (max 2000). Split the file and try again.");
@@ -144,7 +150,7 @@ export async function validateImportRows(
  */
 export async function importTransactions(
   mappedRows: MappedImportRow[],
-): Promise<ActionResult<{ imported: number }>> {
+): Promise<ActionResult<{ imported: number; alreadyImportedCount: number }>> {
   const userId = await getSessionUserId();
   if (!userId) return actionError(NOT_SIGNED_IN_ERROR);
 
@@ -179,9 +185,8 @@ export async function importTransactions(
   }
 
   const portfolio = await getOrCreatePortfolio(userId);
-  const records = report.results.flatMap((result) =>
-    result.ok ? [toTransactionRecord(result.parsed)] : [],
-  );
+  // Validated rows in order, each with its (optional) import reference.
+  const okResults = report.results.flatMap((result) => (result.ok ? [result] : []));
 
   // One transaction that does BOTH the oversell check and the write while
   // holding a lock on this portfolio — so it's atomic:
@@ -204,7 +209,29 @@ export async function importTransactions(
       startingQuantities.set(holding.instrumentId, holding.quantity);
     }
 
-    const oversell = findImportOversell(report.results, startingQuantities);
+    // References already in THIS portfolio (read inside the lock, so a row
+    // that appeared a moment ago is seen). Rows with a known reference — or a
+    // repeat of one earlier in this same upload — are left out, not an error.
+    const knownReferences = new Set<string>();
+    for (const row of existing) {
+      if (row.importReference) knownReferences.add(row.importReference);
+    }
+    const keptResults: typeof okResults = [];
+    let alreadyImportedCount = 0;
+    for (const result of okResults) {
+      const reference = result.reference;
+      if (reference) {
+        if (knownReferences.has(reference)) {
+          alreadyImportedCount += 1;
+          continue;
+        }
+        knownReferences.add(reference);
+      }
+      keptResults.push(result);
+    }
+
+    // The oversell walk sees only the rows that will really be written.
+    const oversell = findImportOversell(keptResults, startingQuantities);
     if (oversell) {
       return {
         ok: false as const,
@@ -212,15 +239,56 @@ export async function importTransactions(
       };
     }
 
-    await tx.transaction.createMany({
-      data: records.map((record) => ({ ...record, portfolioId: portfolio.id })),
-    });
-    return { ok: true as const };
+    if (keptResults.length > 0) {
+      await tx.transaction.createMany({
+        data: keptResults.map((result) => ({
+          ...toTransactionRecord(result.parsed),
+          importReference: result.reference ?? null,
+          portfolioId: portfolio.id,
+        })),
+      });
+    }
+    return { ok: true as const, imported: keptResults.length, alreadyImportedCount };
   });
 
   if (!outcome.ok) return actionError(outcome.error);
 
   revalidatePath("/portfolio");
   revalidatePath("/dashboard");
-  return actionOk({ imported: records.length });
+  return actionOk({
+    imported: outcome.imported,
+    alreadyImportedCount: outcome.alreadyImportedCount,
+  });
+}
+
+/**
+ * The import references already stored in the signed-in user's portfolio, so
+ * the import screen can show repeats as "Already imported" before anything is
+ * sent. Scoped to the session user's own portfolio; reads only (never creates
+ * a portfolio).
+ */
+export async function getKnownImportReferences(
+  portfolioId: string,
+): Promise<{ ok: true; references: string[] } | { ok: false; message: string }> {
+  const userId = await getSessionUserId();
+  if (!userId) return { ok: false, message: NOT_SIGNED_IN_ERROR };
+
+  if (typeof portfolioId !== "string" || portfolioId.length === 0 || portfolioId.length > 100) {
+    return { ok: false, message: "We could not find that portfolio." };
+  }
+
+  // Ownership check: the portfolio must belong to the signed-in user. Anyone
+  // else's id gets the same answer as one that does not exist.
+  const portfolio = await prisma.portfolio.findFirst({
+    where: { id: portfolioId, userId },
+    select: { id: true },
+  });
+  if (!portfolio) return { ok: false, message: "We could not find that portfolio." };
+
+  const rows = await prisma.transaction.findMany({
+    where: { portfolioId: portfolio.id, importReference: { not: null } },
+    select: { importReference: true },
+  });
+  const references = rows.flatMap((row) => (row.importReference ? [row.importReference] : []));
+  return { ok: true, references };
 }

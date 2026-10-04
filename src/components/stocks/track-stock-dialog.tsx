@@ -10,7 +10,12 @@
 import * as React from "react";
 import { LoaderCircle, Plus } from "lucide-react";
 import type { Currency, Market } from "@prisma/client";
-import { defaultCurrencyForMarket, marketLabel, sortMarkets } from "@/lib/markets";
+import {
+  CURRENCY_VALUES,
+  defaultCurrencyForMarket,
+  marketLabel,
+  sortMarkets,
+} from "@/lib/markets";
 
 import { addToWatchlist } from "@/app/actions/stocks";
 import {
@@ -28,6 +33,15 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, type SelectOption } from "@/components/ui/select";
+import { cn } from "@/lib/utils";
+import {
+  AUTO_CHANGE_RING_CLASS,
+  CURRENCY_HINT,
+  HintedControl,
+  MARKET_HINT,
+  PREFILL_HINT,
+  useAutoChangeRing,
+} from "./dialog-hints";
 
 export function TrackStockDialog({ markets }: { markets: Market[] }) {
   const [open, setOpen] = React.useState(false);
@@ -37,6 +51,7 @@ export function TrackStockDialog({ markets }: { markets: Market[] }) {
   const [currency, setCurrency] = React.useState<Currency>(
     defaultCurrencyForMarket(market),
   );
+  const currencyRing = useAutoChangeRing();
   const [sector, setSector] = React.useState<string | undefined>(undefined);
   const [country, setCountry] = React.useState<string | undefined>(undefined);
 
@@ -63,7 +78,11 @@ export function TrackStockDialog({ markets }: { markets: Market[] }) {
   function handleMarketChange(value: string) {
     const nextMarket = value as Market;
     setMarket(nextMarket);
-    setCurrency(defaultCurrencyForMarket(nextMarket));
+    const suggested = defaultCurrencyForMarket(nextMarket);
+    if (suggested !== currency) {
+      setCurrency(suggested);
+      currencyRing.pulse();
+    }
   }
 
   function handlePrefill() {
@@ -123,6 +142,10 @@ export function TrackStockDialog({ markets }: { markets: Market[] }) {
     value: m,
     label: marketLabel(m),
   }));
+  const currencyOptions: SelectOption[] = CURRENCY_VALUES.map((c) => ({
+    value: c,
+    label: c,
+  }));
   const busy = isSaving;
 
   return (
@@ -146,7 +169,7 @@ export function TrackStockDialog({ markets }: { markets: Market[] }) {
           <DialogTitle>Track a Stock</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2">
             <div>
               <Label htmlFor="track-ticker" className="mb-1.5">
                 Ticker
@@ -159,25 +182,48 @@ export function TrackStockDialog({ markets }: { markets: Market[] }) {
                   setTicker(event.target.value.toUpperCase())
                 }
                 placeholder="AAPL"
+                className="h-11"
               />
             </div>
             <div>
               <Label htmlFor="track-market" className="mb-1.5">
                 Market
               </Label>
-              <Select
-                id="track-market"
-                value={market}
-                onValueChange={handleMarketChange}
-                options={marketOptions}
-              />
+              <HintedControl hint={MARKET_HINT}>
+                <Select
+                  id="track-market"
+                  value={market}
+                  onValueChange={handleMarketChange}
+                  options={marketOptions}
+                  className="[&_select]:h-11"
+                />
+              </HintedControl>
             </div>
           </div>
           <div>
+            <Label htmlFor="track-currency" className="mb-1.5">
+              Currency
+            </Label>
+            <HintedControl hint={CURRENCY_HINT}>
+              <Select
+                id="track-currency"
+                value={currency}
+                onValueChange={(value) => setCurrency(value as Currency)}
+                options={currencyOptions}
+                className={cn(
+                  "[&_select]:h-11",
+                  currencyRing.active && AUTO_CHANGE_RING_CLASS,
+                )}
+              />
+            </HintedControl>
+          </div>
+          <div>
+            <HintedControl hint={PREFILL_HINT} className="w-auto">
             <Button
               type="button"
               variant="outline"
               size="sm"
+              className="min-h-11"
               onClick={handlePrefill}
               disabled={isPrefilling || !ticker.trim()}
             >
@@ -190,6 +236,7 @@ export function TrackStockDialog({ markets }: { markets: Market[] }) {
                 "Prefill from FMP"
               )}
             </Button>
+            </HintedControl>
           </div>
           {/* Golden rule: prefill failure is stated honestly, never a made-up name. */}
           {prefillError ? (
@@ -211,15 +258,18 @@ export function TrackStockDialog({ markets }: { markets: Market[] }) {
               value={name}
               onChange={(event) => setName(event.target.value)}
               placeholder="Apple Inc."
+              className="h-11"
             />
           </div>
           {error ? (
             <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
           ) : null}
-          <DialogFooter>
+          <DialogFooter className="flex-col-reverse gap-2 sm:flex-row sm:gap-3">
             <Button
               type="button"
               variant="outline"
+              size="lg"
+              className="w-full sm:w-auto"
               disabled={busy}
               onClick={() => {
                 reset();
@@ -228,7 +278,12 @@ export function TrackStockDialog({ markets }: { markets: Market[] }) {
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={busy}>
+            <Button
+              type="submit"
+              size="lg"
+              className="w-full sm:w-auto"
+              disabled={busy}
+            >
               {isSaving ? (
                 <>
                   <LoaderCircle className="animate-spin" aria-hidden="true" />

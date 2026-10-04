@@ -48,6 +48,8 @@ export type FxRateDisplayRow = {
   base: Currency;
   quote: Currency;
   rate: number;
+  /** The as-of date (used to find the newest usable rate). */
+  asOf: Date;
   /** Pre-formatted as-of date, e.g. "Jul 10, 2026". */
   asOfLabel: string;
   /** Source badge props computed server-side from the row's PriceSource. */
@@ -70,6 +72,11 @@ function formatRate(rate: number): string {
   }).format(rate);
 }
 
+/** The amber sentence shown when a held/tracked currency has no rate. */
+export function missingRateSentence(code: string): string {
+  return `No rate found for ${code}. Type one in below.`;
+}
+
 /** Today's date in the local timezone as an <input type="date"> value. */
 function todayLocalIso(): string {
   const now = new Date();
@@ -83,12 +90,15 @@ export function FxRatesCard({
   currencies,
   baseCurrency,
   hasFmpKey,
+  missingRateCurrencies = [],
 }: {
   rates: FxRateDisplayRow[];
   /** The Currency enum values, passed from the server so the list can't drift from the schema. */
   currencies: Currency[];
   baseCurrency: Currency;
   hasFmpKey: boolean;
+  /** Held or tracked currencies with no usable rate into the base currency. */
+  missingRateCurrencies?: Currency[];
 }) {
   // --- Add-rate form (entries here are always source MANUAL) ---
   const firstNonBase = currencies.find((c) => c !== baseCurrency) ?? baseCurrency;
@@ -204,6 +214,15 @@ export function FxRatesCard({
         {refreshError ? (
           <p className="mb-3 text-sm text-red-600 dark:text-red-400">{refreshError}</p>
         ) : null}
+        {missingRateCurrencies.map((code) => (
+          <p
+            key={`missing-${code}`}
+            className="mb-3 flex items-start gap-1.5 text-sm text-amber-700 dark:text-amber-400"
+          >
+            <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+            <span>{missingRateSentence(code)}</span>
+          </p>
+        ))}
         {report ? (
           // Honest refresh report: exactly which pairs updated, and which
           // stayed unavailable (those never get made-up rates).

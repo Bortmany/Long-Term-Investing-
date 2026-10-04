@@ -35,6 +35,15 @@ import {
   type TransactionInput,
 } from "@/lib/transaction-schema";
 import { defaultCurrencyForMarket, marketLabel, sortCurrencies, sortMarkets } from "@/lib/markets";
+import {
+  AUTO_CHANGE_RING_CLASS,
+  CURRENCY_HINT,
+  HintedControl,
+  MARKET_HINT,
+  PREFILL_HINT,
+  useAutoChangeRing,
+} from "@/components/stocks/dialog-hints";
+import { cn } from "@/lib/utils";
 import { transactionTypeLabel, type InstrumentOptionData, type TransactionRowData } from "./types";
 
 const NEW_INSTRUMENT_VALUE = "__new__";
@@ -126,6 +135,7 @@ export function TransactionDialog({
   // --- Inline "track a new instrument" panel ---
   const [showNewInstrument, setShowNewInstrument] = React.useState(false);
   const [newTicker, setNewTicker] = React.useState("");
+  const newCurrencyRing = useAutoChangeRing();
   const [newMarket, setNewMarket] = React.useState<Market>(markets[0] ?? "US");
   const [newName, setNewName] = React.useState("");
   const [newCurrency, setNewCurrency] = React.useState<Currency>(
@@ -416,7 +426,7 @@ export function TransactionDialog({
                       Cancel
                     </Button>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 min-[480px]:grid-cols-2 gap-3">
                     <div>
                       <Label htmlFor="new-inst-ticker" className="mb-1.5">
                         Ticker
@@ -426,31 +436,40 @@ export function TransactionDialog({
                         value={newTicker}
                         onChange={(event) => setNewTicker(event.target.value.toUpperCase())}
                         placeholder="AAPL"
+                        className="h-11"
                       />
                     </div>
                     <div>
                       <Label htmlFor="new-inst-market" className="mb-1.5">
                         Market
                       </Label>
+                      <HintedControl hint={MARKET_HINT}>
                       <Select
                         id="new-inst-market"
+                        className="[&_select]:h-11"
                         value={newMarket}
                         onValueChange={(value) => {
                           // Picking a market pre-selects its usual currency (still changeable).
                           const nextMarket = value as Market;
                           setNewMarket(nextMarket);
                           const suggested = defaultCurrencyForMarket(nextMarket);
-                          if (currencies.includes(suggested)) setNewCurrency(suggested);
+                          if (currencies.includes(suggested) && suggested !== newCurrency) {
+                            setNewCurrency(suggested);
+                            newCurrencyRing.pulse();
+                          }
                         }}
                         options={marketOptions}
                       />
+                      </HintedControl>
                     </div>
                   </div>
                   <div>
+                    <HintedControl hint={PREFILL_HINT} className="w-auto">
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
+                      className="min-h-11"
                       onClick={handlePrefill}
                       disabled={isPrefilling || !newTicker.trim()}
                     >
@@ -463,6 +482,7 @@ export function TransactionDialog({
                         "Prefill from FMP"
                       )}
                     </Button>
+                    </HintedControl>
                   </div>
                   {/* Golden rule: prefill failure is stated honestly, never a
                       made-up name — the owner just fills the fields by hand. */}
@@ -481,6 +501,7 @@ export function TransactionDialog({
                       value={newName}
                       onChange={(event) => setNewName(event.target.value)}
                       placeholder="Apple Inc."
+                      className="h-11"
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
@@ -488,12 +509,18 @@ export function TransactionDialog({
                       <Label htmlFor="new-inst-currency" className="mb-1.5">
                         Currency
                       </Label>
-                      <Select
-                        id="new-inst-currency"
-                        value={newCurrency}
-                        onValueChange={(value) => setNewCurrency(value as Currency)}
-                        options={currencyOptions}
-                      />
+                      <HintedControl hint={CURRENCY_HINT}>
+                        <Select
+                          id="new-inst-currency"
+                          value={newCurrency}
+                          onValueChange={(value) => setNewCurrency(value as Currency)}
+                          options={currencyOptions}
+                          className={cn(
+                            "[&_select]:h-11",
+                            newCurrencyRing.active && AUTO_CHANGE_RING_CLASS,
+                          )}
+                        />
+                      </HintedControl>
                     </div>
                     <div>
                       <Label htmlFor="new-inst-type" className="mb-1.5">
