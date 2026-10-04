@@ -32,7 +32,7 @@ describe("stock page and pickers use the one visibility rule", () => {
   it("the Add Transaction, Committee and import pickers never list every instrument", () => {
     for (const file of [
       "src/app/(app)/portfolio/page.tsx",
-      "src/app/(app)/committee/page.tsx",
+      "src/app/(app)/committee/(main)/page.tsx",
       "src/app/(app)/portfolio/import/page.tsx",
     ]) {
       const source = read(file);

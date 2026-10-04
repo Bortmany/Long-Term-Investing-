@@ -1,7 +1,6 @@
 import { headers } from "next/headers";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import { FileSearch } from "lucide-react";
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -13,8 +12,6 @@ import {
   sellAnalysisSchema,
 } from "@/lib/ai/schemas";
 import { badgePropsForPrice } from "@/components/source-badge";
-import { EmptyState } from "@/components/empty-state";
-import { Button } from "@/components/ui/button";
 import { CommitteeResultPanel } from "@/components/committee/committee-result-panel";
 import { DecisionRecordHeader } from "@/components/committee/decision-record-header";
 import { BuyAnalysisPanel, type CurrentPriceInfo } from "@/components/committee/buy-analysis-panel";
@@ -45,21 +42,6 @@ export async function generateMetadata({
   return {
     title: instrument ? `${instrument.ticker} run — InvestIQ AI` : "Committee run — InvestIQ AI",
   };
-}
-
-function notFound() {
-  return (
-    <EmptyState
-      icon={FileSearch}
-      heading="Run not found"
-      sentence="This analysis run doesn't exist or has been removed."
-      action={
-        <Button asChild>
-          <Link href="/committee">Back to Committee</Link>
-        </Button>
-      }
-    />
-  );
 }
 
 /**

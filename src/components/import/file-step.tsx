@@ -182,6 +182,8 @@ export function FileStep({
     notice?.kind === "problem" && notice.variant === "destructive"
       ? "Only .csv files, up to 5 MB"
       : null;
+  // Single-file brokers: a refused file never shows a green tick or "Ready".
+  const singleRefused = !multi && files.length > 0 && !!files[0].problem;
 
   const placeholder = isOther ? OTHER_PLACEHOLDER : (card.headerExample ?? OTHER_PLACEHOLDER);
   const showBeta = card.beta || !!card.betaDetail;
@@ -336,7 +338,7 @@ export function FileStep({
               "flex min-h-[160px] w-full flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-6 text-center outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring lg:min-h-[220px]",
               dragging
                 ? "border-blue-600 bg-blue-50 dark:border-blue-500 dark:bg-blue-950"
-                : shortZoneError
+                : shortZoneError || singleRefused
                   ? "border-red-600 dark:border-red-500"
                   : "border-slate-300 hover:border-slate-400 dark:border-slate-700 dark:hover:border-slate-600",
             )}
@@ -350,6 +352,14 @@ export function FileStep({
               <>
                 <Upload className="size-6 text-blue-600 dark:text-blue-400" aria-hidden="true" />
                 <span className="text-sm font-medium">Drop to add it</span>
+              </>
+            ) : singleRefused ? (
+              <>
+                <TriangleAlert className="size-6 text-red-600 dark:text-red-400" aria-hidden="true" />
+                <span className="max-w-full truncate text-sm font-medium">{files[0].name}</span>
+                <span className="text-xs text-red-600 dark:text-red-400">
+                  {singleFileZoneLine(files)}
+                </span>
               </>
             ) : hasFile && !multi ? (
               <>
@@ -596,4 +606,12 @@ export function fileCountLine(files: readonly { problem?: string }[]): string {
   if (bad === 0) return `${good} ${noun(good)} ready`;
   if (good === 0) return `${bad} ${noun(bad)} can't be used`;
   return `${good} ${noun(good)} ready, ${bad} can't be used`;
+}
+
+/** The small line in the single-file upload box: a refused file is never "Ready". */
+export function singleFileZoneLine(files: readonly { problem?: string }[]): string {
+  if (files.length > 0 && files[0].problem) {
+    return "Can't be used. Choose another file to replace it.";
+  }
+  return "Ready. Choose another file to replace it.";
 }

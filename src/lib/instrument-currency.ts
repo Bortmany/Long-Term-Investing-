@@ -16,3 +16,17 @@ export function currencyMismatchMessage(
     `Change the currency to ${instrument.currency} and enter the price in ${instrument.currency}.`
   );
 }
+
+/**
+ * The red form error to show under the form. When the server refused with the
+ * very same currency-mismatch sentence the amber hint already shows, say it
+ * once (the hint) and hide the red copy.
+ */
+export function visibleFormError(
+  formError: string | null,
+  currencyHint: string | null,
+): string | null {
+  if (!formError) return null;
+  if (currencyHint && formError.trim() === currencyHint.trim()) return null;
+  return formError;
+}

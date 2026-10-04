@@ -43,7 +43,7 @@ import {
   PREFILL_HINT,
   useAutoChangeRing,
 } from "@/components/stocks/dialog-hints";
-import { currencyMismatchMessage } from "@/lib/instrument-currency";
+import { currencyMismatchMessage, visibleFormError } from "@/lib/instrument-currency";
 import { cn } from "@/lib/utils";
 import { transactionTypeLabel, type InstrumentOptionData, type TransactionRowData } from "./types";
 
@@ -815,8 +815,11 @@ export function TransactionDialog({
             />
           </div>
 
-          {formError ? (
-            <p className="text-sm text-red-600 dark:text-red-400">{formError}</p>
+          {/* The wrong-currency refusal already shows as the amber hint; don't repeat it. */}
+          {visibleFormError(formError, currencyHint) ? (
+            <p className="text-sm text-red-600 dark:text-red-400">
+              {visibleFormError(formError, currencyHint)}
+            </p>
           ) : null}
 
           <DialogFooter>

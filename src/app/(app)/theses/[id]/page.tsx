@@ -1,8 +1,7 @@
 import { headers } from "next/headers";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { BookOpen } from "lucide-react";
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -16,8 +15,6 @@ import {
   badgePropsForHoldingValue,
   SourceBadge,
 } from "@/components/source-badge";
-import { EmptyState } from "@/components/empty-state";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ThesisStatusChip } from "@/components/theses/thesis-status-chip";
 import { ThesisCheckPanel } from "@/components/theses/thesis-check-panel";
@@ -79,18 +76,7 @@ export default async function ThesisDetailPage({
   });
 
   if (!thesis) {
-    return (
-      <EmptyState
-        icon={BookOpen}
-        heading="Thesis not found"
-        sentence="This thesis doesn't exist or has been removed."
-        action={
-          <Button asChild>
-            <Link href="/theses">Back to Theses</Link>
-          </Button>
-        }
-      />
-    );
+    notFound();
   }
 
   const instrument = thesis.instrument;
@@ -260,7 +246,7 @@ export default async function ThesisDetailPage({
         output={checkOutput}
       />
 
-      <CheckHistoryTimeline checks={checks} />
+      <CheckHistoryTimeline checks={checks} proLocked={!userIsPro} />
     </div>
   );
 }

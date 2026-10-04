@@ -112,7 +112,7 @@ export function StockSearchResults({
                 {/* The ticker is the one real link; its invisible layer covers the whole row. */}
                 <Link
                   href={`/stocks/${row.instrumentId}`}
-                  className="inline-flex min-h-11 items-center font-mono text-base font-semibold text-blue-600 after:absolute after:inset-0 after:content-[''] hover:underline focus-visible:underline focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-ring dark:text-blue-400"
+                  className="inline-flex min-h-11 min-w-11 items-center font-mono text-base font-semibold text-blue-600 after:absolute after:inset-0 after:content-[''] hover:underline focus-visible:underline focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-ring dark:text-blue-400"
                 >
                   {row.ticker}
                 </Link>

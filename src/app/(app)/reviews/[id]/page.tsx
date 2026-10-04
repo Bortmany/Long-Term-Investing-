@@ -1,7 +1,7 @@
 import { headers } from "next/headers";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import { ArrowRight, ClipboardCheck, TrendingDown, TrendingUp, TriangleAlert } from "lucide-react";
+import { ArrowRight, TrendingDown, TrendingUp, TriangleAlert } from "lucide-react";
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -12,9 +12,7 @@ import {
   extractWeeklyReviewMeta,
 } from "@/lib/reviews/output";
 import { AiPanel } from "@/components/ai-panel";
-import { EmptyState } from "@/components/empty-state";
 import { ExplainerTip } from "@/components/explainer-tip";
-import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -41,21 +39,6 @@ export async function generateMetadata({
   return {
     title: review ? `${formatIsoWeek(review.period)} — InvestIQ AI` : "Review — InvestIQ AI",
   };
-}
-
-function notFound() {
-  return (
-    <EmptyState
-      icon={ClipboardCheck}
-      heading="Review not found"
-      sentence="This weekly review doesn't exist or has been removed."
-      action={
-        <Button asChild>
-          <Link href="/reviews">Back to Reviews</Link>
-        </Button>
-      }
-    />
-  );
 }
 
 export default async function ReviewDetailPage({

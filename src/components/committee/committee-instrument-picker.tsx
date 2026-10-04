@@ -22,6 +22,8 @@ import { Info } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConnectKeyNotice } from "@/components/connect-key-notice";
+import { ProFeatureNotice } from "@/components/pro-feature-notice";
+import { committeePageNotice } from "@/lib/committee-page-notice";
 import { Label } from "@/components/ui/label";
 import { Select, type SelectOption } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -50,6 +52,8 @@ export function CommitteeInstrumentPicker({
   selectedInstrumentId,
   mode,
   hasAiKey,
+  proLocked = false,
+  billingEnabled = false,
   position,
   activeThesisTicker,
 }: {
@@ -58,11 +62,20 @@ export function CommitteeInstrumentPicker({
   selectedInstrumentId: string | null;
   mode: CommitteeMode;
   hasAiKey: boolean;
+  /** Free user: the full Committee is Pro. */
+  proLocked?: boolean;
+  billingEnabled?: boolean;
   position: CommitteePosition | null;
   activeThesisTicker: string | null;
 }) {
   const router = useRouter();
   const heldSet = new Set(heldInstrumentIds);
+  const pageNotice = committeePageNotice({
+    hasStock: !!selectedInstrumentId,
+    mode,
+    proLocked,
+    hasAiKey,
+  });
   const isHeld = selectedInstrumentId ? heldSet.has(selectedInstrumentId) : false;
 
   function navigate(nextInstrumentId: string, nextMode: CommitteeMode) {
@@ -130,7 +143,9 @@ export function CommitteeInstrumentPicker({
             without an API key so already-saved Committee / Upside / Downside results
             can still be opened. The notice only takes over when there is no
             stock selected, since then there is no panel below to carry it. */}
-        {!hasAiKey && !selectedInstrumentId ? (
+        {pageNotice === "pro" ? (
+          <ProFeatureNotice billingEnabled={billingEnabled} />
+        ) : pageNotice === "no-key" ? (
           <ConnectKeyNotice />
         ) : selectedInstrumentId ? (
           <Tabs

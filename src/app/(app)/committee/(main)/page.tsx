@@ -211,6 +211,8 @@ export default async function CommitteePage({
         selectedInstrumentId={selectedInstrumentId}
         mode={mode}
         hasAiKey={hasAiKey}
+        proLocked={!userIsPro}
+        billingEnabled={billingEnabled}
         position={position}
         activeThesisTicker={activeThesisTicker}
       />

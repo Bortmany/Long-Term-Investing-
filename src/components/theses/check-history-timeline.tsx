@@ -23,13 +23,26 @@ function evidenceSummary(evidence: unknown): string | null {
   );
 }
 
-export function CheckHistoryTimeline({ checks }: { checks: ThesisCheck[] }) {
+/** The empty-history sentence: a Free user has no "Check thesis now" button to point at. */
+export function emptyHistoryText(proLocked: boolean): string {
+  return proLocked
+    ? "Thesis check-ups are part of Pro, coming soon."
+    : "No checks yet — click \"Check thesis now\" above to run the first one.";
+}
+
+export function CheckHistoryTimeline({
+  checks,
+  proLocked = false,
+}: {
+  checks: ThesisCheck[];
+  proLocked?: boolean;
+}) {
   return (
     <div>
       <h2 className="mb-3 text-sm font-semibold">Check History</h2>
       {checks.length === 0 ? (
         <p className="text-sm text-slate-500 dark:text-slate-400">
-          No checks yet — click &quot;Check thesis now&quot; above to run the first one.
+          {emptyHistoryText(proLocked)}
         </p>
       ) : (
         <ol className="border-l-2 border-slate-200 dark:border-slate-800">
