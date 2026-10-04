@@ -20,7 +20,7 @@ const REASSURANCE = [
 ] as const;
 
 const smallLinkClass =
-  "inline-flex min-h-11 items-center px-1 text-blue-600 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm dark:text-blue-400";
+  "inline-flex min-h-11 min-w-11 items-center justify-center px-1 text-blue-600 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm dark:text-blue-400";
 
 function Wordmark({ className }: { className?: string }) {
   return (

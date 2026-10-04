@@ -288,14 +288,14 @@ export function AppShell({
             {" · "}
             <Link
               href="/privacy"
-              className="text-blue-600 hover:underline dark:text-blue-400"
+              className="inline-flex min-h-11 items-center px-2 text-blue-600 hover:underline dark:text-blue-400"
             >
               Privacy
             </Link>
             {" · "}
             <Link
               href="/terms"
-              className="text-blue-600 hover:underline dark:text-blue-400"
+              className="inline-flex min-h-11 items-center px-2 text-blue-600 hover:underline dark:text-blue-400"
             >
               Terms
             </Link>

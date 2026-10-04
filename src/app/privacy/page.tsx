@@ -22,7 +22,10 @@ export default async function PrivacyPage() {
 
   return (
     <main className="mx-auto min-h-screen max-w-2xl px-4 py-10 sm:px-6">
-      <Link href="/sign-in" className="text-sm text-blue-600 hover:underline dark:text-blue-400">
+      <Link
+        href="/sign-in"
+        className="inline-flex min-h-11 items-center text-sm text-blue-600 hover:underline dark:text-blue-400"
+      >
         ← Back to InvestIQ AI
       </Link>
 
@@ -283,7 +286,7 @@ export default async function PrivacyPage() {
             You can download a complete copy of everything this app stores
             about you, or permanently delete your account and everything in
             it, at any time from the{" "}
-            <Link href="/settings" className="text-blue-600 hover:underline dark:text-blue-400">
+            <Link href="/settings" data-tap-exempt="in-text" className="text-blue-600 hover:underline dark:text-blue-400">
               Settings
             </Link>{" "}
             page — look for the &quot;Your data&quot; and &quot;Danger&quot; cards. The download
@@ -318,6 +321,7 @@ export default async function PrivacyPage() {
             about your data, email{" "}
             <a
               href={`mailto:${contactEmail}`}
+              data-tap-exempt="in-text"
               className="text-blue-600 hover:underline dark:text-blue-400"
             >
               {contactEmail}

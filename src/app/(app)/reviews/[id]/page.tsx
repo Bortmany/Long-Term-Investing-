@@ -187,23 +187,23 @@ export default async function ReviewDetailPage({
               <Table className="mt-3">
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Sector</TableHead>
-                    <TableHead className="text-right">Last Week</TableHead>
-                    <TableHead className="text-right">This Week</TableHead>
-                    <TableHead className="text-right">Drift</TableHead>
+                    <TableHead className="whitespace-normal">Sector</TableHead>
+                    <TableHead className="whitespace-normal text-right">Last Week</TableHead>
+                    <TableHead className="whitespace-normal text-right">This Week</TableHead>
+                    <TableHead className="whitespace-normal text-right">Drift</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {sectorDrift.map((row) => (
                     <TableRow key={row.label}>
-                      <TableCell>{row.label}</TableCell>
-                      <TableCell className="text-right tabular-nums">
+                      <TableCell className="whitespace-normal">{row.label}</TableCell>
+                      <TableCell data-figure className="text-right tabular-nums">
                         {row.previousPercent === null ? "New" : formatPercent(row.previousPercent)}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">
+                      <TableCell data-figure className="text-right tabular-nums">
                         {formatPercent(row.currentPercent)}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">
+                      <TableCell data-figure className="text-right tabular-nums">
                         {row.driftPercent === null
                           ? "—"
                           : formatPercent(row.driftPercent, { signed: true })}

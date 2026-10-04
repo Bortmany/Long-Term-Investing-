@@ -67,7 +67,11 @@ export default async function ThesesPage() {
         icon={BookOpen}
         heading="Theses"
         sentence="Track why you own a position and let AI check if it still holds up."
-        action={<NewThesisDialog instruments={instrumentOptions} />}
+        action={
+          <div className="max-md:[&>button]:h-11">
+            <NewThesisDialog instruments={instrumentOptions} />
+          </div>
+        }
       />
     );
   }
@@ -90,7 +94,10 @@ export default async function ThesesPage() {
     <>
       <div className="mb-6 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-semibold">Theses</h1>
-        <NewThesisDialog instruments={instrumentOptions} />
+        {/* 44px tall and full width on a phone; the dialog's trigger button is a direct child. */}
+        <div className="max-md:w-full max-md:[&>button]:h-11 max-md:[&>button]:w-full">
+          <NewThesisDialog instruments={instrumentOptions} />
+        </div>
       </div>
       <ThesesList rows={rows} />
     </>

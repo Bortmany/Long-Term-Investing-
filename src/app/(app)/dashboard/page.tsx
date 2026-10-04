@@ -22,7 +22,13 @@ import {
 } from "@/lib/portfolio";
 import { loadPortfolioComputation } from "@/lib/portfolio-market-data";
 import { getUpcomingDividends, type UpcomingDividend } from "@/lib/data";
-import { formatMoney, formatPercent, formatQuantity, formatShortDate } from "@/lib/format";
+import {
+  formatMoney,
+  formatPercent,
+  formatQuantity,
+  formatQuantityCompact,
+  formatShortDate,
+} from "@/lib/format";
 import {
   SourceBadge,
   badgePropsForHoldingValue,
@@ -46,6 +52,8 @@ import {
   DividendWarningLine,
 } from "@/components/dashboard/dividend-warning";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ResponsiveRows } from "@/components/ui/responsive-rows";
+import { RowCard } from "@/components/ui/row-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -451,6 +459,53 @@ export default async function DashboardPage({
               className="min-h-48"
             />
           ) : (
+            <ResponsiveRows
+              listLabel="Holdings"
+              cards={holdings.map((holding) => {
+                const instrument = instrumentById.get(holding.instrumentId);
+                const fullQuantity = formatQuantity(holding.quantity);
+                return (
+                  <RowCard
+                    key={holding.instrumentId}
+                    density="compact"
+                    identity={
+                      <span className="font-mono font-semibold">{instrument?.ticker ?? "—"}</span>
+                    }
+                    headline={
+                      holding.valuation.ok ? (
+                        <>
+                          <span className="inline-flex flex-wrap items-center justify-end gap-1.5">
+                            <span data-figure className="text-base font-semibold tabular-nums">
+                              {formatMoney(holding.valuation.marketValue, base)}
+                            </span>
+                            <SourceBadge
+                              size="sm"
+                              {...(instrument
+                                ? badgePropsForHoldingValue(holding.valuation, instrument.market)
+                                : badgePropsForValueSource(holding.valuation.source))}
+                            />
+                          </span>
+                          <FxViaHubHint note={fxViaHubNote(holding.valuation)} />
+                        </>
+                      ) : (
+                        // Never a fake number: say why it couldn't be valued.
+                        <span className="text-sm text-amber-700 dark:text-amber-400">
+                          {holding.valuation.reason === "missing_price"
+                            ? "Unavailable — no price"
+                            : "Unavailable — no exchange rate"}
+                        </span>
+                      )
+                    }
+                    name={instrument?.name ?? "Unknown instrument"}
+                    meta={
+                      <span data-figure title={fullQuantity} aria-label={`${fullQuantity} shares`}>
+                        {formatQuantityCompact(holding.quantity)} shares
+                      </span>
+                    }
+                  />
+                );
+              })}
+              table={
             <Table>
               <TableHeader>
                 <TableRow>
@@ -468,13 +523,15 @@ export default async function DashboardPage({
                       <TableCell className="font-mono font-medium">
                         {instrument?.ticker ?? "—"}
                       </TableCell>
-                      <TableCell className="text-slate-600 dark:text-slate-400">
+                      <TableCell className="whitespace-normal break-words text-slate-600 dark:text-slate-400">
                         {instrument?.name ?? "Unknown instrument"}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
                         {formatQuantity(holding.quantity)}
                       </TableCell>
-                      <TableCell className="text-right">
+                      {/* Extra room on the right so the source badge's hover
+                          hint never reaches past the table edge. */}
+                      <TableCell className="pr-10 text-right">
                         {holding.valuation.ok ? (
                           <>
                             <span className="inline-flex items-center gap-1.5">
@@ -506,6 +563,8 @@ export default async function DashboardPage({
                 })}
               </TableBody>
             </Table>
+              }
+            />
           )}
         </CardContent>
       </Card>

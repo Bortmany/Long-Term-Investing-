@@ -280,14 +280,14 @@ function TradeRows({
 function NeedRows({ items, showFile }: { items: NeedItem[]; showFile: boolean }) {
   return (
     <>
-      <ul className="space-y-3 lg:hidden">
+      <ul className="space-y-2 md:hidden">
         {items.map((item) => (
           <li
             key={item.key}
             className="rounded-md border border-slate-200 p-3 dark:border-slate-800"
           >
-            <p className="text-sm">
-              <span className="font-medium">Row {item.line}</span>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              <span className="font-medium" data-figure>Row {item.line}</span>
               {showFile && item.file ? (
                 <span className="text-xs text-slate-500 dark:text-slate-400"> · {item.file}</span>
               ) : null}
@@ -297,13 +297,13 @@ function NeedRows({ items, showFile }: { items: NeedItem[]; showFile: boolean })
                 {reason}
               </p>
             ))}
-            <div className="mt-1">
+            <div className="mt-2 rounded-md bg-slate-50 p-2 dark:bg-slate-900">
               <RawLine raw={item.raw} />
             </div>
           </li>
         ))}
       </ul>
-      <div className="hidden lg:block">
+      <div className="hidden md:block">
         <Table>
           <TableHeader>
             <TableRow>
@@ -400,7 +400,7 @@ export function CheckStep({
 
   const importLabel = `Import ${readyCount} ${plural(readyCount, "transaction", "transactions")}`;
   const importButton = canImport ? (
-    <Button type="button" size="lg" onClick={onImport} disabled={busy}>
+    <Button type="button" size="lg" className="order-1" onClick={onImport} disabled={busy}>
       {isImporting ? (
         <>
           <LoaderCircle className="animate-spin" aria-hidden="true" />
@@ -674,12 +674,12 @@ export function CheckStep({
 
       {upToDate ? null : (
         <StickyActions className="lg:hidden">
-          <Button type="button" variant="ghost" size="lg" onClick={onBack} disabled={busy}>
+          <Button type="button" variant="ghost" size="lg" className="order-2" onClick={onBack} disabled={busy}>
             Back
           </Button>
           {importButton}
           {noteLines.map((line, i) => (
-            <p key={i} className="text-xs text-slate-500 dark:text-slate-400">
+            <p key={i} className="order-3 text-xs text-slate-500 dark:text-slate-400">
               {line}
             </p>
           ))}

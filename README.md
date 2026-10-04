@@ -136,14 +136,37 @@ version:
 | `SEED_DEMO_PASSWORD` | Password for the local demo login the seed creates. Never used in production. |
 | `E2E_TEST_PASSWORD` | Password for the end-to-end tests' own local login (`e2e-test@investiq.test`). Local test runs only. |
 | `FMP_API_KEY` | Financial Modeling Prep key for live US stock prices/fundamentals. Empty = manual/sample prices only, clearly badged. |
+| `TWELVE_DATA_API_KEY` | Twelve Data key for live Gulf share prices (Tadawul, ADX, QSE; Dubai only if you name it). Empty = the connection is off and Gulf prices stay typed-in or sample. Do not put a paid key on the live site until Twelve Data confirms in writing that showing prices to signed-in users is licensed; the free key is for your own Mac only. Muscat has no data supplier, so it is always typed-in. |
+| `TWELVE_DATA_MARKETS` | Which markets to send to Twelve Data, comma-separated. Empty = `TADAWUL,ADX,QSE`. Add `DFM` only once you have their dearer plan. |
+| `TWELVE_DATA_PUBLIC_DISPLAY_LICENSED` / `FMP_PUBLIC_DISPLAY_LICENSED` | Set to the literal `"true"` only when that supplier's written licence allows showing their prices to signed-out visitors (the public stock pages read these). Empty = no. |
+| `TWELVE_DATA_BASE_URL` | Developer-only: point at the stand-in test server (`scripts/fake-twelve-data.mjs`). Ignored in production. |
+| `BROKER_TOKEN_KEY` | Encrypts the saved Interactive Brokers tokens. Make one with `openssl rand -base64 32`. Empty = the broker connection is off. Never reuse `BETTER_AUTH_SECRET`, and keep a copy away from the database: if it is lost, everyone just has to reconnect. |
+| `IBKR_FLEX_BASE_URL` | Developer-only: point the broker connection at the pretend IBKR server (see below). Ignored in production. |
+| `MUSAFFA_API_KEY` | Key for the optional Pro Sharia screen badge. Verdicts are bought from Musaffa, never worked out here. Empty = every badge says "Not screened", the daily refresh answers a dormant 503 and nothing is ever sent. Do not set it on the live site until Musaffa has given written permission to show their verdicts. |
+| `MUSAFFA_API_BASE_URL` | Optional: Musaffa's sandbox address while testing (must be https). Empty = their normal address. |
+| `SHARIA_VENDOR` | Which supplier is active. Empty = `musaffa`; any other value turns the screen off. |
 | `ANTHROPIC_API_KEY` | Enables the AI features (health scores, committee, thesis checks, weekly reviews). Empty = every AI surface shows an honest "AI features are off" notice instead of a made-up result. |
 | `SENTRY_DSN` / `NEXT_PUBLIC_SENTRY_DSN` | Error tracking. Empty = tracking stays off, nothing is sent anywhere. |
 | `REDIS_URL` | Shared rate-limit store for multi-server deployments. Empty = a fast in-memory limiter scoped to one server process. |
 | `TRUST_PROXY_HEADERS` | Whether to trust `X-Forwarded-For`/`X-Real-IP` for rate-limiting. Only set `"true"` behind a proxy you control that overwrites the header (e.g. Railway). |
-| `CRON_SECRET` | Bearer secret for the scheduled endpoints (`/api/cron/weekly-review`, `/api/cron/check-alerts`). Empty = both answer a dormant 503. |
+| `CRON_SECRET` | Bearer secret for the scheduled endpoints (`/api/cron/weekly-review`, `/api/cron/check-alerts`, `/api/cron/sharia-refresh`). Empty = they answer a dormant 503. |
 | `RESEND_API_KEY` / `RESEND_FROM` | Optional weekly-review email via Resend. Either empty = email stays off. |
 | `PRIVACY_CONTACT_EMAIL` | Contact address shown on `/privacy` and `/terms`. Empty = the owner's default address. |
 | `SEED_DEMO_PASSWORD` | Password for the seeded demo login, used only by `prisma db seed`. Must be at least 12 characters; the seed refuses to run without it. |
+
+### Scheduled jobs (cron)
+
+Each job is a `POST` with the header `Authorization: Bearer <CRON_SECRET>`;
+without `CRON_SECRET` they answer a dormant 503. `weekly-review.yml.example`
+and `check-alerts.yml.example` in `.github/workflows/` show how to schedule
+the first two.
+
+- `POST /api/cron/weekly-review` and `POST /api/cron/check-alerts` — see the examples above.
+- `POST /api/cron/sharia-refresh` — **daily**. Refreshes the Sharia verdicts
+  for the stocks held or watched by people who are on Pro right now **and**
+  have the Sharia switch on; nobody else's stocks are sent to the supplier.
+  At most 500 stocks a run, 5 at once. It answers 503 (dormant) without
+  `MUSAFFA_API_KEY`, after the `CRON_SECRET` check, and makes no outside call.
 
 ### Plans and billing (payments are OFF by default)
 
@@ -164,6 +187,17 @@ npm run plan:set -- --email someone@example.com --plan PRO
 npm run plan:set -- --email someone@example.com --plan FREE
 # add --force for a user who has a Stripe subscription
 ```
+
+## Helper commands
+
+```
+npm run catalogue:sync   # create/correct the shared stock rows for the public stock list (safe to run twice; reads DATABASE_URL; touches no user data)
+npm run dev:fake-ibkr    # a pretend Interactive Brokers server on this computer, for trying the broker connection by hand
+```
+
+For `dev:fake-ibkr`, set `IBKR_FLEX_BASE_URL` in `.env` to the address it
+prints (for example `http://127.0.0.1:4010`), then connect with the pretend
+token `FAKE-TOKEN-OK` (any query id). It refuses to run in production.
 
 ## Checks
 
@@ -194,7 +228,10 @@ used. A red cross on a pull request means one step failed. The browser tests
 are left out there, as they are in `npm run verify`.
 
 Browsers for the smoke tests are preinstalled — never run
-`playwright install` on this machine.
+`playwright install` on this machine. If Playwright can't find a browser,
+point it at one that is already installed by setting
+`PLAYWRIGHT_CHROMIUM_PATH` to that Chromium (or headless shell) file, for
+example `PLAYWRIGHT_CHROMIUM_PATH=/path/to/chrome npm run test:e2e`.
 
 ## Deployment (Railway)
 

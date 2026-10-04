@@ -1,5 +1,5 @@
 // The refresh job: asks the supplier about stocks and stores what it says.
-// Used by the daily cron route (all switched-on users) and by the background
+// Used by the daily cron route (Pro users with the switch on) and by the background
 // fetch right after someone switches the badge on (one user, at most 25).
 //
 // Rules (sharia-screen.md, S4):
@@ -101,7 +101,7 @@ export async function refreshShariaScreens(
   const now = (deps.now ?? (() => new Date()))();
 
   if (options.scope === "all-users" && !(await store.anyoneEnabled())) {
-    return emptySummary("skipped", "Nobody has turned the screen on.");
+    return emptySummary("skipped", "Nobody is on Pro with the screen turned on.");
   }
 
   const summary = emptySummary("ok");

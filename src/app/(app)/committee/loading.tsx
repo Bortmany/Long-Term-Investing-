@@ -1,4 +1,5 @@
 import { Skeleton } from "@/components/ui/skeleton";
+import { CardSkeletonList } from "@/components/ui/card-skeletons";
 
 // Loading state shaped like the real /committee page (header + picker card +
 // result panel) so nothing jumps when the data arrives.
@@ -14,6 +15,8 @@ export default function CommitteeLoading() {
         <Skeleton className="h-6 w-40" />
         <Skeleton className="h-20 w-full" />
       </div>
+      {/* Phone: past-run cards (72px) instead of table rows */}
+      <CardSkeletonList density="compact" count={3} />
     </div>
   );
 }

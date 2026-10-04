@@ -323,7 +323,7 @@ export function TransactionsTable({
                     <TableCell className="text-right tabular-nums">
                       {formatPlainAmount(row.fee, row.currency)}
                     </TableCell>
-                    <TableCell className="max-w-40">
+                    <TableCell className="max-w-28">
                       {row.note ? (
                         <Tooltip>
                           <TooltipTrigger className="block truncate">{row.note}</TooltipTrigger>

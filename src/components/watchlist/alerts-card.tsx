@@ -28,6 +28,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { EmptyState } from "@/components/empty-state";
+import { ResponsiveRows } from "@/components/ui/responsive-rows";
+import { RowCard } from "@/components/ui/row-card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { AlertRowData } from "./types";
@@ -123,9 +125,15 @@ function DeleteAlertDialog({ alert, onClose }: { alert: AlertRowData; onClose: (
 function AlertRowActions({
   alert,
   onEdit,
+  buttonClassName = "size-9",
+  errorClassName = "mt-1 text-xs text-red-600 dark:text-red-400",
 }: {
   alert: AlertRowData;
   onEdit: (alert: AlertRowData) => void;
+  /** The phone card passes "size-11" (44 x 44). */
+  buttonClassName?: string;
+  /** The phone card floats the error under the button instead of squeezing it into the rail. */
+  errorClassName?: string;
 }) {
   const [isPending, startTransition] = React.useTransition();
   const [confirmDelete, setConfirmDelete] = React.useState(false);
@@ -155,7 +163,7 @@ function AlertRowActions({
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="size-9"
+                className={buttonClassName}
                 aria-label={`Actions for the ${alert.instrumentTicker ?? alert.thesisTicker ?? ""} alert`}
               >
                 <EllipsisVertical aria-hidden="true" />
@@ -175,9 +183,67 @@ function AlertRowActions({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      {error ? <p className="mt-1 text-xs text-red-600 dark:text-red-400">{error}</p> : null}
+      {error ? <p className={errorClassName}>{error}</p> : null}
       {confirmDelete ? <DeleteAlertDialog alert={alert} onClose={() => setConfirmDelete(false)} /> : null}
     </>
+  );
+}
+
+/**
+ * One alert as a phone card (below 768px): the rule in words (wraps, never
+ * cut), the ticker, the amber "what happened" line for a triggered alert, the
+ * status and the last-checked date, and the last check's outcome as VISIBLE
+ * text — the touch-screen twin of the laptop table's hover tip.
+ */
+function AlertCard({
+  alert,
+  onEdit,
+}: {
+  alert: AlertRowData;
+  onEdit: (alert: AlertRowData) => void;
+}) {
+  const rule = describeAlertRule({
+    kind: alert.kind,
+    threshold: alert.threshold,
+    currency: alert.instrumentCurrency,
+    intervalDays: alert.intervalDays,
+  });
+  return (
+    <RowCard
+      density="compact"
+      identity={
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium">{rule}</p>
+          <p className="text-xs font-normal text-slate-500 dark:text-slate-400">
+            {alert.instrumentTicker ?? alert.thesisTicker}
+          </p>
+          {alert.status === "TRIGGERED" ? (
+            <p className="mt-1 text-xs font-normal text-amber-700 dark:text-amber-400">
+              {describeFiredAlert(alert.firedRule, alert.lastOutcome)}
+            </p>
+          ) : null}
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+            <AlertStatusBadge status={alert.status} />
+            <span className="text-xs font-normal text-slate-500 dark:text-slate-400">
+              {alert.lastEvaluatedAt ? formatShortDate(alert.lastEvaluatedAt) : "Not checked yet"}
+            </span>
+          </div>
+          {alert.lastEvaluatedAt ? (
+            <p className="mt-1 line-clamp-2 text-xs font-normal text-slate-500 dark:text-slate-400">
+              {alert.lastOutcome ?? "Checked — no details recorded."}
+            </p>
+          ) : null}
+        </div>
+      }
+      action={
+        <AlertRowActions
+          alert={alert}
+          onEdit={onEdit}
+          buttonClassName="size-11"
+          errorClassName="absolute end-0 top-full z-20 mt-1 w-56 rounded-md border border-slate-200 bg-white p-2 text-xs text-red-600 shadow-md dark:border-slate-800 dark:bg-slate-950 dark:text-red-400"
+        />
+      }
+    />
   );
 }
 
@@ -196,7 +262,13 @@ export function AlertsCard({
     <Card className="gap-4">
       <CardHeader className="flex-row items-center justify-between">
         <CardTitle>Alerts</CardTitle>
-        <Button type="button" size="sm" onClick={onNew} disabled={!hasPickableTargets}>
+        <Button
+          type="button"
+          size="sm"
+          className="max-md:h-11"
+          onClick={onNew}
+          disabled={!hasPickableTargets}
+        >
           <Bell aria-hidden="true" />
           New Alert
         </Button>
@@ -217,65 +289,75 @@ export function AlertsCard({
             className="min-h-48"
           />
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Alert</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Last Checked</TableHead>
-                <TableHead>
-                  <span className="sr-only">Actions</span>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {alerts.map((alert) => (
-                <TableRow key={alert.id}>
-                  <TableCell>
-                    <div className="font-medium">
-                      {describeAlertRule({
-                        kind: alert.kind,
-                        threshold: alert.threshold,
-                        currency: alert.instrumentCurrency,
-                        intervalDays: alert.intervalDays,
-                      })}
-                    </div>
-                    <div className="text-xs text-slate-500 dark:text-slate-400">
-                      {alert.instrumentTicker ?? alert.thesisTicker}
-                    </div>
-                    {/* A triggered alert says what happened next to what was
-                        asked for, in the row itself — not only on hover,
-                        which a touch screen can't do. */}
-                    {alert.status === "TRIGGERED" ? (
-                      <div className="mt-1 text-xs text-amber-700 dark:text-amber-400">
-                        {describeFiredAlert(alert.firedRule, alert.lastOutcome)}
-                      </div>
-                    ) : null}
-                  </TableCell>
-                  <TableCell>
-                    <AlertStatusBadge status={alert.status} />
-                  </TableCell>
-                  <TableCell className="text-slate-500 dark:text-slate-400">
-                    {alert.lastEvaluatedAt ? (
-                      <Tooltip>
-                        <TooltipTrigger className="underline decoration-dotted underline-offset-2">
-                          {formatShortDate(alert.lastEvaluatedAt)}
-                        </TooltipTrigger>
-                        <TooltipContent className="max-w-64 whitespace-normal text-left">
-                          {alert.lastOutcome ?? "Checked — no details recorded."}
-                        </TooltipContent>
-                      </Tooltip>
-                    ) : (
-                      "Not checked yet"
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <AlertRowActions alert={alert} onEdit={onEdit} />
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <ResponsiveRows
+            listLabel="Alerts"
+            cards={alerts.map((alert) => (
+              <AlertCard key={alert.id} alert={alert} onEdit={onEdit} />
+            ))}
+            table={
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Alert</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Last Checked</TableHead>
+                    <TableHead>
+                      <span className="sr-only">Actions</span>
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {alerts.map((alert) => (
+                    <TableRow key={alert.id}>
+                      <TableCell className="whitespace-normal">
+                        <div className="font-medium">
+                          {describeAlertRule({
+                            kind: alert.kind,
+                            threshold: alert.threshold,
+                            currency: alert.instrumentCurrency,
+                            intervalDays: alert.intervalDays,
+                          })}
+                        </div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">
+                          {alert.instrumentTicker ?? alert.thesisTicker}
+                        </div>
+                        {/* A triggered alert says what happened next to what was
+                            asked for, in the row itself — not only on hover,
+                            which a touch screen can't do. */}
+                        {alert.status === "TRIGGERED" ? (
+                          <div className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+                            {describeFiredAlert(alert.firedRule, alert.lastOutcome)}
+                          </div>
+                        ) : null}
+                      </TableCell>
+                      <TableCell>
+                        <AlertStatusBadge status={alert.status} />
+                      </TableCell>
+                      <TableCell className="text-slate-500 dark:text-slate-400">
+                        {alert.lastEvaluatedAt ? (
+                          <Tooltip>
+                            <TooltipTrigger className="underline decoration-dotted underline-offset-2">
+                              {formatShortDate(alert.lastEvaluatedAt)}
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-64 whitespace-normal text-left">
+                              {alert.lastOutcome ?? "Checked — no details recorded."}
+                            </TooltipContent>
+                          </Tooltip>
+                        ) : (
+                          "Not checked yet"
+                        )}
+                      </TableCell>
+                      {/* Extra room on the right so the hover hint under the
+                          actions button never reaches past the table edge. */}
+                      <TableCell className="pr-8 text-right">
+                        <AlertRowActions alert={alert} onEdit={onEdit} />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            }
+          />
         )}
       </CardContent>
     </Card>

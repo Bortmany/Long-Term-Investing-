@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { CardSkeletonList, LAPTOP_ONLY } from "@/components/ui/card-skeletons";
 
 // Loading state shaped like the real settings page (four stacked cards at the
 // same max width) so nothing jumps when the data arrives.
@@ -26,7 +27,8 @@ export default function SettingsLoading() {
             <Skeleton className="h-10 w-40" />
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
+            <CardSkeletonList density="compact" count={3} />
+            <div className={`${LAPTOP_ONLY} space-y-3`}>
               {Array.from({ length: 3 }).map((_, i) => (
                 <div key={i} className="grid grid-cols-5 gap-4">
                   <Skeleton className="h-4 w-10" />

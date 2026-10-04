@@ -128,7 +128,7 @@ async function loadStartingQuantities(userId: string): Promise<Map<string, numbe
 /**
  * Dry-run validation of mapped CSV rows — NOTHING is written. Each row comes
  * back with ok/issues so the import screen can show exactly what to fix.
- * Tickers are resolved against the instruments already tracked in the app.
+ * Tickers are resolved against the instruments that already exist in the app.
  */
 export async function validateImportRows(
   mappedRows: MappedImportRow[],

@@ -218,18 +218,37 @@ export function TransactionDialog({
         setNewInstrumentError(result.error);
         return;
       }
-      const created: InstrumentOptionData = {
-        id: result.data.id,
-        ticker: result.data.ticker,
-        name: newName.trim(),
-        currency: newCurrency,
-        market: newMarket,
-      };
-      setLocalInstruments((prev) =>
-        [...prev, created].sort((a, b) => a.ticker.localeCompare(b.ticker)),
-      );
+      // Duplicate ticker+market: reuse the stored row's id. The server never
+      // returns the stored name/currency, so we must not present what was typed
+      // as if it were the stored instrument.
+      const existingOption = result.data.alreadyExisted
+        ? localInstruments.find((i) => i.id === result.data.id)
+        : undefined;
+      const created: InstrumentOptionData =
+        existingOption ??
+        (result.data.alreadyExisted
+          ? {
+              id: result.data.id,
+              ticker: result.data.ticker,
+              name: result.data.ticker,
+              currency,
+              market: newMarket,
+            }
+          : {
+              id: result.data.id,
+              ticker: result.data.ticker,
+              name: newName.trim(),
+              currency: newCurrency,
+              market: newMarket,
+            });
+      if (!existingOption) {
+        setLocalInstruments((prev) =>
+          [...prev, created].sort((a, b) => a.ticker.localeCompare(b.ticker)),
+        );
+      }
       setInstrumentId(created.id);
-      setCurrency(created.currency);
+      // Only default the currency from a known stored instrument or a new row.
+      if (existingOption || !result.data.alreadyExisted) setCurrency(created.currency);
       setShowNewInstrument(false);
       setNewTicker("");
       setNewName("");

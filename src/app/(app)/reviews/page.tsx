@@ -12,6 +12,8 @@ import { weeklyReviewSchema } from "@/lib/ai/schemas";
 import { ConnectKeyNotice } from "@/components/connect-key-notice";
 import { EmptyState } from "@/components/empty-state";
 import { RunWeeklyReviewButton } from "@/components/reviews/run-weekly-review-button";
+import { ResponsiveRows } from "@/components/ui/responsive-rows";
+import { RowCard } from "@/components/ui/row-card";
 import {
   Table,
   TableBody,
@@ -93,7 +95,12 @@ export default async function ReviewsPage() {
     <div className="space-y-6">
       <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-semibold">Reviews</h1>
-        {userIsPro ? <RunWeeklyReviewButton hasKey={hasAiKey} /> : null}
+        {userIsPro ? (
+          // 44px tall and full width on a phone.
+          <div className="max-md:w-full max-md:[&_button]:h-11 max-md:[&_button]:w-full">
+            <RunWeeklyReviewButton hasKey={hasAiKey} />
+          </div>
+        ) : null}
       </div>
 
       {/* Free plan: the notice sits under the heading, full width; every past
@@ -102,6 +109,29 @@ export default async function ReviewsPage() {
         <RunWeeklyReviewButton hasKey={hasAiKey} proLocked billingEnabled={billingEnabled} />
       )}
 
+      <ResponsiveRows
+        listLabel="Weekly reviews"
+        cards={rows.map((row) => (
+          <RowCard
+            key={row.id}
+            chevron
+            identity={
+              // The whole card is this one link (its invisible layer covers the card).
+              <Link
+                href={`/reviews/${row.id}`}
+                className="inline-flex min-h-11 items-center text-base font-medium after:absolute after:inset-0 after:rounded-lg after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-ring"
+              >
+                {formatIsoWeek(row.period)}
+              </Link>
+            }
+            headline={
+              <p className="line-clamp-3 w-full text-sm text-slate-600 dark:text-slate-400">
+                {row.summary}
+              </p>
+            }
+          />
+        ))}
+        table={
       <Table>
         <TableHeader>
           <TableRow>
@@ -124,6 +154,8 @@ export default async function ReviewsPage() {
           ))}
         </TableBody>
       </Table>
+        }
+      />
 
       {/* Past reviews above stay visible; this only explains why the run
           button is switched off. */}

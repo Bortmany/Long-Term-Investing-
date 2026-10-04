@@ -4,6 +4,7 @@
 
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { resolveEffectivePlan } from "@/lib/plan-access";
 import type { StoredShariaScreen } from "./types";
 import type { VendorResult } from "./vendor";
 
@@ -16,9 +17,9 @@ export type RefreshCandidate = {
 };
 
 export type ShariaStore = {
-  /** True when at least one user has the switch on. */
+  /** True when at least one user is Pro AND has the switch on. */
   anyoneEnabled(): Promise<boolean>;
-  /** Stocks held or watched by switched-on users (all-users), or by one user. */
+  /** Stocks held or watched by Pro users with the switch on (all-users), or by one user. */
   listCandidates(scope: "all-users" | { userId: string }, source: string): Promise<RefreshCandidate[]>;
   save(
     instrumentId: string,
@@ -29,67 +30,94 @@ export type ShariaStore = {
   remove(instrumentId: string, source: string): Promise<void>;
 };
 
-export const prismaShariaStore: ShariaStore = {
-  async anyoneEnabled() {
-    const row = await prisma.user.findFirst({
-      where: { shariaScreenEnabled: true },
-      select: { id: true },
-    });
-    return row !== null;
-  },
+/** The slice of the database client the store uses (lets tests pass a pretend one). */
+export type ShariaDb = Pick<typeof prisma, "user" | "instrument" | "shariaScreen">;
 
-  async listCandidates(scope, source) {
-    const owner =
-      scope === "all-users"
-        ? {
-            OR: [
-              { transactions: { some: { portfolio: { user: { shariaScreenEnabled: true } } } } },
-              { watchlistItems: { some: { user: { shariaScreenEnabled: true } } } },
-            ],
-          }
-        : {
-            OR: [
-              { transactions: { some: { portfolio: { userId: scope.userId } } } },
-              { watchlistItems: { some: { userId: scope.userId } } },
-            ],
-          };
-    const rows = await prisma.instrument.findMany({
-      where: owner,
-      select: {
-        id: true,
-        ticker: true,
-        market: true,
-        shariaScreens: { where: { source }, select: { fetchedAt: true, asOf: true } },
-      },
-    });
-    return rows.map((row) => ({
-      id: row.id,
-      ticker: row.ticker,
-      market: row.market,
-      existing: row.shariaScreens[0] ?? null,
-    }));
-  },
+/**
+ * Users the daily refresh is for: switch ON and Pro right now. Reads switched-on
+ * users with their subscription, then asks `resolveEffectivePlan` (owner-granted
+ * Pro, active/trialing/past-due with grace, or a cancelled period not yet ended).
+ * Ids only; nothing about the person leaves this function.
+ */
+export async function listEligibleUserIds(db: ShariaDb, now: Date): Promise<string[]> {
+  const users = await db.user.findMany({
+    where: { shariaScreenEnabled: true },
+    select: {
+      id: true,
+      plan: true,
+      subscription: { select: { status: true, currentPeriodEnd: true, providerSubscriptionId: true } },
+    },
+  });
+  return users
+    .filter((u) => resolveEffectivePlan({ plan: u.plan, subscription: u.subscription, now }) === "PRO")
+    .map((u) => u.id);
+}
 
-  async save(instrumentId, source, result, fetchedAt) {
-    const data = {
-      verdict: result.verdict,
-      methodName: result.methodName,
-      methodVersion: result.methodVersion,
-      ratios: result.ratios ?? Prisma.JsonNull,
-      asOf: result.asOf,
-      fetchedAt,
-    };
-    await prisma.shariaScreen.upsert({
-      where: { instrumentId_source: { instrumentId, source } },
-      create: { instrumentId, source, ...data },
-      update: data,
-    });
-  },
+export function createShariaStore(db: ShariaDb, clock: () => Date = () => new Date()): ShariaStore {
+  return {
+    async anyoneEnabled() {
+      return (await listEligibleUserIds(db, clock())).length > 0;
+    },
 
-  async remove(instrumentId, source) {
-    await prisma.shariaScreen.deleteMany({ where: { instrumentId, source } });
-  },
-};
+    async listCandidates(scope, source) {
+      let owner: Prisma.InstrumentWhereInput;
+      if (scope === "all-users") {
+        const userIds = await listEligibleUserIds(db, clock());
+        if (userIds.length === 0) return [];
+        owner = {
+          OR: [
+            { transactions: { some: { portfolio: { userId: { in: userIds } } } } },
+            { watchlistItems: { some: { userId: { in: userIds } } } },
+          ],
+        };
+      } else {
+        owner = {
+          OR: [
+            { transactions: { some: { portfolio: { userId: scope.userId } } } },
+            { watchlistItems: { some: { userId: scope.userId } } },
+          ],
+        };
+      }
+      const rows = await db.instrument.findMany({
+        where: owner,
+        select: {
+          id: true,
+          ticker: true,
+          market: true,
+          shariaScreens: { where: { source }, select: { fetchedAt: true, asOf: true } },
+        },
+      });
+      return rows.map((row) => ({
+        id: row.id,
+        ticker: row.ticker,
+        market: row.market,
+        existing: row.shariaScreens[0] ?? null,
+      }));
+    },
+
+    async save(instrumentId, source, result, fetchedAt) {
+      const data = {
+        verdict: result.verdict,
+        methodName: result.methodName,
+        methodVersion: result.methodVersion,
+        ratios: result.ratios ?? Prisma.JsonNull,
+        asOf: result.asOf,
+        fetchedAt,
+      };
+      await db.shariaScreen.upsert({
+        where: { instrumentId_source: { instrumentId, source } },
+        create: { instrumentId, source, ...data },
+        update: data,
+      });
+    },
+
+    async remove(instrumentId, source) {
+      await db.shariaScreen.deleteMany({ where: { instrumentId, source } });
+    },
+  };
+}
+
+export const prismaShariaStore: ShariaStore = createShariaStore(prisma);
 
 /**
  * Read stored rows for some instruments from ONE supplier. Takes no user id on

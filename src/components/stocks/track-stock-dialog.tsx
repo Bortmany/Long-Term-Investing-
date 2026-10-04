@@ -26,6 +26,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -33,6 +34,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, type SelectOption } from "@/components/ui/select";
+import { useToast } from "@/components/ui/toast";
+import { trackedToastMessage } from "@/lib/stocks/watch-messages";
 import { cn } from "@/lib/utils";
 import {
   AUTO_CHANGE_RING_CLASS,
@@ -62,6 +65,7 @@ export function TrackStockDialog({ markets }: { markets: Market[] }) {
   const [error, setError] = React.useState<string | null>(null);
   const [isPrefilling, startPrefilling] = React.useTransition();
   const [isSaving, startSaving] = React.useTransition();
+  const { toast } = useToast();
 
   function reset() {
     setTicker("");
@@ -128,11 +132,17 @@ export function TrackStockDialog({ markets }: { markets: Market[] }) {
         setError(created.error);
         return;
       }
+      // New stock or one InvestIQ already had: both end the same way — the
+      // stock goes on THIS user's watchlist through the same rate-limited
+      // action the star uses. The message uses only the ticker the person
+      // typed, never a stored name (it may have been typed by someone else).
+      const typedTicker = created.data.ticker;
       const watched = await addToWatchlist(created.data.id);
       if (!watched.ok) {
         setError(watched.error);
         return;
       }
+      toast({ message: trackedToastMessage(typedTicker, watched.data.alreadyWatching) });
       reset();
       setOpen(false);
     });
@@ -160,13 +170,17 @@ export function TrackStockDialog({ markets }: { markets: Market[] }) {
         }
       }}
     >
-      <Button type="button" onClick={() => setOpen(true)}>
+      <Button type="button" size="lg" onClick={() => setOpen(true)}>
         <Plus aria-hidden="true" />
         Track a Stock
       </Button>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Track a Stock</DialogTitle>
+          <DialogDescription>
+            Add a stock to your watchlist. If InvestIQ already has it, we&apos;ll just add it for
+            you.
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2">
@@ -260,6 +274,9 @@ export function TrackStockDialog({ markets }: { markets: Market[] }) {
               placeholder="Apple Inc."
               className="h-11"
             />
+            <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
+              If InvestIQ already has this stock, we&apos;ll use the name it already has.
+            </p>
           </div>
           {error ? (
             <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
@@ -290,7 +307,7 @@ export function TrackStockDialog({ markets }: { markets: Market[] }) {
                   Adding…
                 </>
               ) : (
-                "Add"
+                "Add to watchlist"
               )}
             </Button>
           </DialogFooter>

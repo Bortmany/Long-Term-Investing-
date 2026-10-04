@@ -58,6 +58,22 @@ function missingEntry(txn: TxnInput, net: number): MissingDividend {
 }
 
 /**
+ * The ONE per-payment calculation: net of fee, converted to the base
+ * currency. `baseAmount` is null when no exchange rate exists (never 1.0).
+ * Income by Holding and the per-stock list both go through this, so they
+ * cannot disagree.
+ */
+function convertDividendPayment(
+  txn: TxnInput,
+  baseCurrency: Currency,
+  fxRates: FxRateInput[],
+): { net: number; baseAmount: number | null } {
+  const net = txn.amount - txn.fee;
+  const converted = convertAmount(net, txn.currency, baseCurrency, fxRates);
+  return { net, baseAmount: converted.ok ? converted.value : null };
+}
+
+/**
  * Sum of DIVIDEND transactions in the trailing window (default 12 months),
  * converted to `baseCurrency` via the given FX rates.
  */
@@ -241,14 +257,13 @@ export function computeDividendsByHolding(
     if (txn.tradeDate < from || txn.tradeDate > to) continue;
     if (!txn.instrumentId) continue;
 
-    const net = txn.amount - txn.fee;
-    const converted = convertAmount(net, txn.currency, baseCurrency, fxRates);
-    if (!converted.ok) {
-      missing.push(missingEntry(txn, net));
+    const payment = convertDividendPayment(txn, baseCurrency, fxRates);
+    if (payment.baseAmount === null) {
+      missing.push(missingEntry(txn, payment.net));
       continue;
     }
     const entry = byInstrument.get(txn.instrumentId) ?? { total: 0, count: 0 };
-    entry.total += converted.value;
+    entry.total += payment.baseAmount;
     entry.count += 1;
     byInstrument.set(txn.instrumentId, entry);
   }
@@ -268,5 +283,88 @@ export function computeDividendsByHolding(
     to,
     complete: missing.length === 0,
     missing,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// One stock's received dividends (the "Dividends you've received" block).
+// ---------------------------------------------------------------------------
+
+export type StockDividendPayment = {
+  tradeDate: Date;
+  /** The payment as recorded (net of fee), in its own currency. */
+  currency: Currency;
+  amount: number;
+  /** Base-currency amount, rounded to the money's precision; null = no exchange rate. */
+  baseAmount: number | null;
+  /** True when the payment falls in the trailing window (counted in the total). */
+  inWindow: boolean;
+};
+
+export type StockDividends = {
+  baseCurrency: Currency;
+  /** Every payment for this stock, newest first. Unconvertible ones are kept. */
+  payments: StockDividendPayment[];
+  /**
+   * Trailing-window total, or null when no payment in the window could be
+   * counted (an honest "none", never a zero figure). It is this stock's
+   * Income by Holding row, from the same function.
+   */
+  trailing: { total: number; count: number; from: Date; to: Date } | null;
+  complete: boolean;
+  /** Payments left out of the total because no exchange rate was available. */
+  missing: MissingDividend[];
+};
+
+/**
+ * List ONE stock's DIVIDEND payments and its trailing total. The total comes
+ * straight from computeDividendsByHolding, and each payment goes through the
+ * same convertDividendPayment, so this can never disagree with the
+ * dashboard's Income by Holding.
+ *
+ * Caller must pass only the signed-in user's own transactions.
+ */
+export function computeStockDividends(
+  transactions: TxnInput[],
+  options: {
+    instrumentId: string;
+    baseCurrency: Currency;
+    fxRates: FxRateInput[];
+    now?: Date;
+    months?: number;
+  },
+): StockDividends {
+  const { instrumentId, baseCurrency, fxRates } = options;
+  const own = transactions.filter(
+    (t) => t.type === "DIVIDEND" && t.instrumentId === instrumentId,
+  );
+
+  const byHolding = computeDividendsByHolding(own, options);
+  const row = byHolding.rows.find((r) => r.instrumentId === instrumentId);
+
+  const payments: StockDividendPayment[] = own
+    .map((txn) => {
+      const payment = convertDividendPayment(txn, baseCurrency, fxRates);
+      return {
+        tradeDate: txn.tradeDate,
+        currency: txn.currency,
+        amount: payment.net,
+        baseAmount:
+          payment.baseAmount === null
+            ? null
+            : roundMoney(payment.baseAmount, baseCurrency),
+        inWindow: txn.tradeDate >= byHolding.from && txn.tradeDate <= byHolding.to,
+      };
+    })
+    .sort((a, b) => b.tradeDate.getTime() - a.tradeDate.getTime());
+
+  return {
+    baseCurrency,
+    payments,
+    trailing: row
+      ? { total: row.total, count: row.count, from: byHolding.from, to: byHolding.to }
+      : null,
+    complete: byHolding.complete,
+    missing: byHolding.missing,
   };
 }

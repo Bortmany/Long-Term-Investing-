@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { CardSkeletonList, LAPTOP_ONLY } from "@/components/ui/card-skeletons";
 
 // Loading state shaped like the real /watchlist page (header, the Watched &
 // Held Stocks table card, then the Alerts card) so nothing jumps when the
@@ -17,7 +18,8 @@ export default function WatchlistLoading() {
           <Skeleton className="h-5 w-44" />
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
+          <CardSkeletonList />
+          <div className={`${LAPTOP_ONLY} space-y-3`}>
             {Array.from({ length: 5 }).map((_, i) => (
               <div key={i} className="grid grid-cols-4 gap-4">
                 <Skeleton className="h-4 w-16" />
@@ -35,7 +37,8 @@ export default function WatchlistLoading() {
           <Skeleton className="h-5 w-20" />
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
+          <CardSkeletonList density="compact" count={3} />
+          <div className={`${LAPTOP_ONLY} space-y-3`}>
             {Array.from({ length: 3 }).map((_, i) => (
               <div key={i} className="grid grid-cols-3 gap-4">
                 <Skeleton className="h-4 w-24" />

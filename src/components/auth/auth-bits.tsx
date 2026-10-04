@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 
 /** A text link with a 44px tap height (go-public-ui.md §0 fix 1). */
 export const tapLinkClass =
-  "inline-flex min-h-11 items-center rounded-sm text-blue-600 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-blue-400";
+  "inline-flex min-h-11 min-w-11 items-center justify-center rounded-sm text-blue-600 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-blue-400";
 
 export function TextLink({ href, children }: { href: string; children: React.ReactNode }) {
   return (

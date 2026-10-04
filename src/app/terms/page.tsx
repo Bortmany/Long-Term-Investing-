@@ -38,7 +38,10 @@ export default async function TermsPage() {
 
   return (
     <main className="mx-auto min-h-screen max-w-2xl px-4 py-10 sm:px-6">
-      <Link href="/sign-in" className="text-sm text-blue-600 hover:underline dark:text-blue-400">
+      <Link
+        href="/sign-in"
+        className="inline-flex min-h-11 items-center text-sm text-blue-600 hover:underline dark:text-blue-400"
+      >
         ← Back to InvestIQ AI
       </Link>
 
@@ -161,7 +164,7 @@ export default async function TermsPage() {
           </h2>
           <p className="mt-2">
             You can close your account at any time from the{" "}
-            <Link href="/settings" className="text-blue-600 hover:underline dark:text-blue-400">
+            <Link href="/settings" data-tap-exempt="in-text" className="text-blue-600 hover:underline dark:text-blue-400">
               Settings
             </Link>{" "}
             page (&quot;Danger&quot; card). This permanently deletes your account,
@@ -192,12 +195,13 @@ export default async function TermsPage() {
             about these terms, email{" "}
             <a
               href={`mailto:${contactEmail}`}
+              data-tap-exempt="in-text"
               className="text-blue-600 hover:underline dark:text-blue-400"
             >
               {contactEmail}
             </a>
             . See also the{" "}
-            <Link href="/privacy" className="text-blue-600 hover:underline dark:text-blue-400">
+            <Link href="/privacy" data-tap-exempt="in-text" className="text-blue-600 hover:underline dark:text-blue-400">
               Privacy Policy
             </Link>
             .

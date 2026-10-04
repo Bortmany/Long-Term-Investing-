@@ -68,3 +68,59 @@ test("shows the seeded thesis, creates a new one, and the check panel is honest 
   await confirmDialog.getByRole("button", { name: "Close Thesis" }).click();
   await expect(confirmDialog).toBeHidden();
 });
+
+// ---------------------------------------------------------------------------
+// Phone viewport (390 x 844): each thesis is a card that shows its Status,
+// Integrity Score and Last Checked without any sideways scrolling, and a long
+// statement is cut to two lines (phone-tables-as-cards.md, "done when").
+// The sample data (tests/e2e/phone-seed.ts) adds a 500-character thesis with
+// a stored score; the seeded MSFT thesis has never been checked.
+// ---------------------------------------------------------------------------
+test.describe("phone viewport", () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+
+  test("every thesis card shows status, score and last checked; long statements are cut", async ({
+    page,
+  }) => {
+    test.skip(
+      !DEMO_PASSWORD,
+      "Set E2E_TEST_PASSWORD in .env to run this test",
+    );
+
+    await page.goto("/theses");
+    const cards = page.getByRole("list", { name: "Theses", exact: true }).locator(":scope > li");
+    await expect(cards.first()).toBeVisible();
+
+    const pageWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+    expect(pageWidth).toBeLessThanOrEqual(390);
+
+    for (const card of await cards.all()) {
+      await expect(card).toContainText("Active");
+      await expect(card).toContainText("Integrity score");
+      await expect(card).toContainText("Last checked");
+      const box = await card.boundingBox();
+      expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(390);
+    }
+
+    // The never-checked MSFT thesis says so; the long one shows its score.
+    await expect(cards.filter({ hasText: "MSFT" })).toContainText("Never checked");
+    const long = cards.filter({ hasText: "ZQLONG" });
+    await expect(long).toContainText("72");
+
+    // The 500-character statement is cut to two lines.
+    const statement = long.locator("p.line-clamp-2");
+    const lines = await statement.evaluate((p) => ({
+      lineHeight: parseFloat(getComputedStyle(p).lineHeight),
+      clientHeight: p.clientHeight,
+      scrollHeight: p.scrollHeight,
+    }));
+    expect(lines.clientHeight).toBeLessThanOrEqual(lines.lineHeight * 2 + 1);
+    expect(lines.scrollHeight).toBeGreaterThan(lines.clientHeight);
+
+    // The Active / Closed chips are thumb-sized.
+    for (const name of [/^Active \(/, /^Closed \(/]) {
+      const box = await page.getByRole("button", { name }).boundingBox();
+      expect(box?.height ?? 0).toBeGreaterThanOrEqual(43.5);
+    }
+  });
+});

@@ -1,7 +1,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { ChartLine } from "lucide-react";
+import { ChartLine, ChevronRight } from "lucide-react";
 import { MARKET_VALUES } from "@/lib/markets";
 
 import { auth } from "@/lib/auth";
@@ -23,6 +23,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ResponsiveRows } from "@/components/ui/responsive-rows";
+import { RowCard, ROW_CARD_LINK } from "@/components/ui/row-card";
+import {
+  CARD_LINK_TAP_AREA,
+  TABLE_ROW_LINK,
+  TABLE_ROW_LINKED,
+  TABLE_ROW_RAISED,
+} from "@/components/ui/row-link";
 import { TrackStockDialog } from "@/components/stocks/track-stock-dialog";
 import { WatchToggleButton } from "@/components/stocks/watch-toggle-button";
 import type { StockListRow } from "@/components/stocks/types";
@@ -51,6 +59,61 @@ function changeColor(percent: number): string {
   if (percent > 0) return "text-green-600 dark:text-green-400";
   if (percent < 0) return "text-red-600 dark:text-red-400";
   return "";
+}
+
+/**
+ * The quote, with its source badge — or the honest amber words when there is
+ * no price. Same in the table and the phone card (golden rule: never a made-up
+ * number).
+ */
+function QuoteFigure({
+  row,
+  large = false,
+}: {
+  row: StockListRow;
+  large?: boolean;
+}) {
+  if (!row.quote.ok) {
+    return (
+      <span className="text-sm text-amber-700 dark:text-amber-400">
+        Unavailable — no price
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center justify-end gap-1.5">
+      <span data-figure className={`tabular-nums ${large ? "text-base" : ""}`}>
+        {formatMoney(row.quote.value, row.quote.currency)}
+      </span>
+      <span className={TABLE_ROW_RAISED}>
+        <SourceBadge size="sm" {...row.quote.badge} />
+      </span>
+    </span>
+  );
+}
+
+/** The change since the lookback start, green or red, with its badge — or a dash. */
+function ChangeFigure({
+  row,
+  align = "start",
+}: {
+  row: StockListRow;
+  align?: "start" | "end";
+}) {
+  if (!row.change.ok) {
+    return <span className="text-slate-400">—</span>;
+  }
+  return (
+    <span
+      data-figure
+      className={`inline-flex items-center gap-1.5 text-sm tabular-nums ${align === "end" ? "justify-end" : ""} ${changeColor(row.change.percent)}`}
+    >
+      {formatPercent(row.change.percent, { signed: true })}
+      <span className={TABLE_ROW_RAISED}>
+        <SourceBadge size="sm" {...row.change.badge} />
+      </span>
+    </span>
+  );
 }
 
 // /stocks — every instrument worth watching (held or explicitly tracked) in
@@ -214,77 +277,107 @@ export default async function StocksPage({
       </div>
       <StockSearchBox query={null} />
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Ticker</TableHead>
-            <TableHead>Name</TableHead>
-            <TableHead className="text-right">Quote</TableHead>
-            <TableHead className="text-right">
-              <span className="inline-flex items-center justify-end gap-1">
-                Change <ExplainerTip term="day-change" />
-              </span>
-            </TableHead>
-            <TableHead>Held</TableHead>
-            <TableHead>
-              <span className="sr-only">Watch</span>
-            </TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map((row) => (
-            <TableRow key={row.instrumentId}>
-              <TableCell className="font-mono font-medium">
+      <ResponsiveRows
+        listLabel="Stocks"
+        cards={rows.map((row) => (
+          <RowCard
+            key={row.instrumentId}
+            chevron
+            identity={
+              <>
                 <Link
                   href={`/stocks/${row.instrumentId}`}
-                  className="hover:underline"
+                  className={`${ROW_CARD_LINK} ${CARD_LINK_TAP_AREA}`}
                 >
                   {row.ticker}
                 </Link>
-              </TableCell>
-              <TableCell className="text-slate-600 dark:text-slate-400">
-                {row.name}
-              </TableCell>
-              <TableCell className="text-right">
-                {row.quote.ok ? (
-                  <span className="inline-flex items-center justify-end gap-1.5">
-                    <span className="tabular-nums">
-                      {formatMoney(row.quote.value, row.quote.currency)}
-                    </span>
-                    <SourceBadge size="sm" {...row.quote.badge} />
-                  </span>
-                ) : (
-                  <span className="text-sm text-amber-700 dark:text-amber-400">
-                    Unavailable — no price
-                  </span>
-                )}
-              </TableCell>
-              <TableCell className="text-right">
-                {row.change.ok ? (
-                  <span
-                    className={`inline-flex items-center justify-end gap-1.5 tabular-nums ${changeColor(row.change.percent)}`}
-                  >
-                    {formatPercent(row.change.percent, { signed: true })}
-                    <SourceBadge size="sm" {...row.change.badge} />
-                  </span>
-                ) : (
-                  <span className="text-slate-400">—</span>
-                )}
-              </TableCell>
-              <TableCell>
                 {row.held ? <Badge variant="secondary">Held</Badge> : null}
-              </TableCell>
-              <TableCell>
-                <WatchToggleButton
-                  instrumentId={row.instrumentId}
-                  initialWatched={row.watched}
-                  ticker={row.ticker}
-                />
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+              </>
+            }
+            name={row.name}
+            headline={
+              <>
+                <QuoteFigure row={row} large />
+                <ChangeFigure row={row} />
+              </>
+            }
+            action={
+              <WatchToggleButton
+                instrumentId={row.instrumentId}
+                initialWatched={row.watched}
+                ticker={row.ticker}
+              />
+            }
+          />
+        ))}
+        table={
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Ticker</TableHead>
+                <TableHead>Name</TableHead>
+                <TableHead className="text-right">Quote</TableHead>
+                <TableHead className="text-right">
+                  <span className="inline-flex items-center justify-end gap-1">
+                    Change <ExplainerTip term="day-change" />
+                  </span>
+                </TableHead>
+                <TableHead>Held</TableHead>
+                <TableHead>
+                  <span className="sr-only">Watch</span>
+                </TableHead>
+                <TableHead className="w-10">
+                  <span className="sr-only">Open</span>
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((row) => (
+                <TableRow
+                  key={row.instrumentId}
+                  className={`${TABLE_ROW_LINKED} h-14`}
+                >
+                  <TableCell>
+                    <Link
+                      href={`/stocks/${row.instrumentId}`}
+                      className={TABLE_ROW_LINK}
+                    >
+                      {row.ticker}
+                    </Link>
+                  </TableCell>
+                  <TableCell className="whitespace-normal break-words text-slate-600 dark:text-slate-400">
+                    {row.name}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <QuoteFigure row={row} />
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <ChangeFigure row={row} align="end" />
+                  </TableCell>
+                  <TableCell>
+                    {row.held ? <Badge variant="secondary">Held</Badge> : null}
+                  </TableCell>
+                  <TableCell>
+                    <div className={TABLE_ROW_RAISED}>
+                      <WatchToggleButton
+                        instrumentId={row.instrumentId}
+                        initialWatched={row.watched}
+                        ticker={row.ticker}
+                      />
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <ChevronRight
+                      aria-hidden="true"
+                      className="size-4 text-slate-400"
+                    />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        }
+      />
     </>
   );
 }

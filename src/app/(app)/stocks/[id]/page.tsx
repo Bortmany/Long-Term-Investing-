@@ -24,6 +24,7 @@ import {
 } from "@/components/source-badge";
 import { EmptyState } from "@/components/empty-state";
 import { Badge } from "@/components/ui/badge";
+import { ReceivedDividendsCard } from "@/components/stocks/received-dividends-card";
 import { ShariaBadge } from "@/components/sharia/sharia-badge";
 import { getShariaBadgeData } from "@/lib/sharia/badge-data";
 import { Button } from "@/components/ui/button";
@@ -50,6 +51,9 @@ import type {
   StatementBlock,
   UpcomingDividendRow,
 } from "@/components/stocks/types";
+import { fromPrismaTransaction } from "@/lib/portfolio/types";
+import { computeStockDividends, type StockDividends } from "@/lib/portfolio/dividends";
+import { loadUserMarketData } from "@/lib/portfolio-market-data";
 import { buildStatementTable } from "@/lib/stocks/statement-table";
 import {
   computeChangePercent,
@@ -358,6 +362,40 @@ export default async function StockDetailPage({
         }))
     : [];
 
+  // "Dividends you've received": only THIS user's own DIVIDEND transactions
+  // for this stock, in the portfolio they own (the oldest one, the same
+  // portfolio the dashboard uses) — so it matches Income by Holding exactly.
+  let receivedDividends: StockDividends | null = null;
+  let receivedDividendsFailed = false;
+  try {
+    const portfolio = await prisma.portfolio.findFirst({
+      where: { userId },
+      orderBy: { createdAt: "asc" },
+    });
+    if (portfolio) {
+      const [rows, market] = await Promise.all([
+        prisma.transaction.findMany({
+          where: {
+            portfolioId: portfolio.id,
+            portfolio: { userId },
+            instrumentId: instrument.id,
+            type: "DIVIDEND",
+          },
+          orderBy: [{ tradeDate: "desc" }, { createdAt: "desc" }, { id: "desc" }],
+        }),
+        loadUserMarketData(userId, []),
+      ]);
+      receivedDividends = computeStockDividends(rows.map(fromPrismaTransaction), {
+        instrumentId: instrument.id,
+        baseCurrency: portfolio.baseCurrency,
+        fxRates: market.fxRates,
+        now,
+      });
+    }
+  } catch {
+    receivedDividendsFailed = true;
+  }
+
   // Sharia screen badge: null (nothing rendered) unless this person has the
   // switch on AND is on Pro. Database reads only; never an outside call.
   const shariaData = await getShariaBadgeData(userId, [
@@ -396,7 +434,7 @@ export default async function StockDetailPage({
         <div className="sm:text-right">
           {quoteResult.ok ? (
             <div className="flex items-baseline gap-2 sm:justify-end">
-              <span className="text-2xl font-semibold tabular-nums">
+              <span data-figure className="text-2xl font-semibold tabular-nums">
                 {formatMoney(quoteResult.data.price, quoteResult.data.currency)}
               </span>
               {changeResult.ok ? (
@@ -508,6 +546,14 @@ export default async function StockDetailPage({
           <CardTitle>Dividends</CardTitle>
         </CardHeader>
         <CardContent>
+          {/* Your own payments first; they never depend on market data. */}
+          <ReceivedDividendsCard
+            ticker={instrument.ticker}
+            dividends={receivedDividends}
+            loadError={receivedDividendsFailed}
+          />
+          <hr className="my-6 border-slate-200 dark:border-slate-800" />
+          <h3 className="mb-2 text-base font-semibold">Market dividend history</h3>
           {!dividendResult.ok ? (
             <p className="text-sm text-slate-500 dark:text-slate-400">
               {dividendUnavailableMessage(dividendResult)}
@@ -530,7 +576,7 @@ export default async function StockDetailPage({
                     <TableCell>{formatShortDate(row.exDate)}</TableCell>
                     <TableCell className="text-right">
                       <span className="inline-flex items-center justify-end gap-1.5">
-                        <span className="tabular-nums">
+                        <span data-figure className="tabular-nums">
                           {formatMoney(row.amountPerShare, row.currency)}
                         </span>
                         <SourceBadge size="sm" {...row.badge} />
@@ -542,8 +588,8 @@ export default async function StockDetailPage({
             </Table>
           )}
 
-          <div className="mt-4">
-            <h3 className="mb-2 text-sm font-semibold">Upcoming</h3>
+          <div className="mt-6">
+            <h3 className="mb-2 text-base font-semibold">Upcoming</h3>
             {!upcomingResult.ok ? (
               <p className="text-sm text-slate-500 dark:text-slate-400">
                 {upcomingUnavailableMessage(upcomingResult)}
@@ -562,7 +608,7 @@ export default async function StockDetailPage({
                     <span className="text-slate-500 dark:text-slate-400">
                       {formatShortDate(row.exDate)}
                     </span>
-                    <span className="inline-flex items-center gap-1.5 tabular-nums">
+                    <span data-figure className="inline-flex items-center gap-1.5 tabular-nums">
                       {row.amountPerShare === null ? (
                         <span className="text-slate-500 dark:text-slate-400">
                           Amount not yet announced

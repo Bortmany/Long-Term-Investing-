@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   computeDividendsByHolding,
   computeMonthlyDividends,
+  computeStockDividends,
   computeTrailingDividendIncome,
   roundMoney,
 } from "@/lib/portfolio/dividends";
@@ -181,5 +182,94 @@ describe("dividend headline equals the sum of the rounded rows", () => {
     expect(roundMoney(10.005, "USD")).toBe(10.01);
     expect(roundMoney(1.0005, "OMR")).toBe(1.001);
     expect(roundMoney(1.00049, "OMR")).toBe(1);
+  });
+});
+
+describe("computeStockDividends (the Dividends you've received block)", () => {
+  const now = d("2026-07-12");
+  const opts = (instrumentId: string) => ({
+    instrumentId,
+    baseCurrency: "OMR" as const,
+    fxRates,
+    now,
+  });
+
+  it("equals the dashboard's Income by Holding row for the same stock and window", () => {
+    const txns = [
+      dividendFor("armco", 100, "USD", "2026-06-01"),
+      dividendFor("armco", 50.0004, "OMR", "2026-03-14"),
+      dividendFor("armco", 20, "OMR", "2026-01-02"),
+      dividendFor("armco", 999, "OMR", "2025-01-01"), // older than 12 months
+      dividendFor("other", 77, "OMR", "2026-05-05"), // another stock
+    ];
+    const stock = computeStockDividends(txns, opts("armco"));
+    const row = computeDividendsByHolding(txns, {
+      baseCurrency: "OMR",
+      fxRates,
+      now,
+    }).rows.find((r) => r.instrumentId === "armco");
+
+    expect(stock.trailing?.total).toBe(row?.total);
+    expect(stock.trailing?.count).toBe(row?.count);
+    // All four of this stock's payments are listed, newest first; none of the other stock's.
+    expect(stock.payments).toHaveLength(4);
+    expect(stock.payments.map((p) => p.inWindow)).toEqual([true, true, true, false]);
+    expect(stock.payments[0].tradeDate).toEqual(d("2026-06-01"));
+    expect(stock.payments[0].baseAmount).toBe(roundMoney(100 * 0.385, "OMR"));
+    expect(stock.complete).toBe(true);
+  });
+
+  it("names a payment with no exchange rate instead of dropping it", () => {
+    const txns = [
+      dividendFor("armco", 100, "OMR", "2026-06-01"),
+      dividendFor("armco", 250, "SAR", "2026-04-01"), // no SAR rate
+    ];
+    const stock = computeStockDividends(txns, opts("armco"));
+
+    expect(stock.payments).toHaveLength(2);
+    const unconverted = stock.payments.find((p) => p.currency === "SAR");
+    expect(unconverted?.baseAmount).toBeNull();
+    expect(unconverted?.amount).toBe(250);
+    expect(stock.complete).toBe(false);
+    expect(stock.missing).toHaveLength(1);
+    expect(stock.missing[0]).toMatchObject({ currency: "SAR", instrumentId: "armco" });
+    // The total covers only what converted — never a 1.0 guess.
+    expect(stock.trailing?.total).toBe(100);
+  });
+
+  it("returns an honest empty result for a stock with no dividends (no zero total)", () => {
+    const stock = computeStockDividends(
+      [dividendFor("other", 77, "OMR", "2026-05-05")],
+      opts("armco"),
+    );
+    expect(stock.payments).toEqual([]);
+    expect(stock.trailing).toBeNull();
+    expect(stock.complete).toBe(true);
+  });
+
+  it("with only old payments there is a list but no 12-month figure", () => {
+    const stock = computeStockDividends(
+      [dividendFor("armco", 40, "OMR", "2024-01-01")],
+      opts("armco"),
+    );
+    expect(stock.payments).toHaveLength(1);
+    expect(stock.payments[0].inWindow).toBe(false);
+    expect(stock.trailing).toBeNull();
+  });
+
+  it("ignores non-dividend transactions for the stock", () => {
+    const buy: TxnInput = {
+      type: "BUY",
+      instrumentId: "armco",
+      quantity: 10,
+      pricePerUnit: 5,
+      amount: 50,
+      currency: "OMR",
+      fee: 0,
+      tradeDate: d("2026-06-01"),
+    };
+    const stock = computeStockDividends([buy], opts("armco"));
+    expect(stock.payments).toEqual([]);
+    expect(stock.trailing).toBeNull();
   });
 });

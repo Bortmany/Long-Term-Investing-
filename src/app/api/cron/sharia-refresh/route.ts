@@ -1,4 +1,5 @@
 // Secure cron trigger for the daily Sharia screen refresh (Step 5).
+// Covers only Pro users with the switch on (decided in src/lib/sharia/store.ts).
 // POST only, same secure idiom as the other cron routes (copied deliberately):
 // a bearer secret, never the session cookie.
 //

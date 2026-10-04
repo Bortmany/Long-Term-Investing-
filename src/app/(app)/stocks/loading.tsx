@@ -1,4 +1,5 @@
 import { Skeleton } from "@/components/ui/skeleton";
+import { CardSkeletonList, LAPTOP_ONLY } from "@/components/ui/card-skeletons";
 
 // Loading state shaped like the real /stocks table (header row + 5 skeleton
 // rows) so nothing jumps when the data arrives. No source badges while
@@ -10,7 +11,8 @@ export default function StocksLoading() {
         <Skeleton className="h-8 w-24" />
         <Skeleton className="h-10 w-36" />
       </div>
-      <div className="space-y-3">
+      <CardSkeletonList />
+      <div className={`${LAPTOP_ONLY} space-y-3`}>
         {Array.from({ length: 5 }).map((_, i) => (
           <div key={i} className="grid grid-cols-6 gap-4">
             <Skeleton className="h-4 w-14" />

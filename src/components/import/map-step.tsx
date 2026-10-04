@@ -10,6 +10,7 @@ import { LoaderCircle } from "lucide-react";
 import type { MappedImportRow } from "@/lib/import-rows";
 import type { CsvData } from "@/lib/csv";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { Select } from "@/components/ui/select";
 import {
   Table,
@@ -105,6 +106,29 @@ export function MapStep({
   return (
     <div>
       <h2 className="mb-4 text-base font-medium">Match columns</h2>
+      {/* Phone (under 768): a stacked list, the column name with a full-width
+          44px "Maps to" dropdown under it. From 768 up: the two-column table. */}
+      <ul className="divide-y divide-slate-200 border-y border-slate-200 md:hidden dark:divide-slate-800 dark:border-slate-800">
+        {csv.headers.map((header, index) => (
+          <li key={`${header}-${index}`} className="py-4">
+            <p className="font-mono text-xs break-words text-slate-600 dark:text-slate-400">
+              {header || "(unnamed column)"}
+            </p>
+            <Select
+              value={mapping[index]}
+              onValueChange={(value) => {
+                const next = [...mapping];
+                next[index] = value;
+                onMappingChange(next);
+              }}
+              options={MAPPING_OPTIONS}
+              className="mt-2 [&_select]:h-11"
+              aria-label={`Map column ${header || index + 1}`}
+            />
+          </li>
+        ))}
+      </ul>
+      <div className="hidden md:block">
       <Table>
         <TableHeader>
           <TableRow>
@@ -133,6 +157,7 @@ export function MapStep({
           ))}
         </TableBody>
       </Table>
+      </div>
 
       {duplicateTargets.length > 0 ? (
         <p className="mt-3 text-sm text-amber-700 dark:text-amber-400">
@@ -144,12 +169,22 @@ export function MapStep({
       <h3 className="mt-6 mb-2 text-sm font-semibold">
         Preview — first {previewRows.length} row{previewRows.length === 1 ? "" : "s"}
       </h3>
-      <div className="overflow-x-auto">
-        <Table>
+      <p className="mb-1 text-xs text-slate-500 md:hidden dark:text-slate-400">
+        Swipe sideways to see more columns.
+      </p>
+      <div className="relative">
+        <Table allowScroll="csv-preview">
           <TableHeader>
             <TableRow>
               {csv.headers.map((header, index) => (
-                <TableHead key={`${header}-${index}`} className="font-mono text-xs">
+                <TableHead
+                  key={`${header}-${index}`}
+                  className={cn(
+                    "font-mono text-xs",
+                    index === 0 &&
+                      "sticky start-0 z-10 bg-background shadow-[1px_0_0_0_var(--color-border)]",
+                  )}
+                >
                   {header || "(unnamed)"}
                 </TableHead>
               ))}
@@ -159,7 +194,14 @@ export function MapStep({
             {previewRows.map((cells, rowIndex) => (
               <TableRow key={rowIndex}>
                 {csv.headers.map((_, cellIndex) => (
-                  <TableCell key={cellIndex} className="font-mono text-xs">
+                  <TableCell
+                    key={cellIndex}
+                    className={cn(
+                      "font-mono text-xs",
+                      cellIndex === 0 &&
+                        "sticky start-0 z-10 bg-background shadow-[1px_0_0_0_var(--color-border)]",
+                    )}
+                  >
                     {cells[cellIndex] ?? ""}
                   </TableCell>
                 ))}
@@ -167,15 +209,28 @@ export function MapStep({
             ))}
           </TableBody>
         </Table>
+        {/* Permanent soft fade on the right edge (phone only): more columns may be off-screen. */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-y-0 end-0 w-6 bg-gradient-to-l from-background to-transparent md:hidden"
+        />
       </div>
 
       <StickyActions>
-        <Button type="button" variant="outline" size="lg" onClick={onBack} disabled={isValidating}>
+        <Button
+          type="button"
+          variant="outline"
+          size="lg"
+          onClick={onBack}
+          disabled={isValidating}
+          className="order-2 lg:order-1"
+        >
           Back
         </Button>
         <Button
           type="button"
           size="lg"
+          className="order-1 lg:order-2"
           onClick={onValidate}
           disabled={isValidating || duplicateTargets.length > 0}
         >

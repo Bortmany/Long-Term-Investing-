@@ -2,7 +2,8 @@
 
 // The action row at the bottom of a wizard screen. On a phone it sticks to the
 // bottom of the screen (thumb zone, with room for the home bar) and stacks the
-// buttons full width with the main one last. On a laptop it is a normal row.
+// buttons full width with the main one first (each screen gives its buttons
+// order-1 / order-2 so the main button leads on a phone). On a laptop it is a normal row.
 
 import * as React from "react";
 

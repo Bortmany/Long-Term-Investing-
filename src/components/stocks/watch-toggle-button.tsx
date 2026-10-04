@@ -11,6 +11,12 @@ import { addToWatchlist, removeFromWatchlist } from "@/app/actions/stocks";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/components/ui/toast";
+import {
+  backOnWatchlistMessage,
+  removedToastMessage,
+  undoFailureMessage,
+  watchFailureMessage,
+} from "@/lib/stocks/watch-messages";
 
 export function WatchToggleButton({
   instrumentId,
@@ -41,17 +47,18 @@ export function WatchToggleButton({
       if (!result.ok) {
         toast({
           tone: "error",
-          message: result.error.includes("Too many")
-            ? "Too many requests. Wait a moment, then try again."
-            : "Couldn't update your watchlist. Please try again.",
+          message: watchFailureMessage(result.error),
         });
         return;
       }
       setWatched(next);
       if (!next) {
-        // Un-watching offers an Undo that uses the same (rate-limited) action.
+        // Un-watching offers an Undo. It calls the SAME addToWatchlist server
+        // action as the star, so the 30-a-minute watchlist-write limit applies
+        // to it too — there is no other route back. If the limiter refuses,
+        // the toast says so in the standard "Too many requests" sentence.
         toast({
-          message: `${ticker} removed from your watchlist`,
+          message: removedToastMessage(ticker),
           action: {
             label: "Undo",
             ariaLabel: `Undo removing ${ticker}`,
@@ -59,11 +66,11 @@ export function WatchToggleButton({
               const back = await addToWatchlist(instrumentId);
               if (back.ok) {
                 setWatched(true);
-                return { message: `${ticker} is back on your watchlist` };
+                return { message: backOnWatchlistMessage(ticker) };
               }
               return {
                 tone: "error",
-                message: `Couldn't put ${ticker} back. Try Track a Stock to add it again.`,
+                message: undoFailureMessage(ticker, back.error),
               };
             },
           },

@@ -59,7 +59,14 @@ export function ThemeToggle({
               <TriggerIcon className="size-5" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent side={placement === "topbar" ? "bottom" : "right"}>{hint}</TooltipContent>
+          <TooltipContent
+            side={placement === "topbar" ? "bottom" : "right"}
+            // The top-bar button sits at the screen's right edge: line the hint's
+            // right edge up with the button's so it never pokes past the screen.
+            className={placement === "topbar" ? "left-auto right-0 translate-x-0" : undefined}
+          >
+            {hint}
+          </TooltipContent>
         </Tooltip>
       </DropdownMenuTrigger>
       <DropdownMenuContent

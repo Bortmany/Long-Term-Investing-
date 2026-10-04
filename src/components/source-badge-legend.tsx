@@ -85,7 +85,7 @@ export function SourceBadgeLegend({ className }: { className?: string }) {
         type="button"
         onClick={() => setOpen(true)}
         className={cn(
-          "inline-flex items-center gap-1 rounded text-xs text-slate-500 outline-none transition-colors hover:text-slate-700 focus-visible:ring-2 focus-visible:ring-ring dark:text-slate-400 dark:hover:text-slate-200",
+          "inline-flex min-h-11 items-center gap-1 rounded text-xs text-slate-500 md:min-h-0 outline-none transition-colors hover:text-slate-700 focus-visible:ring-2 focus-visible:ring-ring dark:text-slate-400 dark:hover:text-slate-200",
           className,
         )}
       >

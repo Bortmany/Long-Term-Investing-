@@ -9,6 +9,7 @@ import { conveneCommittee } from "@/app/actions/committee";
 import { AiPanel, type AiPanelAnalysis } from "@/components/ai-panel";
 import { ExplainerTip } from "@/components/explainer-tip";
 import { ProFeatureNotice } from "@/components/pro-feature-notice";
+import { ResponsiveRows } from "@/components/ui/responsive-rows";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -96,6 +97,30 @@ export function CommitteeResultPanel({
             </span>
           </div>
 
+          <ResponsiveRows
+            listLabel="Committee votes"
+            cards={output.votes.map((vote) => (
+              // One persona per card (below 768px). The reasoning is a whole
+              // sentence, so it is shown in full. AI output: neutral, no
+              // source badge, no link, no chevron.
+              <div
+                key={vote.persona}
+                className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-950"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <span className="text-sm font-medium">{PERSONA_LABELS[vote.persona]}</span>
+                  <span data-figure className="text-sm tabular-nums">
+                    {vote.confidence}/100
+                  </span>
+                </div>
+                <div className="mt-2">
+                  <VerdictChip verdict={vote.recommendation} />
+                </div>
+                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Strongest point</p>
+                <p className="text-sm">{vote.reasoning}</p>
+              </div>
+            ))}
+            table={
           <Table>
             <TableHeader>
               <TableRow>
@@ -120,6 +145,8 @@ export function CommitteeResultPanel({
               ))}
             </TableBody>
           </Table>
+            }
+          />
 
           {/* Disagreements panel — visually prominent, NEVER collapsed or hidden by
               default (ui-spec §6.2). "What would change this verdict" lives inside

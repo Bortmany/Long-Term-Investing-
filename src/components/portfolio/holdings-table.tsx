@@ -5,7 +5,7 @@
 // fake number), and the kebab menu offers Update price (manual-priced
 // instruments only), Downside check and View details.
 import Link from "next/link";
-import { EllipsisVertical, Inbox } from "lucide-react";
+import { ChevronRight, EllipsisVertical, Inbox } from "lucide-react";
 import type { Currency } from "@prisma/client";
 
 import { Button } from "@/components/ui/button";
@@ -25,9 +25,19 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { ResponsiveRows } from "@/components/ui/responsive-rows";
 import { RowCard, ROW_CARD_LINK } from "@/components/ui/row-card";
+import {
+  CARD_LINK_TAP_AREA,
+  TABLE_ROW_LINK,
+  TABLE_ROW_LINKED,
+  TABLE_ROW_RAISED,
+} from "@/components/ui/row-link";
 import { EmptyState } from "@/components/empty-state";
 import { ExplainerTip } from "@/components/explainer-tip";
 import {
@@ -85,25 +95,39 @@ function HoldingCard({
     <RowCard
       chevron
       identity={
-        <Link href={`/stocks/${row.instrumentId}`} className={ROW_CARD_LINK}>
+        <Link
+          href={`/stocks/${row.instrumentId}`}
+          className={`${ROW_CARD_LINK} ${CARD_LINK_TAP_AREA}`}
+        >
           {row.ticker}
         </Link>
       }
       name={row.name}
-      badges={row.sharia ? <ShariaBadge data={row.sharia} /> : undefined}
+      badges={
+        row.sharia ? (
+          <span className={TABLE_ROW_RAISED}>
+            <ShariaBadge data={row.sharia} />
+          </span>
+        ) : undefined
+      }
       headline={
         <>
           {row.valuation.ok ? (
             <div>
               <span className="inline-flex flex-wrap items-center gap-1.5">
-                <span className="text-base font-semibold tabular-nums">
+                <span
+                  data-figure
+                  className="text-base font-semibold tabular-nums"
+                >
                   {formatMoney(row.valuation.marketValue, baseCurrency)}
                 </span>
-                <SourceBadge
-                  size="sm"
-                  {...badgePropsForValueSource(row.valuation.source)}
-                  detail={row.valuation.detail}
-                />
+                <span className={TABLE_ROW_RAISED}>
+                  <SourceBadge
+                    size="sm"
+                    {...badgePropsForValueSource(row.valuation.source)}
+                    detail={row.valuation.detail}
+                  />
+                </span>
               </span>
               <FxViaHubHint note={row.valuation.fxNote} />
             </div>
@@ -114,6 +138,7 @@ function HoldingCard({
           )}
           {row.gainLoss.ok ? (
             <span
+              data-figure
               className={`text-right text-sm tabular-nums ${gainLossColor(row.gainLoss.amount)}`}
             >
               {signedMoney(row.gainLoss.amount, baseCurrency)}
@@ -135,7 +160,12 @@ function HoldingCard({
           label: "Quantity",
           // Short form only for huge numbers; the exact value is in the hover/label text.
           value: (
-            <span className="tabular-nums" aria-label={`${formatQuantity(row.quantity)} shares`}>
+            <span
+              data-figure
+              className="tabular-nums"
+              title={`${formatQuantity(row.quantity)} shares`}
+              aria-label={`${formatQuantity(row.quantity)} shares`}
+            >
               {formatQuantityCompact(row.quantity)}
             </span>
           ),
@@ -147,7 +177,9 @@ function HoldingCard({
             row.weightPct === null ? (
               <span className="text-slate-400">—</span>
             ) : (
-              <span className="tabular-nums">{formatPercent(row.weightPct)}</span>
+              <span data-figure className="tabular-nums">
+                {formatPercent(row.weightPct)}
+              </span>
             ),
         },
         {
@@ -157,8 +189,12 @@ function HoldingCard({
               <span className="text-slate-400">—</span>
             ) : (
               <span className="inline-flex flex-wrap items-center gap-1.5">
-                <span className="tabular-nums">{formatMoney(row.avgCost, row.currency)}</span>
-                <SourceBadge size="sm" variant="derived" />
+                <span data-figure className="tabular-nums">
+                  {formatMoney(row.avgCost, row.currency)}
+                </span>
+                <span className={TABLE_ROW_RAISED}>
+                  <SourceBadge size="sm" variant="derived" />
+                </span>
               </span>
             ),
         },
@@ -166,14 +202,16 @@ function HoldingCard({
           label: "Current Price",
           value: row.price.ok ? (
             <span className="inline-flex flex-wrap items-center gap-1.5">
-              <span className="tabular-nums">
+              <span data-figure className="tabular-nums">
                 {formatMoney(row.price.value, row.price.currency)}
               </span>
-              <SourceBadge
-                size="sm"
-                {...badgePropsForValueSource(row.price.source)}
-                detail={row.price.detail}
-              />
+              <span className={TABLE_ROW_RAISED}>
+                <SourceBadge
+                  size="sm"
+                  {...badgePropsForValueSource(row.price.source)}
+                  detail={row.price.detail}
+                />
+              </span>
             </span>
           ) : (
             <span className="text-amber-700 dark:text-amber-400">
@@ -183,7 +221,11 @@ function HoldingCard({
         },
       ]}
       action={
-        <HoldingActions row={row} onUpdatePrice={onUpdatePrice} buttonClassName="size-11" />
+        <HoldingActions
+          row={row}
+          onUpdatePrice={onUpdatePrice}
+          buttonClassName="size-11"
+        />
       }
     />
   );
@@ -287,139 +329,185 @@ export function HoldingsTable({
               />
             ))}
             table={
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Ticker</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead className="text-right">Quantity</TableHead>
-                <TableHead className="text-right">
-                  <span className="inline-flex items-center justify-end gap-1">
-                    Avg Cost <ExplainerTip term="avg-cost" />
-                  </span>
-                </TableHead>
-                <TableHead className="text-right">Current Price</TableHead>
-                <TableHead className="text-right">
-                  <span className="inline-flex items-center justify-end gap-1">
-                    Market Value ({baseCurrency}) <ExplainerTip term="market-value" />
-                  </span>
-                </TableHead>
-                <TableHead className="text-right">
-                  <span className="inline-flex items-center justify-end gap-1">
-                    Unrealized Gain/Loss <ExplainerTip term="unrealized-gain" />
-                  </span>
-                </TableHead>
-                <TableHead className="text-right">
-                  <span className="inline-flex items-center justify-end gap-1">
-                    Weight <ExplainerTip term="weight" />
-                  </span>
-                </TableHead>
-                <TableHead>
-                  <span className="sr-only">Actions</span>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.map((row) => (
-                <TableRow key={row.instrumentId}>
-                  <TableCell className="font-mono font-medium">
-                    <Link href={`/stocks/${row.instrumentId}`} className="hover:underline">
-                      {row.ticker}
-                    </Link>
-                  </TableCell>
-                  <TableCell className="text-slate-600 dark:text-slate-400">
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                      <span>{row.name}</span>
-                      {row.sharia ? <ShariaBadge data={row.sharia} /> : null}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {formatQuantity(row.quantity)}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {row.avgCost === null ? (
-                      <span className="text-slate-400">—</span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1.5">
-                        <span className="tabular-nums">
-                          {formatMoney(row.avgCost, row.currency)}
-                        </span>
-                        {/* Arithmetic on the user's own BUY transactions. */}
-                        <SourceBadge size="sm" variant="derived" />
+              <Table className="[&_td]:px-1 [&_th]:whitespace-normal [&_th]:px-1">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Ticker</TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead className="text-right">Quantity</TableHead>
+                    <TableHead className="text-right">
+                      <span className="inline-flex items-center justify-end gap-1">
+                        Avg Cost <ExplainerTip term="avg-cost" />
                       </span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {row.price.ok ? (
-                      <span className="inline-flex items-center gap-1.5">
-                        <span className="tabular-nums">
-                          {formatMoney(row.price.value, row.price.currency)}
-                        </span>
-                        <SourceBadge
-                          size="sm"
-                          {...badgePropsForValueSource(row.price.source)}
-                          detail={row.price.detail}
-                        />
+                    </TableHead>
+                    <TableHead className="text-right">Current Price</TableHead>
+                    <TableHead className="text-right">
+                      <span className="inline-flex items-center justify-end gap-1">
+                        Market Value ({baseCurrency}){" "}
+                        <ExplainerTip term="market-value" />
                       </span>
-                    ) : (
-                      <span className="text-sm text-amber-700 dark:text-amber-400">
-                        {UNAVAILABLE_TEXT.missing_price}
+                    </TableHead>
+                    <TableHead className="text-right">
+                      <span className="inline-flex items-center justify-end gap-1">
+                        Unrealized Gain/Loss{" "}
+                        <ExplainerTip term="unrealized-gain" />
                       </span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {row.valuation.ok ? (
-                      <>
-                        <span className="inline-flex items-center gap-1.5">
-                          <span className="font-medium tabular-nums">
-                            {formatMoney(row.valuation.marketValue, baseCurrency)}
+                    </TableHead>
+                    <TableHead className="text-right">
+                      <span className="inline-flex items-center justify-end gap-1">
+                        Weight <ExplainerTip term="weight" />
+                      </span>
+                    </TableHead>
+                    <TableHead>
+                      <span className="sr-only">Actions</span>
+                    </TableHead>
+                    <TableHead className="w-10">
+                      <span className="sr-only">Open</span>
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {rows.map((row) => (
+                    <TableRow
+                      key={row.instrumentId}
+                      className={TABLE_ROW_LINKED}
+                    >
+                      <TableCell>
+                        <Link
+                          href={`/stocks/${row.instrumentId}`}
+                          className={TABLE_ROW_LINK}
+                        >
+                          {row.ticker}
+                        </Link>
+                      </TableCell>
+                      <TableCell className="whitespace-normal break-words text-slate-600 dark:text-slate-400">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <span>{row.name}</span>
+                          {row.sharia ? (
+                            <span className={TABLE_ROW_RAISED}>
+                              <ShariaBadge data={row.sharia} />
+                            </span>
+                          ) : null}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        <span data-figure>{formatQuantity(row.quantity)}</span>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {row.avgCost === null ? (
+                          <span className="text-slate-400">—</span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className="tabular-nums">
+                              {formatMoney(row.avgCost, row.currency)}
+                            </span>
+                            {/* Arithmetic on the user's own BUY transactions. */}
+                            <span className={TABLE_ROW_RAISED}>
+                              <SourceBadge size="sm" variant="derived" />
+                            </span>
                           </span>
-                          {/* Same wording as the price column: an end-of-day
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {row.price.ok ? (
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className="tabular-nums">
+                              {formatMoney(row.price.value, row.price.currency)}
+                            </span>
+                            <span className={TABLE_ROW_RAISED}>
+                              <SourceBadge
+                                size="sm"
+                                {...badgePropsForValueSource(row.price.source)}
+                                detail={row.price.detail}
+                              />
+                            </span>
+                          </span>
+                        ) : (
+                          <span className="whitespace-normal text-sm text-amber-700 dark:text-amber-400">
+                            {UNAVAILABLE_TEXT.missing_price}
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {row.valuation.ok ? (
+                          <>
+                            <span className="inline-flex items-center gap-1.5">
+                              <span className="font-medium tabular-nums">
+                                {formatMoney(
+                                  row.valuation.marketValue,
+                                  baseCurrency,
+                                )}
+                              </span>
+                              {/* Same wording as the price column: an end-of-day
                               price is never called Live. */}
-                          <SourceBadge
-                            size="sm"
-                            {...badgePropsForValueSource(row.valuation.source)}
-                            detail={row.valuation.detail}
-                          />
-                        </span>
-                        <FxViaHubHint note={row.valuation.fxNote} />
-                      </>
-                    ) : (
-                      <span className="text-sm text-amber-700 dark:text-amber-400">
-                        {UNAVAILABLE_TEXT[row.valuation.reason]}
-                      </span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {row.gainLoss.ok ? (
-                      <span className={`tabular-nums ${gainLossColor(row.gainLoss.amount)}`}>
-                        {signedMoney(row.gainLoss.amount, baseCurrency)}
-                        {row.gainLoss.pct !== null ? (
-                          <span className="ml-1 text-sm font-medium">
-                            ({formatPercent(row.gainLoss.pct, { signed: true })})
+                              <span className={TABLE_ROW_RAISED}>
+                                <SourceBadge
+                                  size="sm"
+                                  {...badgePropsForValueSource(
+                                    row.valuation.source,
+                                  )}
+                                  detail={row.valuation.detail}
+                                />
+                              </span>
+                            </span>
+                            <FxViaHubHint note={row.valuation.fxNote} />
+                          </>
+                        ) : (
+                          <span className="whitespace-normal text-sm text-amber-700 dark:text-amber-400">
+                            {UNAVAILABLE_TEXT[row.valuation.reason]}
                           </span>
-                        ) : null}
-                      </span>
-                    ) : (
-                      <span className="text-sm text-amber-700 dark:text-amber-400">
-                        {UNAVAILABLE_TEXT[row.gainLoss.reason]}
-                      </span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {row.weightPct === null ? (
-                      <span className="text-slate-400">—</span>
-                    ) : (
-                      formatPercent(row.weightPct)
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <HoldingActions row={row} onUpdatePrice={onUpdatePrice} />
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {row.gainLoss.ok ? (
+                          <span
+                            className={`whitespace-normal tabular-nums ${gainLossColor(row.gainLoss.amount)}`}
+                          >
+                            <span className="whitespace-nowrap">
+                              {signedMoney(row.gainLoss.amount, baseCurrency)}
+                            </span>
+                            {row.gainLoss.pct !== null ? (
+                              <span className="ml-1 inline-block whitespace-nowrap text-sm font-medium">
+                                (
+                                {formatPercent(row.gainLoss.pct, {
+                                  signed: true,
+                                })}
+                                )
+                              </span>
+                            ) : null}
+                          </span>
+                        ) : (
+                          <span className="whitespace-normal text-sm text-amber-700 dark:text-amber-400">
+                            {UNAVAILABLE_TEXT[row.gainLoss.reason]}
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {row.weightPct === null ? (
+                          <span className="text-slate-400">—</span>
+                        ) : (
+                          formatPercent(row.weightPct)
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {/* Raised above the row's link layer: opening the menu never opens the stock. */}
+                        <div className={TABLE_ROW_RAISED}>
+                          <HoldingActions
+                            row={row}
+                            onUpdatePrice={onUpdatePrice}
+                          />
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <ChevronRight
+                          aria-hidden="true"
+                          className="size-4 text-slate-400"
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             }
           />
         )}

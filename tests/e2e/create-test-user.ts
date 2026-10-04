@@ -10,6 +10,7 @@
 import { PrismaClient } from "@prisma/client";
 
 import { ensureVerifiedPasswordUser, seedDemoDataForUser } from "../../prisma/seed-demo";
+import { seedPhoneLayoutRows } from "./phone-seed";
 import {
   E2E_USER_EMAIL,
   E2E_USER_NAME,
@@ -33,6 +34,8 @@ async function main(): Promise<void> {
       plan: "PRO",
     });
     await seedDemoDataForUser(prisma, user.id);
+    // Extra sample rows for the phone-layout tests (tests/e2e/phone-seed.ts).
+    await seedPhoneLayoutRows(prisma, user.id);
   } finally {
     await prisma.$disconnect();
   }

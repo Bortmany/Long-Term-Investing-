@@ -60,10 +60,14 @@ async function instrumentExists(instrumentId: string): Promise<boolean> {
   return count > 0;
 }
 
-/** Start watching an instrument. Idempotent — watching twice is a no-op, not an error. */
+/**
+ * Start watching an instrument. Idempotent — watching twice is a no-op, not an
+ * error; `alreadyWatching` tells the caller which one happened (it only ever
+ * describes THIS user's own watchlist).
+ */
 export async function addToWatchlist(
   instrumentId: string,
-): Promise<ActionResult<{ id: string }>> {
+): Promise<ActionResult<{ id: string; alreadyWatching: boolean }>> {
   const userId = await getSessionUserId();
   if (!userId) return actionError(NOT_SIGNED_IN_ERROR);
 
@@ -84,6 +88,11 @@ export async function addToWatchlist(
     return actionError("That stock could not be found.");
   }
 
+  const alreadyWatching =
+    (await prisma.watchlistItem.count({
+      where: { userId, instrumentId: parsed.data },
+    })) > 0;
+
   await prisma.watchlistItem.upsert({
     where: { userId_instrumentId: { userId, instrumentId: parsed.data } },
     create: { userId, instrumentId: parsed.data },
@@ -91,7 +100,7 @@ export async function addToWatchlist(
   });
 
   revalidateStockPages(parsed.data);
-  return actionOk({ id: parsed.data });
+  return actionOk({ id: parsed.data, alreadyWatching });
 }
 
 /** Stop watching an instrument. Scoped to the signed-in user's own row — nothing else can be touched. */

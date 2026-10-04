@@ -3,9 +3,27 @@ import * as React from "react";
 
 import { cn } from "@/lib/utils";
 
-function Table({ className, ...props }: React.HTMLAttributes<HTMLTableElement>) {
+function Table({
+  className,
+  containerClassName,
+  allowScroll,
+  ...props
+}: React.HTMLAttributes<HTMLTableElement> & {
+  /** Extra classes for the scrolling box around the table. */
+  containerClassName?: string;
+  /**
+   * Marks the scrolling box as intentionally scrollable, with a one-word
+   * reason (e.g. "statements"), so the phone layout sweep can tell an
+   * intended scroller from a bug. Only pass it for tables that stay tables.
+   */
+  allowScroll?: string;
+}) {
   return (
-    <div data-slot="table-container" className="relative w-full overflow-x-auto">
+    <div
+      data-slot="table-container"
+      data-allow-scroll={allowScroll}
+      className={cn("relative w-full overflow-x-auto", containerClassName)}
+    >
       <table
         data-slot="table"
         className={cn("w-full caption-bottom text-sm", className)}

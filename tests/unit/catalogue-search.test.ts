@@ -67,3 +67,66 @@ describe("search scope", () => {
     ]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Cross-user isolation, run against a tiny in-memory copy of the shared stock
+// table: the real filter from buildStockSearchWhere is evaluated row by row,
+// the way the database would.
+// ---------------------------------------------------------------------------
+type Row = { id: string; ticker: string; name: string; market: string; currency: string };
+
+function matches(row: Row, where: ReturnType<typeof buildStockSearchWhere>): boolean {
+  const [scope, text] = where.AND;
+  const inScope = scope.OR.some((clause) =>
+    "id" in clause
+      ? clause.id.in.includes(row.id)
+      : clause.ticker === row.ticker &&
+        clause.market === row.market &&
+        clause.currency === row.currency,
+  );
+  const textMatch = text.OR.some((clause) => {
+    if ("ticker" in clause) {
+      return row.ticker.toLowerCase().includes(clause.ticker.contains.toLowerCase());
+    }
+    return row.name.toLowerCase().includes(clause.name.contains.toLowerCase());
+  });
+  return inScope && textMatch;
+}
+
+describe("cross-user isolation (simulated database)", () => {
+  const table: Row[] = [
+    // On the public list.
+    { id: "jnj", ticker: "JNJ", name: "Johnson & Johnson", market: "US", currency: "USD" },
+    // A same-ticker row in the wrong currency must not count as the public one.
+    { id: "jnj-odd", ticker: "JNJ", name: "Johnson odd", market: "US", currency: "OMR" },
+    // Typed in privately by user A only.
+    { id: "a-secret", ticker: "ZQXA", name: "Alice Private Johnson Fund", market: "OTHER", currency: "USD" },
+    // Typed in privately by user B only.
+    { id: "b-secret", ticker: "ZQXB", name: "Bob Private Johnson Fund", market: "OTHER", currency: "USD" },
+  ];
+  const search = (query: string, ownIds: string[]) =>
+    table.filter((row) => matches(row, buildStockSearchWhere(query, ownIds))).map((r) => r.id);
+
+  it("user B never finds a stock that only user A created, holds or watches", () => {
+    expect(search("johnson", ["b-secret"])).not.toContain("a-secret");
+    expect(search("ZQXA", ["b-secret"])).toEqual([]);
+  });
+
+  it("user A never finds user B's private stock either", () => {
+    expect(search("johnson", ["a-secret"])).not.toContain("b-secret");
+    expect(search("ZQXB", ["a-secret"])).toEqual([]);
+  });
+
+  it("each user finds their own private stock plus the public list", () => {
+    expect(search("johnson", ["a-secret"]).sort()).toEqual(["a-secret", "jnj"]);
+    expect(search("johnson", ["b-secret"]).sort()).toEqual(["b-secret", "jnj"]);
+  });
+
+  it("a user with nothing of their own sees only the public list", () => {
+    expect(search("johnson", [])).toEqual(["jnj"]);
+  });
+
+  it("the public-list row in the wrong currency is not found", () => {
+    expect(search("odd", [])).toEqual([]);
+  });
+});

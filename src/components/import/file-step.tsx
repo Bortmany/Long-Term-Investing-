@@ -502,7 +502,7 @@ export function FileStep({
           size="lg"
           onClick={onBack}
           disabled={isChecking}
-          className="lg:order-1"
+          className="order-2 lg:order-1"
         >
           Back
         </Button>
@@ -511,7 +511,7 @@ export function FileStep({
           size="lg"
           disabled={continueDisabled || isChecking}
           onClick={onContinue}
-          className="lg:order-2"
+          className="order-1 lg:order-2"
         >
           {isChecking ? (
             <>

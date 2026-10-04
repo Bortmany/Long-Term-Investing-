@@ -187,7 +187,7 @@ export default async function ThesisDetailPage({
       <div>
         <Link
           href="/theses"
-          className="text-sm text-slate-500 hover:underline dark:text-slate-400"
+          className="inline-flex min-h-11 items-center text-sm text-slate-500 hover:underline md:min-h-0 dark:text-slate-400"
         >
           ← All Theses
         </Link>
