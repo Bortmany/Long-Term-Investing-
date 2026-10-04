@@ -447,11 +447,20 @@ export default async function StockDetailPage({
         <CardHeader className="flex-row items-center gap-3">
           <CardTitle>Price History</CardTitle>
           {historyResult.ok && latestPoint ? (
+            // A Tadawul (Twelve Data) stored price is end of day, not Live:
+            // borrow the quote's true origin so the wording matches the price.
             <SourceBadge
-              {...badgePropsForValueSource({
-                kind: latestPoint.source,
-                asOf: latestPoint.date,
-              })}
+              {...badgePropsForPrice(
+                {
+                  source: latestPoint.source,
+                  asOf: latestPoint.date,
+                  priceSource:
+                    latestPoint.source === "live" && quoteResult.ok
+                      ? quoteResult.data.priceSource
+                      : undefined,
+                },
+                instrument.market,
+              )}
             />
           ) : null}
         </CardHeader>

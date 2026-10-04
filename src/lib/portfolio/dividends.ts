@@ -40,6 +40,7 @@ export type DividendIncome = {
  */
 export function roundMoney(amount: number, currency: Currency): number {
   const factor = currency === "OMR" ? 1000 : 100;
+  // (toPrecision(12) keeps 12 significant digits, plenty for realistic dividend amounts.)
   // toPrecision first so a value like 1.0005 (really 1.000499999…) rounds
   // the way a person expects.
   return Math.round(Number((amount * factor).toPrecision(12))) / factor;

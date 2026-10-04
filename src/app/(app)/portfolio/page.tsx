@@ -11,10 +11,11 @@ import {
   convertAmount,
   describeUnvalued,
   fromPrismaTransaction,
+  fxViaHubNote,
   type PriceInput,
 } from "@/lib/portfolio";
 import { loadPortfolioComputation } from "@/lib/portfolio-market-data";
-import { badgePropsForValueSources } from "@/components/source-badge";
+import { badgePropsForHoldingValue, badgePropsForValueSources } from "@/components/source-badge";
 import { PortfolioView } from "@/components/portfolio/portfolio-view";
 import { UnvaluedBanner } from "@/components/portfolio/unvalued-banner";
 import type {
@@ -137,6 +138,12 @@ export default async function PortfolioPage() {
           ok: true,
           marketValue: holding.valuation.marketValue,
           source: holding.valuation.source,
+          // Same provider/delay wording as the price column, and the
+          // through-the-rial rate date when the conversion used that route.
+          detail: instrument
+            ? badgePropsForHoldingValue(holding.valuation, instrument.market).detail
+            : undefined,
+          fxNote: fxViaHubNote(holding.valuation) ?? undefined,
         }
       : { ok: false, reason: holding.valuation.reason };
 

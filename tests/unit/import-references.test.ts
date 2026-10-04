@@ -160,6 +160,33 @@ describe("reference length cap and argument guard", () => {
     expect(v.ok).toBe(true);
   });
 
+  it.each([
+    ["ticker", 33],
+    ["market", 33],
+    ["type", 33],
+    ["quantity", 65],
+    ["pricePerUnit", 65],
+    ["amount", 65],
+    ["currency", 17],
+    ["fee", 65],
+    ["tradeDate", 65],
+    ["note", 501],
+  ] as const)("refuses an oversized %s with a plain message", async (field, length) => {
+    const row = { ...buy("a"), [field]: "x".repeat(length) };
+    for (const result of [await validateImportRows([row]), await importTransactions([row])]) {
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error).toMatch(/^Row 1: .* is too long \(the limit is \d+ characters\)\. Shorten it/);
+      }
+    }
+    expect(db.createMany).not.toHaveBeenCalled();
+  });
+
+  it("accepts a note at exactly 500 characters", async () => {
+    const v = await validateImportRows([{ ...buy("a"), note: "n".repeat(500) }]);
+    expect(v.ok).toBe(true);
+  });
+
   it("refuses a non-integer line", async () => {
     const v = await validateImportRows([{ ...buy("a"), line: 1.5 }]);
     expect(v.ok).toBe(false);
@@ -169,33 +196,39 @@ describe("reference length cap and argument guard", () => {
 describe("getKnownImportReferences - scoped to the signed-in user", () => {
   it("refuses when signed out and touches no data", async () => {
     session.userId = null;
-    const r = await getKnownImportReferences("pf-1");
+    const r = await getKnownImportReferences();
     expect(r.ok).toBe(false);
     expect(db.portfolioFindFirst).not.toHaveBeenCalled();
     expect(db.txFindMany).not.toHaveBeenCalled();
   });
 
-  it("looks the portfolio up by the session user id and returns its references", async () => {
+  it("takes no argument: finds the portfolio by the session user id only", async () => {
     db.portfolioFindFirst.mockResolvedValue({ id: "pf-1" });
     db.txFindMany.mockResolvedValue([
       { importReference: "a:1" },
       { importReference: null },
       { importReference: "a:2" },
     ]);
-    const r = await getKnownImportReferences("pf-1");
-    expect(r).toEqual({ ok: true, references: ["a:1", "a:2"] });
-    expect(db.portfolioFindFirst.mock.calls[0][0].where).toEqual({
-      id: "pf-1",
-      userId: session.userId,
-    });
+    expect(getKnownImportReferences.length).toBe(0);
+    const r = await getKnownImportReferences();
+    expect(r).toEqual({ ok: true, data: { references: ["a:1", "a:2"] } });
+    expect(db.portfolioFindFirst.mock.calls[0][0].where).toEqual({ userId: session.userId });
     expect(db.txFindMany.mock.calls[0][0].where.portfolioId).toBe("pf-1");
   });
 
-  it("someone else's portfolio id gets a refusal and no references", async () => {
+  it("a user with no portfolio gets an empty list and nothing is created", async () => {
     db.portfolioFindFirst.mockResolvedValue(null);
-    const r = await getKnownImportReferences("pf-of-another-user");
-    expect(r.ok).toBe(false);
+    const r = await getKnownImportReferences();
+    expect(r).toEqual({ ok: true, data: { references: [] } });
     expect(db.txFindMany).not.toHaveBeenCalled();
+  });
+
+  it("is rate-limited like the other import actions", async () => {
+    db.portfolioFindFirst.mockResolvedValue(null);
+    let last = await getKnownImportReferences();
+    for (let i = 0; i < 10; i++) last = await getKnownImportReferences();
+    expect(last.ok).toBe(false);
+    if (!last.ok) expect(last.error.length).toBeGreaterThan(10);
   });
 });
 

@@ -13,7 +13,7 @@ import { isBillingEnabled } from "@/lib/billing/config";
 import { thesisCheckSchema } from "@/lib/ai/schemas";
 import {
   badgePropsForPrice,
-  badgePropsForValueSource,
+  badgePropsForHoldingValue,
   SourceBadge,
 } from "@/components/source-badge";
 import { EmptyState } from "@/components/empty-state";
@@ -28,6 +28,7 @@ import {
   fromPrismaFxRate,
   fromPrismaPriceCache,
   fromPrismaTransaction,
+  fxViaHubNote,
 } from "@/lib/portfolio";
 import { formatMoney, formatQuantity } from "@/lib/format";
 
@@ -123,7 +124,9 @@ export default async function ThesisDetailPage({
     quantity: number;
     marketValue: number;
     currency: string;
-    badge: ReturnType<typeof badgePropsForValueSource>;
+    badge: ReturnType<typeof badgePropsForHoldingValue>;
+    /** "rate via OMR, as of <date>" when converted through the rial. */
+    fxNote: string | null;
   } | null = null;
   if (portfolio) {
     const [transactionRows, priceRows, fxRows] = await Promise.all([
@@ -145,7 +148,8 @@ export default async function ThesisDetailPage({
         quantity: holding.quantity,
         marketValue: holding.valuation.marketValue,
         currency: portfolio.baseCurrency,
-        badge: badgePropsForValueSource(holding.valuation.source),
+        badge: badgePropsForHoldingValue(holding.valuation, instrument.market),
+        fxNote: fxViaHubNote(holding.valuation),
       };
     }
   }
@@ -232,6 +236,11 @@ export default async function ThesisDetailPage({
               {formatMoney(position.marketValue, position.currency)}
             </span>
             ) <SourceBadge size="sm" {...position.badge} />
+            {position.fxNote ? (
+              <span className="text-xs text-slate-500 dark:text-slate-400">
+                ({position.fxNote})
+              </span>
+            ) : null}
           </span>
         ) : null}
         {instrument.sector ? <span>Sector: {instrument.sector}</span> : null}

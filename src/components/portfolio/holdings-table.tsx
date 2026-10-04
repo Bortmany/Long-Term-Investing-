@@ -34,6 +34,7 @@ import {
   type SourceBadgeProps,
 } from "@/components/source-badge";
 import { formatMoney, formatPercent, formatQuantity } from "@/lib/format";
+import { FxViaHubHint } from "./fx-via-hub-hint";
 import type { HoldingRowData } from "./types";
 
 /** "+OMR 12.500" / "−OMR 3.000" — sign out front so it never hides in the currency prefix. */
@@ -167,15 +168,21 @@ export function HoldingsTable({
                   </TableCell>
                   <TableCell className="text-right">
                     {row.valuation.ok ? (
-                      <span className="inline-flex items-center gap-1.5">
-                        <span className="font-medium tabular-nums">
-                          {formatMoney(row.valuation.marketValue, baseCurrency)}
+                      <>
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="font-medium tabular-nums">
+                            {formatMoney(row.valuation.marketValue, baseCurrency)}
+                          </span>
+                          {/* Same wording as the price column: an end-of-day
+                              price is never called Live. */}
+                          <SourceBadge
+                            size="sm"
+                            {...badgePropsForValueSource(row.valuation.source)}
+                            detail={row.valuation.detail}
+                          />
                         </span>
-                        <SourceBadge
-                          size="sm"
-                          {...badgePropsForValueSource(row.valuation.source)}
-                        />
-                      </span>
+                        <FxViaHubHint note={row.valuation.fxNote} />
+                      </>
                     ) : (
                       <span className="text-sm text-amber-700 dark:text-amber-400">
                         {UNAVAILABLE_TEXT[row.valuation.reason]}

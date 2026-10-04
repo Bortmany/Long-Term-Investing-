@@ -14,6 +14,7 @@ import {
   collectUnvaluedItems,
   decideDividendCard,
   describeUnvalued,
+  fxViaHubNote,
   type AllocatableHolding,
   type Allocation,
   type ReturnFigure,
@@ -24,10 +25,12 @@ import { getUpcomingDividends, type UpcomingDividend } from "@/lib/data";
 import { formatMoney, formatPercent, formatQuantity, formatShortDate } from "@/lib/format";
 import {
   SourceBadge,
+  badgePropsForHoldingValue,
   badgePropsForValueSource,
   badgePropsForValueSources,
   type SourceBadgeProps,
 } from "@/components/source-badge";
+import { FxViaHubHint } from "@/components/portfolio/fx-via-hub-hint";
 import { EmptyState } from "@/components/empty-state";
 import { EmailConfirmedNotice } from "@/components/auth/email-confirmed-notice";
 import { ExplainerTip } from "@/components/explainer-tip";
@@ -473,15 +476,22 @@ export default async function DashboardPage({
                       </TableCell>
                       <TableCell className="text-right">
                         {holding.valuation.ok ? (
-                          <span className="inline-flex items-center gap-1.5">
-                            <span className="font-medium tabular-nums">
-                              {formatMoney(holding.valuation.marketValue, base)}
+                          <>
+                            <span className="inline-flex items-center gap-1.5">
+                              <span className="font-medium tabular-nums">
+                                {formatMoney(holding.valuation.marketValue, base)}
+                              </span>
+                              {/* Per-holding badge matches the price's real
+                                  origin (end of day is never called Live). */}
+                              <SourceBadge
+                                size="sm"
+                                {...(instrument
+                                  ? badgePropsForHoldingValue(holding.valuation, instrument.market)
+                                  : badgePropsForValueSource(holding.valuation.source))}
+                              />
                             </span>
-                            <SourceBadge
-                              size="sm"
-                              {...badgePropsForValueSource(holding.valuation.source)}
-                            />
-                          </span>
+                            <FxViaHubHint note={fxViaHubNote(holding.valuation)} />
+                          </>
                         ) : (
                           // Never a fake number: say why it couldn't be valued.
                           <span className="text-sm text-amber-700 dark:text-amber-400">

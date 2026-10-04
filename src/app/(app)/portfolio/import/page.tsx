@@ -18,26 +18,19 @@ export default async function ImportPage() {
   }
 
   // The stocks and funds InvestIQ tracks (just ticker and market) so the
-  // browser can match a broker's tickers to them. The user's own portfolio id
-  // is read, never created: a brand-new account simply has nothing imported.
-  const [instruments, portfolio] = await Promise.all([
-    prisma.instrument.findMany({
-      select: { ticker: true, market: true },
-      orderBy: { ticker: "asc" },
-    }),
-    prisma.portfolio.findFirst({
-      where: { userId: session.user.id },
-      orderBy: { createdAt: "asc" },
-      select: { id: true },
-    }),
-  ]);
+  // browser can match a broker's tickers to them. Which rows were already
+  // imported is looked up on the server from the signed-in user's own
+  // portfolio — never from anything the browser sends.
+  const instruments = await prisma.instrument.findMany({
+    select: { ticker: true, market: true },
+    orderBy: { ticker: "asc" },
+  });
 
   return (
     <>
       <h1 className="mb-6 text-2xl font-semibold">Import transactions</h1>
       <ImportWizard
         instruments={instruments.map((i) => ({ ticker: i.ticker, market: i.market }))}
-        portfolioId={portfolio?.id ?? null}
       />
     </>
   );

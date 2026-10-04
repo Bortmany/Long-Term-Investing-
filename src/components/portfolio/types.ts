@@ -29,7 +29,15 @@ export type HoldingRowData = {
     | { ok: false };
   /** Market value in the portfolio base currency. */
   valuation:
-    | { ok: true; marketValue: number; source: ValueSource }
+    | {
+        ok: true;
+        marketValue: number;
+        source: ValueSource;
+        /** Provider + delay wording when the price came from Twelve Data. */
+        detail?: ProviderBadgeDetail;
+        /** "rate via OMR, as of <date>" when the conversion went through the rial. */
+        fxNote?: string;
+      }
     | { ok: false; reason: "missing_price" | "missing_fx_rate" };
   /** Unrealized gain/loss in the base currency (+ percent of cost basis). */
   gainLoss:

@@ -73,12 +73,9 @@ const CHECK_FAILED = "We couldn't check your file. Please try again.";
 
 export function ImportWizard({
   instruments,
-  portfolioId,
 }: {
   /** The stocks and funds InvestIQ already tracks (ticker and market). */
   instruments: TrackedInstrument[];
-  /** The signed-in user's portfolio, or null if they have none yet. */
-  portfolioId: string | null;
 }) {
   const router = useRouter();
   const [step, setStep] = React.useState<Step>("broker");
@@ -225,15 +222,14 @@ export function ImportWizard({
 
     startChecking(async () => {
       try {
-        let references: string[] = [];
-        if (portfolioId) {
-          const known = await getKnownImportReferences(portfolioId);
-          if (!known.ok) {
-            setActionError(known.message);
-            return;
-          }
-          references = known.references;
+        // The server finds the signed-in user's own portfolio; a new account
+        // simply has no references yet.
+        const known = await getKnownImportReferences();
+        if (!known.ok) {
+          setActionError(known.error);
+          return;
         }
+        const references = known.data.references;
         const plan = prepareUpload(reads, { instruments, knownReferences: references });
 
         if (plan.serverRows.length > MAX_ROWS) {
@@ -324,15 +320,12 @@ export function ImportWizard({
     setActionError(null);
     startChecking(async () => {
       try {
-        let known = new Set<string>();
-        if (portfolioId) {
-          const result = await getKnownImportReferences(portfolioId);
-          if (!result.ok) {
-            setActionError(result.message);
-            return;
-          }
-          known = new Set(result.references);
+        const result = await getKnownImportReferences();
+        if (!result.ok) {
+          setActionError(result.error);
+          return;
         }
+        const known = new Set(result.data.references);
         const fresh = entries.filter((e) => !known.has(e.reference));
         const already = entries.filter((e) => known.has(e.reference));
         let report: ImportValidationReport = { total: 0, validCount: 0, errorCount: 0, results: [] };

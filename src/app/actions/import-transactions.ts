@@ -50,27 +50,60 @@ import {
 // (numbers, dates, ticker resolution) still happens in src/lib/import-rows.ts;
 // this only proves the top-level input is a bounded array of the right shape
 // before any of it is read. The 2000-row cap keeps a single import bounded.
+// The server (not only the browser's 5 MB file check) caps the size of every
+// free-text field, so a hand-made request can't push a huge string through.
+// Limits are generous for real data: tickers/ids are short, a note matches the
+// 500-character limit of the Add Transaction form, numbers and dates are tiny.
+const MAX_ROW_LINE = 1_000_000;
+function capped(maxLength: number, label: string) {
+  return z
+    .string()
+    .max(maxLength, `${label} is too long (the limit is ${maxLength} characters).`)
+    .optional();
+}
+
 const importArgsSchema = z
   .array(
     z.object({
-      ticker: z.string().optional(),
-      market: z.string().optional(),
-      type: z.string().optional(),
-      quantity: z.string().optional(),
-      pricePerUnit: z.string().optional(),
-      amount: z.string().optional(),
-      currency: z.string().optional(),
-      fee: z.string().optional(),
-      tradeDate: z.string().optional(),
-      note: z.string().optional(),
+      ticker: capped(32, "A ticker"),
+      market: capped(32, "A market"),
+      type: capped(32, "A transaction type"),
+      quantity: capped(64, "A quantity"),
+      pricePerUnit: capped(64, "A price"),
+      amount: capped(64, "An amount"),
+      currency: capped(16, "A currency"),
+      fee: capped(64, "A fee"),
+      tradeDate: capped(64, "A trade date"),
+      note: capped(500, "A note"),
       // Broker-preset / fingerprint reference, stored only to stop the same
       // line being imported twice. Length-capped; `line` is for messages and
       // is never stored.
-      reference: z.string().max(MAX_IMPORT_REFERENCE_LENGTH).optional(),
-      line: z.number().int().optional(),
+      reference: z
+        .string()
+        .max(
+          MAX_IMPORT_REFERENCE_LENGTH,
+          `A row reference is too long (the limit is ${MAX_IMPORT_REFERENCE_LENGTH} characters).`,
+        )
+        .optional(),
+      line: z.number().int().min(0).max(MAX_ROW_LINE).optional(),
     }),
   )
   .max(2000, "That's more rows than one import allows (max 2000). Split the file and try again.");
+
+/** Plain-English refusal for a bad argument shape, naming the row when known. */
+function argsErrorMessage(error: z.ZodError): string {
+  const issue = error.issues[0];
+  if (!issue) {
+    return "Those import rows aren't in the expected format. Refresh the page and try again.";
+  }
+  const rowIndex = issue.path[0];
+  // The row-count cap has no row in its path: its own message says it all.
+  if (typeof rowIndex !== "number") return issue.message;
+  if (issue.code === "too_big" && issue.path.length > 1) {
+    return `Row ${rowIndex + 1}: ${issue.message} Shorten it or leave that row out, then try again.`;
+  }
+  return `Row ${rowIndex + 1} isn't in the expected format. Refresh the page and try again.`;
+}
 
 async function loadKnownInstruments(): Promise<KnownInstrument[]> {
   const rows = await prisma.instrument.findMany({
@@ -121,10 +154,7 @@ export async function validateImportRows(
   // per-row validation loop or an unbounded instrument-table read.
   const parsedArgs = importArgsSchema.safeParse(mappedRows);
   if (!parsedArgs.success) {
-    return actionError(
-      parsedArgs.error.issues[0]?.message ??
-        "Those import rows aren't in the expected format. Refresh the page and try again.",
-    );
+    return actionError(argsErrorMessage(parsedArgs.error));
   }
   const rows = parsedArgs.data;
   if (rows.length === 0) {
@@ -160,10 +190,7 @@ export async function importTransactions(
   // Top-level shape guard on this action's own arguments.
   const parsedArgs = importArgsSchema.safeParse(mappedRows);
   if (!parsedArgs.success) {
-    return actionError(
-      parsedArgs.error.issues[0]?.message ??
-        "Those import rows aren't in the expected format. Refresh the page and try again.",
-    );
+    return actionError(argsErrorMessage(parsedArgs.error));
   }
   const rows = parsedArgs.data;
   if (rows.length === 0) {
@@ -264,31 +291,30 @@ export async function importTransactions(
 /**
  * The import references already stored in the signed-in user's portfolio, so
  * the import screen can show repeats as "Already imported" before anything is
- * sent. Scoped to the session user's own portfolio; reads only (never creates
- * a portfolio).
+ * sent. The browser sends nothing: the portfolio is found from the SESSION
+ * user (the same lookup the dry run uses). Reads only — never creates a
+ * portfolio, so a brand-new account simply has nothing imported yet.
  */
-export async function getKnownImportReferences(
-  portfolioId: string,
-): Promise<{ ok: true; references: string[] } | { ok: false; message: string }> {
+export async function getKnownImportReferences(): Promise<
+  ActionResult<{ references: string[] }>
+> {
   const userId = await getSessionUserId();
-  if (!userId) return { ok: false, message: NOT_SIGNED_IN_ERROR };
+  if (!userId) return actionError(NOT_SIGNED_IN_ERROR);
 
-  if (typeof portfolioId !== "string" || portfolioId.length === 0 || portfolioId.length > 100) {
-    return { ok: false, message: "We could not find that portfolio." };
-  }
+  const limited = rateLimit(userKey("tx-known-refs", userId), IMPORT_RATE_LIMIT);
+  if (!limited.ok) return actionError(rateLimitMessage(limited.retryAfterSeconds));
 
-  // Ownership check: the portfolio must belong to the signed-in user. Anyone
-  // else's id gets the same answer as one that does not exist.
   const portfolio = await prisma.portfolio.findFirst({
-    where: { id: portfolioId, userId },
+    where: { userId },
+    orderBy: { createdAt: "asc" },
     select: { id: true },
   });
-  if (!portfolio) return { ok: false, message: "We could not find that portfolio." };
+  if (!portfolio) return actionOk({ references: [] });
 
   const rows = await prisma.transaction.findMany({
     where: { portfolioId: portfolio.id, importReference: { not: null } },
     select: { importReference: true },
   });
   const references = rows.flatMap((row) => (row.importReference ? [row.importReference] : []));
-  return { ok: true, references };
+  return actionOk({ references });
 }

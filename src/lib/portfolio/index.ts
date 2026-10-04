@@ -53,6 +53,7 @@ export {
   type AllocationSlice,
   type UnvaluedHolding,
 } from "./allocation";
+export { fxViaHubNote } from "./fx-note";
 export {
   fromPrismaFxRate,
   fromPrismaPriceCache,

@@ -3,7 +3,7 @@
 // Anything that cannot be valued (missing price, missing FX rate) is listed
 // in `missing` and excluded from the total — never guessed.
 
-import type { Currency } from "@prisma/client";
+import type { Currency, PriceSource } from "@prisma/client";
 import { badgeForPriceSource } from "@/lib/data/provider";
 import { convertAmount, type ConversionResult, type FxViaHub } from "./fx";
 import {
@@ -24,6 +24,11 @@ export type HoldingValuation =
       priceCurrency: Currency;
       /** Badge + as-of of the price used. */
       source: ValueSource;
+      /**
+       * The price's true origin (FMP, Twelve Data, manual, sample). The badge
+       * needs it to say "end of day" / "delayed" instead of a bare "Live".
+       */
+      priceSource: PriceSource;
       /** As-of date of the FX rate applied; null when no conversion was needed. */
       fxRateAsOf: Date | null;
       /** Set when the rate was worked out through the rial (both legs + dates). */
@@ -134,6 +139,7 @@ export function computePortfolioValue(input: {
         price: price.price,
         priceCurrency: price.currency,
         source,
+        priceSource: price.source,
         fxRateAsOf: converted.rateAsOf,
         ...(converted.viaHub ? { fxViaHub: converted.viaHub } : {}),
       },

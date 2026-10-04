@@ -153,6 +153,28 @@ export function badgePropsForPrice(
 }
 
 /**
+ * Badge props for ONE holding's market value. The value wears the same
+ * badge as the price it was worked out from, so an end-of-day Tadawul price
+ * says "Twelve Data · end of day, <date>" (clock icon) and never "Live".
+ * Aggregate figures (totals, cash) keep using badgePropsForValueSources.
+ */
+export function badgePropsForHoldingValue(
+  valuation: { source: ValueSource; priceSource?: PriceSource },
+  market: Market,
+): Pick<SourceBadgeProps, "variant" | "date" | "detail"> {
+  const { source } = valuation;
+  if (source.kind === "derived") return badgePropsForValueSource(source);
+  return badgePropsForPrice(
+    {
+      source: source.kind,
+      asOf: source.asOf,
+      priceSource: valuation.priceSource,
+    },
+    market,
+  );
+}
+
+/**
  * Summarise many ValueSources into one badge for an aggregate figure
  * (e.g. the Total Portfolio Value card). Precedence: if ANY input is sample
  * data the total is sample; else if any is manual the total is manual (with
