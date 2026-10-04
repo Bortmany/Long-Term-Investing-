@@ -1,0 +1,9 @@
+Date,Type,Details,Amount,Units,Realized Equity Change,Realized Equity,Balance,Position ID,Asset type,NWA
+20/05/2026 10:00:00,Deposit,-,500.00,-,0,"1,000.00",900.33,-,-,-
+14/03/2026 00:00:00,Dividend,KO/USD,4.33,-,4.33,"1,037.33",860.33,P0000004,Stocks,-
+02/03/2026 16:00:00,Position closed,AAPL/USD,856.00,4,33.00,"1,033.00",856.00,P0000001,Stocks,-
+01/03/2026 12:00:00,Open Position,BTC/USD,300.00,0.005,0,"1,000.00",0.00,P0000005,Crypto,-
+20/02/2026 15:30:00,Open Position,KO/USD,600.00,10,0,"1,000.00",400.00,P0000004,Stocks,-
+03/02/2026 15:45:00,Open Position,MSFT/USD,"2,050.50",5,0,"1,000.00","-1,000.00",P0000003,Stocks,-
+12/01/2026 15:31:00,Open Position,AAPL/USD,"2,054.00",10,0,"1,000.00","1,000.00",P0000001,Stocks,-
+05/01/2026 09:00:00,Deposit,-,"5,000.00",-,0,0,"5,000.00",-,-,-

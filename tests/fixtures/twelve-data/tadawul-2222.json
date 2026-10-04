@@ -1,0 +1,19 @@
+{
+  "symbol": "2222",
+  "name": "Saudi Arabian Oil Co (MADE-UP SAMPLE REPLY)",
+  "exchange": "XSAU",
+  "mic_code": "XSAU",
+  "currency": "SAR",
+  "datetime": "2026-09-28",
+  "timestamp": 1790596800,
+  "open": "27.30",
+  "high": "27.60",
+  "low": "27.20",
+  "close": "27.45",
+  "volume": "9876543",
+  "previous_close": "27.30",
+  "change": "0.15",
+  "percent_change": "0.54945",
+  "average_volume": "8500000",
+  "is_market_open": false
+}

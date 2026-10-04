@@ -1,6 +1,6 @@
 # InvestIQ AI — UI Spec, Phases 2–6
 
-Desktop-first personal tool (English only, LTR, single owner — no i18n/RTL work). Ground truth for
+Desktop-first, with a phone breakpoint for the data tables (below 768px they become stacked cards, with 44×44 tap targets; see `Agents/docs/specs/investiq/phone-tables-as-cards-ui.md`). Personal tool (English only, LTR, single owner — no i18n/RTL work). Ground truth for
 visual language is `docs/design/ui-spec-phase-1.md` (design tokens, the golden-rule
 `SourceBadge` component, app shell, empty-state, loading/error patterns) — **this document does not
 repeat those, it builds on them.** Read that spec first. Every rule in `docs/CONVENTIONS.md` (the
@@ -10,7 +10,8 @@ The app shell (`src/components/app-shell.tsx`) already defines three breakpoints
 (240px sidebar), tablet 768–1023px (64px icon rail), mobile <768px (top bar + drawer) — and wraps
 page content in `max-w-6xl` (or narrower, per-page, see below). Every screen in this document is
 specified **desktop-first** because that's how the owner actually uses this tool, but every layout
-below states how it collapses at the other two breakpoints. Nothing is phone-only; nothing needs
+below states how it collapses at the other two breakpoints. The data tables are the one place the
+phone gets its own layout (cards, built from `ResponsiveRows` and `RowCard`); nothing else is phone-only; nothing needs
 Arabic/RTL handling.
 
 This is one spec covering five phases so five different builders (working one phase at a time,
@@ -314,10 +315,9 @@ last in the legend** even if it happens to be numerically large — it should ne
 - **Filter bar**: one or more `Select`s left-aligned in a card header or just above a table,
   `flex flex-wrap gap-2`, each with a leading "All {thing}" option as the default/cleared state.
 - **Table row actions**: a single action → plain ghost icon button. Two or more → `DropdownMenu`
-  triggered by a `MoreVertical` ghost icon button, `size-9` inside table cells (still comfortably
-  tappable at that size; the global 44px minimum is for primary/standalone controls, not every dense
-  in-table icon — this one exception is intentional, matching how `SourceBadge size="sm"` already
-  trades density for a slightly smaller in-table target).
+  triggered by a `MoreVertical` ghost icon button. The old exception ("`size-9` inside table cells")
+  is **retired**: on a phone the button lives in the card's rail at 44×44 (`size-11`); the laptop
+  table may keep a denser button only because the table is not shown on a phone.
 
 ---
 
@@ -994,13 +994,17 @@ unaffected.
 - **Money** always through `formatMoney` (OMR 3dp / others 2dp); **quantities** through
   `formatQuantity`; **dates** through `formatShortDate`; **percentages** through the new
   `formatPercent` (§2.8) — never a one-off `toFixed()` scattered in a page component.
-- **Touch targets**: primary/standalone interactive elements stay ≥44×44px per Phase 1's rule; the
-  one documented exception is in-table dense icon buttons (`size-9`, §2.9), matching the precedent
-  `SourceBadge size="sm"` already set for density-over-target-size trade-offs in dense table cells.
+- **Touch targets**: every interactive element on a screen under 768px is ≥44×44px (a full-width
+  link needs only 44px of height). The old exception for in-table dense icon buttons (`size-9`) is
+  retired: those buttons move into the phone card's rail at 44×44. A text link inside a sentence may
+  be shorter if it carries `data-tap-exempt="in-text"`.
 - **Every table on every screen above** follows the same shape: `Table`/`TableHeader`/`TableRow`/
   `TableHead`/`TableCell` from `src/components/ui/table.tsx`, right-aligned numeric columns,
-  `tabular-nums`, horizontal scroll on overflow (already built into the `Table` wrapper) rather than
-  ever squeezing columns unreadably on a narrow viewport.
+  `tabular-nums`. Below the table's switch point (768px, or 1280px for Holdings and Transactions) the
+  table is replaced by stacked cards (`ResponsiveRows` + `RowCard`) instead of scrolling sideways or
+  squeezing columns. Only tables that must stay grids (financial statements, CSV preview) scroll
+  sideways, and they say so: pinned first column, a right-edge fade, a "swipe" caption, and a
+  `data-allow-scroll` marker on the scrolling box.
 
 ---
 

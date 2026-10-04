@@ -314,7 +314,7 @@ export const EXTERNAL_LOOKUP_RATE_LIMIT: RateLimitOptions = {
 };
 // AI analysis generation (Health Score, Committee, etc.) calls a paid model
 // API. This is a burst guard, separate from and in addition to the daily
-// per-user $ cap in src/lib/ai/spend-cap.ts (DAILY_AI_ANALYSIS_LIMIT) — this
+// AI spending limits in src/lib/ai/spend-cap.ts (app-wide, per-user daily, Pro monthly) — this
 // one stops rapid double-clicks/retries within a minute; the spend cap stops
 // the day's total cost.
 export const AI_GENERATION_RATE_LIMIT: RateLimitOptions = {
@@ -326,3 +326,47 @@ export const AI_GENERATION_RATE_LIMIT: RateLimitOptions = {
 // generous for a person checking their own data, tight enough to stop a
 // scripted loop from hammering the database with full-account reads.
 export const EXPORT_RATE_LIMIT: RateLimitOptions = { limit: 5, windowMs: 60 * 60_000 };
+
+// --- Go public safely, chunk A (sign-up and account emails) ---------------
+// Sign-up: at most 5 new-account attempts per hour from one caller (browser
+// or, behind a trusted proxy, IP). Stacked on top of AUTH_RATE_LIMIT's
+// 10-per-minute check, which stays.
+export const SIGNUP_RATE_LIMIT: RateLimitOptions = { limit: 5, windowMs: 60 * 60_000 };
+// Account emails (confirm-your-email resends, password-reset requests): at
+// most 5 per hour for any ONE email address, so nobody can flood someone's
+// inbox or burn the email-sending allowance on one address.
+export const EMAIL_SEND_RATE_LIMIT: RateLimitOptions = { limit: 5, windowMs: 60 * 60_000 };
+// --- end chunk A ------------------------------------------------------------
+
+// --- Go public safely, chunk B (plans and billing) -------------------------
+// Upgrade (Stripe Checkout) and Manage billing (Stripe's portal) each call
+// Stripe: at most 5 a minute per signed-in user (userKey). The billing
+// webhook has its own, far more generous per-IP limit in its route, so Stripe
+// itself is never blocked.
+export const BILLING_ACTION_RATE_LIMIT: RateLimitOptions = { limit: 5, windowMs: 60_000 };
+// --- end chunk B ------------------------------------------------------------
+
+// --- Public stock pages (Step 7) --------------------------------------------
+// Per anonymous visitor address, counted in the proxy (before the page cache):
+// at most 60 public stock pages a minute, and at most 10 sitemap/robots
+// requests a minute. Kept in memory for the current minute only.
+export const PUBLIC_PAGE_RATE_LIMIT: RateLimitOptions = { limit: 60, windowMs: 60_000 };
+export const PUBLIC_FILE_RATE_LIMIT: RateLimitOptions = { limit: 10, windowMs: 60_000 };
+// --- end public stock pages -------------------------------------------------
+
+// --- Broker connection (Step 4b) --------------------------------------------
+// Connect calls Interactive Brokers with a user-supplied token: 5 an hour per
+// user, so nobody can use us as a token-guessing proxy. Sync now calls IBKR
+// twice: 6 an hour per user (plus a 60-second cooldown and a one-at-a-time
+// claim in src/lib/broker/sync.ts). Disconnect uses WRITE_ACTION_RATE_LIMIT.
+export const BROKER_CONNECT_RATE_LIMIT: RateLimitOptions = { limit: 5, windowMs: 60 * 60_000 };
+export const BROKER_SYNC_RATE_LIMIT: RateLimitOptions = { limit: 6, windowMs: 60 * 60_000 };
+// --- end broker connection --------------------------------------------------
+
+// --- Sharia screen (Step 5) -------------------------------------------------
+// The background fetch started when someone switches the badge on calls the
+// screening supplier: 3 an hour per user (userKey "sharia-refresh"), at most
+// 25 stocks a run. The daily cron route uses the same 5-a-minute-per-IP
+// limit as the other cron routes. The switch itself uses WRITE_ACTION_RATE_LIMIT.
+export const SHARIA_REFRESH_RATE_LIMIT: RateLimitOptions = { limit: 3, windowMs: 60 * 60_000 };
+// --- end Sharia screen ------------------------------------------------------

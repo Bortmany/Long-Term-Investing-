@@ -12,6 +12,19 @@ import {
   toTransactionRecord,
   type TransactionInput,
 } from "./transaction-schema";
+import { currencyListText } from "./markets";
+import { currencyMismatchMessage } from "./instrument-currency";
+import { shortHash } from "./import-presets/shared";
+
+/** Longest import reference the server accepts (also the zod cap in the action). */
+export const MAX_IMPORT_REFERENCE_LENGTH = 200;
+
+/**
+ * Shown after an oversell error on a row that came from a broker preset. The
+ * wording is the product spec's (broker-file-presets.md section 6).
+ */
+export const PRESET_OVERSELL_HINT =
+  "If your file contains a stock split, a transfer in from another broker or a reinvested dividend, those rows are skipped and can cause this. Add the missing shares by hand first.";
 
 /** One CSV row after column mapping — everything still raw text. */
 export type MappedImportRow = {
@@ -25,6 +38,13 @@ export type MappedImportRow = {
   fee?: string;
   tradeDate?: string;
   note?: string;
+  /**
+   * Where the row came from ("<preset>:<broker id>" or a fingerprint). Stored
+   * only to stop the same line being imported twice. Optional.
+   */
+  reference?: string;
+  /** The row's line number in the broker file, for messages. Never stored. */
+  line?: number;
 };
 
 /** The instrument info needed to resolve tickers (from existing Instrument rows). */
@@ -42,6 +62,8 @@ export type ImportRowResult =
       ok: true;
       /** The validated, ready-to-write transaction (amount server-derived). */
       parsed: TransactionInput;
+      /** The row's import reference, trimmed, when it carried one. */
+      reference?: string;
     }
   | {
       row: number;
@@ -168,7 +190,7 @@ export function validateMappedRow(
   // --- Currency (fall back to the instrument's own currency when omitted) ---
   const currency = cell(row.currency)?.toUpperCase() ?? instrument?.currency;
   if (!currency) {
-    issues.push("Missing currency (OMR, USD, SAR or AED).");
+    issues.push(`Missing currency (${currencyListText()}).`);
   }
 
   if (issues.length > 0) {
@@ -203,7 +225,67 @@ export function validateMappedRow(
     const messages = [...new Set(parsed.error.issues.map((issue) => issue.message))];
     return { row: rowNumber, ok: false, issues: messages };
   }
-  return { row: rowNumber, ok: true, parsed: parsed.data };
+  // A buy or sell must use the tracked stock's own currency (same rule as the
+  // Add Transaction form), so a file can't store a trade under the wrong code.
+  if (instrument) {
+    const mismatch = currencyMismatchMessage(parsed.data, instrument);
+    if (mismatch) return { row: rowNumber, ok: false, issues: [mismatch] };
+  }
+  const reference = cell(row.reference);
+  return {
+    row: rowNumber,
+    ok: true,
+    parsed: parsed.data,
+    ...(reference ? { reference } : {}),
+  };
+}
+
+/**
+ * A stable label for a row typed or pasted through the "Other" path, which has
+ * no broker id. Same values in, same text out, so sending the same file twice
+ * is recognised as already imported. Only the row's important values go in
+ * (never the note). Returns "other:h:<fingerprint>"; when a file holds
+ * identical rows, callers add "#<n>" (see assignFingerprintReferences) so two
+ * genuine identical fills both stay.
+ */
+export function fingerprintRow(mapped: MappedImportRow): string {
+  const t = (v: string | undefined) => (v ?? "").trim();
+  const u = (v: string | undefined) => t(v).toUpperCase();
+  return (
+    "other:h:" +
+    shortHash(
+      [
+        u(mapped.type),
+        u(mapped.ticker),
+        u(mapped.market),
+        t(mapped.tradeDate),
+        t(mapped.quantity),
+        t(mapped.pricePerUnit),
+        t(mapped.amount),
+        t(mapped.fee),
+        u(mapped.currency),
+      ].join("|"),
+    )
+  );
+}
+
+/**
+ * References for a whole "Other" file: each row's fingerprint plus "#<n>"
+ * counting identical rows in the file (first is #1). Deterministic.
+ */
+export function assignFingerprintReferences(rows: MappedImportRow[]): string[] {
+  const counts = new Map<string, number>();
+  return rows.map((row) => {
+    const base = fingerprintRow(row);
+    const n = (counts.get(base) ?? 0) + 1;
+    counts.set(base, n);
+    return `${base}#${n}`;
+  });
+}
+
+/** True for references made by a broker preset (not the "Other" fingerprint). */
+function hasPresetReference(reference: string | undefined): boolean {
+  return !!reference && !reference.startsWith("other:");
 }
 
 // A hair of tolerance so floating-point noise on a legitimate "sell
@@ -249,7 +331,8 @@ export function findImportOversell(
           }, but only ${heldLabel} share${current === 1 ? "" : "s"} ${
             current === 1 ? "is" : "are"
           } held at that point (counting the buys earlier in this file). ` +
-          `Add the matching buys first, or sell fewer.`,
+          `Add the matching buys first, or sell fewer.` +
+          (hasPresetReference(result.reference) ? ` ${PRESET_OVERSELL_HINT}` : ""),
       };
     }
     held.set(input.instrumentId, current - input.quantity);

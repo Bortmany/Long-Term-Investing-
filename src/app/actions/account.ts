@@ -26,6 +26,10 @@ import {
   type ActionResult,
 } from "@/lib/action-result";
 import { getSessionUserId } from "@/lib/user-portfolio";
+import { getStripe } from "@/lib/billing/stripe-client";
+import { cancelSubscriptionBeforeDelete, needsCancelBeforeDelete } from "@/lib/billing/cancel";
+import { cancelBeforeDeleteFailedMessage } from "@/lib/billing/messages";
+import { getLegalContactEmail } from "@/lib/legal-contact";
 import {
   AUTH_RATE_LIMIT,
   getClientIp,
@@ -60,6 +64,35 @@ export async function deleteMyAccount(
   const parsed = deleteAccountSchema.safeParse(input);
   if (!parsed.success) {
     return actionError(parsed.error.issues[0]?.message ?? "Enter your password to confirm.");
+  }
+
+  // A paying subscriber's Stripe subscription is cancelled FIRST (billing on
+  // only). The password is checked before that, so a wrong password can
+  // never cancel anyone's subscription; and if cancelling fails, the account
+  // is NOT deleted — a silent success would keep billing someone whose
+  // account no longer exists.
+  const stripe = getStripe();
+  if (await needsCancelBeforeDelete(userId, { stripe })) {
+    try {
+      await auth.api.verifyPassword({
+        headers: headerList,
+        body: { password: parsed.data.password },
+      });
+    } catch (error) {
+      if (error instanceof APIError) {
+        return actionError("That password is incorrect. Please try again.");
+      }
+      logger.error("Password check before account deletion failed", {
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return actionError("Something went wrong deleting your account. Please try again.");
+    }
+
+    const cancelled = await cancelSubscriptionBeforeDelete(userId, { stripe });
+    if (!cancelled.ok) {
+      return actionError(cancelBeforeDeleteFailedMessage(getLegalContactEmail()));
+    }
   }
 
   try {

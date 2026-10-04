@@ -5,17 +5,20 @@
 // src/app/actions/stocks.ts / transactions.ts: session → rate limit → zod
 // parse → ownership check → mutate → revalidate.
 
+import { getVisibleInstrument } from "@/lib/stocks/visible-instruments";
 import { revalidatePath } from "next/cache";
 import type { Instrument, Prisma, Thesis } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import {
   actionError,
+  aiRunError,
   actionOk,
   NOT_SIGNED_IN_ERROR,
   type ActionResult,
 } from "@/lib/action-result";
 import { getSessionUserId } from "@/lib/user-portfolio";
+import { PRO_FEATURE_LABELS, requirePro } from "@/lib/plan-access";
 import {
   AI_GENERATION_RATE_LIMIT,
   rateLimit,
@@ -98,9 +101,7 @@ export async function createThesis(input: {
     );
   }
 
-  const instrument = await prisma.instrument.findUnique({
-    where: { id: parsed.data.instrumentId },
-  });
+  const instrument = await getVisibleInstrument(userId, parsed.data.instrumentId);
   if (!instrument) return actionError("That stock could not be found.");
 
   const created = await prisma.thesis.create({
@@ -349,6 +350,11 @@ export async function checkThesis(
   if (!limited.ok)
     return actionError(rateLimitMessage(limited.retryAfterSeconds));
 
+  // Pro gate, enforced here on the server — hiding the button is never the
+  // only protection. Writing, editing and closing a thesis stay free.
+  const pro = await requirePro(userId, PRO_FEATURE_LABELS.thesisCheck);
+  if (!pro.ok) return pro;
+
   const parsedId = thesisIdSchema.safeParse(thesisId);
   if (!parsedId.success) {
     return actionError(parsedId.error.issues[0]?.message ?? "That thesis could not be found.");
@@ -370,7 +376,7 @@ export async function checkThesis(
     schema: thesisCheckSchema,
   });
 
-  if (!result.ok) return actionError(result.message);
+  if (!result.ok) return aiRunError(result);
 
   await prisma.thesisCheck.create({
     data: {

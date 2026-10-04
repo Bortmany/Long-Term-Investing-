@@ -1,0 +1,11 @@
+Date,Ticker,Market,Type,Quantity,Price,Amount,Fee,Currency,Note
+2026-01-05,,,Deposit,,,2000.000,,OMR,Salary transfer
+2026-01-12,BKMB,MSX,Buy,500,0.305,,1.000,OMR,
+2026-02-03,2222.SR,TADAWUL,Buy,40,25.10,,5.00,SAR,
+2026-02-20,AAPL,US,Buy,3,205.00,,4.00,USD,US stock via Gulf broker
+2026-03-10,BKMB,MSX,Dividend,,,15.000,0,OMR,Final dividend
+2026-04-02,BKMB,MSX,Sell,200,0.320,,0.500,OMR,
+2026-04-15,2222.SR,TADAWUL,Dividend,,,8.20,0,SAR,
+2026-05-01,,,Fee,,,3.000,,OMR,Custody fee
+2026-05-25,NVDA,US,Split,,,,,USD,10-for-1 split
+2026-06-01,ABC,,Buy,10,5.00,,,EUR,

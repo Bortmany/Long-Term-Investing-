@@ -21,13 +21,43 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { SourceBadge, type SourceBadgeVariant } from "@/components/source-badge";
+import type { ProviderBadgeDetail } from "@/lib/data/provider-info";
 import { cn } from "@/lib/utils";
 
-const LEGEND: { variant: SourceBadgeVariant; meaning: string }[] = [
+// Wording-only examples for the provider badges: no made-up dates or times.
+const PROVIDER_EXAMPLE: ProviderBadgeDetail = {
+  text: "Twelve Data · end of day or delayed",
+  meaning: "",
+  icon: "clock",
+  fallbackNote: null,
+  timeZoneNote: null,
+};
+const PROVIDER_FALLBACK_EXAMPLE: ProviderBadgeDetail = {
+  ...PROVIDER_EXAMPLE,
+  fallbackNote: "Provider not responding. Showing the last price we have, with its date.",
+};
+
+const LEGEND: {
+  variant: SourceBadgeVariant;
+  meaning: string;
+  detail?: ProviderBadgeDetail;
+}[] = [
   {
     variant: "live",
     meaning:
       "Fetched from the market-data provider. Prices are refreshed at most every 15 minutes, so this is the latest price we were given.",
+  },
+  {
+    variant: "live",
+    detail: PROVIDER_EXAMPLE,
+    meaning:
+      "A price from an outside data provider. The wording says how far behind the market it can be.",
+  },
+  {
+    variant: "live",
+    detail: PROVIDER_FALLBACK_EXAMPLE,
+    meaning:
+      "The provider didn't answer, so this is the newest price we had stored. It is shown with its own date, never a guess.",
   },
   {
     variant: "manual",
@@ -55,7 +85,7 @@ export function SourceBadgeLegend({ className }: { className?: string }) {
         type="button"
         onClick={() => setOpen(true)}
         className={cn(
-          "inline-flex items-center gap-1 rounded text-xs text-slate-500 outline-none transition-colors hover:text-slate-700 focus-visible:ring-2 focus-visible:ring-ring dark:text-slate-400 dark:hover:text-slate-200",
+          "inline-flex min-h-11 items-center gap-1 rounded text-xs text-slate-500 md:min-h-0 outline-none transition-colors hover:text-slate-700 focus-visible:ring-2 focus-visible:ring-ring dark:text-slate-400 dark:hover:text-slate-200",
           className,
         )}
       >
@@ -73,9 +103,13 @@ export function SourceBadgeLegend({ className }: { className?: string }) {
             </DialogDescription>
           </DialogHeader>
           <ul className="mt-2 space-y-3">
-            {LEGEND.map((entry) => (
-              <li key={entry.variant} className="flex flex-col gap-1">
-                <SourceBadge variant={entry.variant} className="self-start" />
+            {LEGEND.map((entry, index) => (
+              <li key={index} className="flex flex-col gap-1">
+                <SourceBadge
+                  variant={entry.variant}
+                  detail={entry.detail}
+                  className="self-start"
+                />
                 <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-300">
                   {entry.meaning}
                 </p>

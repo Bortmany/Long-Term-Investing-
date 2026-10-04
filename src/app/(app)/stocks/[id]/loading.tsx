@@ -18,7 +18,9 @@ export default function StockDetailLoading() {
           </div>
         </div>
         <div>
-          <Skeleton className="h-9 w-32" />
+          <Skeleton className="h-9 w-32 sm:ml-auto" />
+          {/* Badge pill shape, 24px tall (spec 3d) */}
+          <Skeleton className="mt-1 h-6 w-[180px] max-w-full rounded-full sm:ml-auto" />
         </div>
       </div>
 

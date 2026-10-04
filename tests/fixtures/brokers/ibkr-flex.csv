@@ -1,0 +1,6 @@
+"ClientAccountID","CurrencyPrimary","AssetClass","Symbol","ISIN","TradeDate","Buy/Sell","Quantity","TradePrice","IBCommission","IBCommissionCurrency","TransactionID"
+"U0000000","USD","STK","AAPL","US0378331005","20260112","BUY","10","205.40","-1.00","USD","900000001"
+"U0000000","USD","STK","MSFT","US5949181045","20260203","BUY","5","410.10","-1.00","USD","900000002"
+"U0000000","USD","STK","AAPL","US0378331005","20260302","SELL","4","214.00","-1.00","USD","900000003"
+"U0000000","EUR","STK","SAP","DE0007164600","20260310","BUY","3","150.00","-1.50","EUR","900000004"
+"U0000000","USD","OPT","AAPL 260619C00220000","","20260401","BUY","1","3.20","-0.65","USD","900000005"

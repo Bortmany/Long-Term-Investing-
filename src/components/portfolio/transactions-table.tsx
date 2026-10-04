@@ -19,6 +19,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ResponsiveRows } from "@/components/ui/responsive-rows";
+import { RowCard } from "@/components/ui/row-card";
 import { Select } from "@/components/ui/select";
 import {
   Table,
@@ -29,7 +31,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { formatQuantity, formatShortDate } from "@/lib/format";
+import { formatQuantity, formatQuantityCompact, formatShortDate } from "@/lib/format";
+import { FromBrokerTag, FromBrokerTagToggle } from "./from-broker-tag";
 import { isCashInflow, transactionTypeLabel, type TransactionRowData } from "./types";
 
 const PAGE_SIZE = 25;
@@ -49,14 +52,136 @@ function formatPlainAmount(amount: number, currency: string): string {
   }).format(amount);
 }
 
+/** The Edit/Delete menu, shared by the table row and the phone card. */
+function TransactionActions({
+  row,
+  onEdit,
+  onDelete,
+  buttonClassName = "size-9",
+}: {
+  row: TransactionRowData;
+  onEdit: (row: TransactionRowData) => void;
+  onDelete: (row: TransactionRowData) => void;
+  buttonClassName?: string;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger>
+        <Tooltip>
+          <TooltipTrigger>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className={buttonClassName}
+              aria-label={`Actions for the ${transactionTypeLabel(row.type).toLowerCase()} on ${formatShortDate(row.tradeDate)}`}
+            >
+              <EllipsisVertical aria-hidden="true" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="left">Actions</TooltipContent>
+        </Tooltip>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent>
+        <DropdownMenuItem onClick={() => onEdit(row)}>Edit</DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem variant="destructive" onClick={() => onDelete(row)}>
+          Delete
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/**
+ * One transaction as a compact card (shown below 1280px). The card goes
+ * nowhere, so it has no link and no chevron; only its menu button is active.
+ */
+function TransactionCard({
+  row,
+  brokerConnected,
+  onEdit,
+  onDelete,
+}: {
+  row: TransactionRowData;
+  brokerConnected: boolean;
+  onEdit: (row: TransactionRowData) => void;
+  onDelete: (row: TransactionRowData) => void;
+}) {
+  const details = [
+    { label: "Date", value: formatShortDate(row.tradeDate) },
+    {
+      label: "Quantity",
+      value:
+        row.quantity === null ? (
+          <span className="text-slate-400">—</span>
+        ) : (
+          <span className="tabular-nums" aria-label={`${formatQuantity(row.quantity)} shares`}>
+            {formatQuantityCompact(row.quantity)}
+          </span>
+        ),
+      title: row.quantity === null ? undefined : `${formatQuantity(row.quantity)} shares`,
+    },
+    {
+      label: `Price (${row.currency})`,
+      value:
+        row.pricePerUnit === null ? (
+          <span className="text-slate-400">—</span>
+        ) : (
+          <span className="tabular-nums">{formatPlainAmount(row.pricePerUnit, row.currency)}</span>
+        ),
+    },
+    {
+      label: `Fee (${row.currency})`,
+      value: <span className="tabular-nums">{formatPlainAmount(row.fee, row.currency)}</span>,
+    },
+  ];
+  return (
+    <RowCard
+      density="compact"
+      identity={
+        <>
+          <Badge variant="outline">{transactionTypeLabel(row.type)}</Badge>
+          <span className="font-mono">{row.ticker ?? "—"}</span>
+        </>
+      }
+      headline={
+        // Cash-flow direction, not a return figure — plain slate, never green/red.
+        <span className="text-base font-semibold tabular-nums">
+          {isCashInflow(row.type) ? "+" : "−"}
+          {row.currency} {formatPlainAmount(row.amount, row.currency)}
+        </span>
+      }
+      details={details}
+      badges={
+        row.syncedFrom ? (
+          <FromBrokerTagToggle syncedOn={row.syncedOn ?? null} connected={brokerConnected} />
+        ) : undefined
+      }
+      meta={row.note ? row.note : undefined}
+      action={
+        <TransactionActions
+          row={row}
+          onEdit={onEdit}
+          onDelete={onDelete}
+          buttonClassName="size-11"
+        />
+      }
+    />
+  );
+}
+
 export function TransactionsTable({
   rows,
   transactionTypes,
+  brokerConnected = false,
   onAdd,
   onEdit,
   onDelete,
 }: {
   rows: TransactionRowData[];
+  /** The user has a saved broker connection (chooses the "From broker" explanation). */
+  brokerConnected?: boolean;
   /** The TransactionType enum values, passed from the server so the filter can't drift from the schema. */
   transactionTypes: TransactionType[];
   onAdd: () => void;
@@ -81,6 +206,9 @@ export function TransactionsTable({
     return true;
   });
   const visible = filtered.slice(0, visibleCount);
+  // The Source column only exists when a loaded row came from the broker sync,
+  // so people who never connect see no change at all.
+  const showSource = rows.some((row) => row.syncedFrom);
   const hasMore = filtered.length > visible.length;
 
   function handleTypeFilterChange(value: string) {
@@ -139,6 +267,13 @@ export function TransactionsTable({
           </div>
         ) : (
           <>
+            <ResponsiveRows
+              breakpoint="xl"
+              listLabel="Transactions"
+              cards={visible.map((row) => (
+                <TransactionCard key={row.id} row={row} brokerConnected={brokerConnected} onEdit={onEdit} onDelete={onDelete} />
+              ))}
+              table={
             <Table>
               <TableHeader>
                 <TableRow>
@@ -151,6 +286,7 @@ export function TransactionsTable({
                   <TableHead>Currency</TableHead>
                   <TableHead className="text-right">Fee</TableHead>
                   <TableHead>Note</TableHead>
+                  {showSource ? <TableHead>Source</TableHead> : null}
                   <TableHead>
                     <span className="sr-only">Actions</span>
                   </TableHead>
@@ -187,47 +323,42 @@ export function TransactionsTable({
                     <TableCell className="text-right tabular-nums">
                       {formatPlainAmount(row.fee, row.currency)}
                     </TableCell>
-                    <TableCell className="max-w-40">
-                      {row.note ? (
-                        <Tooltip>
-                          <TooltipTrigger className="block truncate">{row.note}</TooltipTrigger>
-                          <TooltipContent>{row.note}</TooltipContent>
-                        </Tooltip>
-                      ) : (
-                        <span className="text-slate-400">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger>
-                          <Tooltip>
-                            <TooltipTrigger>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="size-9"
-                                aria-label={`Actions for the ${transactionTypeLabel(row.type).toLowerCase()} on ${formatShortDate(row.tradeDate)}`}
-                              >
-                                <EllipsisVertical aria-hidden="true" />
-                              </Button>
+                    <TableCell>
+                      {/* A max-width on the cell itself is ignored by auto table layout,
+                          so the note sits in a fixed-width box: long text is cut with "…"
+                          instead of running under the Source tag and the row menu. */}
+                      <div className="w-28 min-[1440px]:w-40">
+                        {row.note ? (
+                          <Tooltip className="block w-full">
+                            <TooltipTrigger className="block w-full truncate text-left">
+                              {row.note}
                             </TooltipTrigger>
-                            <TooltipContent side="left">Actions</TooltipContent>
+                            <TooltipContent>{row.note}</TooltipContent>
                           </Tooltip>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent>
-                          <DropdownMenuItem onClick={() => onEdit(row)}>Edit</DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem variant="destructive" onClick={() => onDelete(row)}>
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
+                      </div>
+                    </TableCell>
+                    {showSource ? (
+                      <TableCell>
+                        {row.syncedFrom ? (
+                          <FromBrokerTag
+                            syncedOn={row.syncedOn ?? null}
+                            connected={brokerConnected}
+                          />
+                        ) : null}
+                      </TableCell>
+                    ) : null}
+                    <TableCell className="text-right">
+                      <TransactionActions row={row} onEdit={onEdit} onDelete={onDelete} />
                     </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
+              }
+            />
             {hasMore ? (
               <div className="mt-4 flex justify-center">
                 <Button

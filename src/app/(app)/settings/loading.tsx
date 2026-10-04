@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { CardSkeletonList, LAPTOP_ONLY } from "@/components/ui/card-skeletons";
 
 // Loading state shaped like the real settings page (four stacked cards at the
 // same max width) so nothing jumps when the data arrives.
@@ -26,7 +27,8 @@ export default function SettingsLoading() {
             <Skeleton className="h-10 w-40" />
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
+            <CardSkeletonList density="compact" count={3} />
+            <div className={`${LAPTOP_ONLY} space-y-3`}>
               {Array.from({ length: 3 }).map((_, i) => (
                 <div key={i} className="grid grid-cols-5 gap-4">
                   <Skeleton className="h-4 w-10" />
@@ -41,17 +43,71 @@ export default function SettingsLoading() {
           </CardContent>
         </Card>
 
-        {/* Appearance + Account Access */}
-        {Array.from({ length: 2 }).map((_, i) => (
-          <Card key={i}>
-            <CardHeader>
-              <Skeleton className="h-5 w-28" />
-            </CardHeader>
-            <CardContent>
-              <Skeleton className="h-4 w-full max-w-md" />
-            </CardContent>
-          </Card>
-        ))}
+        {/* Sharia screen: title, label, control, two paragraph lines. */}
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-5 w-32" />
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Skeleton className="h-4 w-64 max-w-full" />
+            <Skeleton className="h-11 w-44 rounded-md" />
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-3/4" />
+          </CardContent>
+        </Card>
+
+        {/* Appearance */}
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-5 w-28" />
+          </CardHeader>
+          <CardContent>
+            <Skeleton className="h-4 w-full max-w-md" />
+          </CardContent>
+        </Card>
+
+        {/* Plans & billing: title + plan badge, the state line, two usage
+            rows, four "what's included" rows. */}
+        <Card>
+          <CardHeader className="flex-row items-center justify-between">
+            <Skeleton className="h-5 w-32" />
+            <Skeleton className="h-6 w-14 rounded-full" />
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Skeleton className="h-4 w-64 max-w-full" />
+            <div className="grid gap-6 sm:grid-cols-2">
+              <div className="space-y-4">
+                {Array.from({ length: 2 }).map((_, i) => (
+                  <div key={i} className="space-y-2">
+                    <Skeleton className="h-4 w-40" />
+                    <Skeleton className="h-2 w-full" />
+                  </div>
+                ))}
+              </div>
+              <div className="space-y-2">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <Skeleton className="size-4 rounded-full" />
+                    <Skeleton className="h-4 flex-1" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Broker connection: title + badge, a heading, two lines, a button. */}
+        <Card>
+          <CardHeader className="flex-row items-center justify-between">
+            <Skeleton className="h-5 w-36" />
+            <Skeleton className="h-6 w-20 rounded-full" />
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Skeleton className="h-5 w-64 max-w-full" />
+            <Skeleton className="h-4 w-full max-w-md" />
+            <Skeleton className="h-11 w-full sm:w-56" />
+          </CardContent>
+        </Card>
       </div>
     </>
   );

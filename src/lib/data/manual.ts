@@ -90,6 +90,8 @@ export function createManualProvider(
           asOf: latest.asOf,
           source: badgeForPriceSource(latest.source),
           fetchedAt: latest.fetchedAt,
+          // The true origin, so a stored vendor price keeps its honest label.
+          priceSource: latest.source,
         },
       };
     },

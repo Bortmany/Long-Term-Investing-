@@ -50,7 +50,7 @@ function Select({
           // Matches Input's visuals; appearance-none hides the native arrow
           // so the ChevronDown below is the only indicator. pr-9 keeps text
           // clear of the icon.
-          "h-10 w-full appearance-none rounded-md border border-input bg-transparent px-3 pr-9 text-sm shadow-sm transition-colors outline-none",
+          "h-11 w-full appearance-none md:h-10 rounded-md border border-input bg-transparent px-3 pr-9 text-sm shadow-sm transition-colors outline-none",
           "focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40",
           disabled && "cursor-not-allowed opacity-50",
         )}

@@ -1,16 +1,17 @@
 import { expect, test } from "@playwright/test";
+import { E2E_USER_EMAIL, E2E_USER_PASSWORD } from "./test-user";
 
-// Same env-loading idiom as smoke.spec.ts — the demo login's password is
-// never hardcoded.
+// Same env-loading idiom as smoke.spec.ts — the e2e test login's password
+// is never hardcoded.
 try {
   process.loadEnvFile();
 } catch {
   // no .env file — rely on the environment
 }
 
-const DEMO_PASSWORD = process.env.SEED_DEMO_PASSWORD;
+const DEMO_PASSWORD = E2E_USER_PASSWORD;
 
-// The signed-in tests below start already authenticated as the demo user —
+// The signed-in tests below start already authenticated as the e2e test user —
 // see tests/e2e/global-setup.ts. These two public-page tests instead force
 // an empty (logged-out) session so "renders without signing in" is actually
 // exercised, not just true by coincidence.
@@ -33,7 +34,7 @@ test.describe("no session", () => {
 test("signed-in Settings shows the data-download control and the delete-account card", async ({
   page,
 }) => {
-  test.skip(!DEMO_PASSWORD, "Set SEED_DEMO_PASSWORD in .env to run this test");
+  test.skip(!DEMO_PASSWORD, "Set E2E_TEST_PASSWORD in .env to run this test");
 
   await page.goto("/settings");
   await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
@@ -46,7 +47,7 @@ test("signed-in Settings shows the data-download control and the delete-account 
 });
 
 test("GET /api/account/export returns the signed-in user's data as JSON", async ({ page }) => {
-  test.skip(!DEMO_PASSWORD, "Set SEED_DEMO_PASSWORD in .env to run this test");
+  test.skip(!DEMO_PASSWORD, "Set E2E_TEST_PASSWORD in .env to run this test");
 
   // page.request shares the browser context's cookies, so this call carries
   // the same session cookie the signed-in page has.
@@ -55,5 +56,5 @@ test("GET /api/account/export returns the signed-in user's data as JSON", async 
   expect(response.headers()["content-type"]).toContain("application/json");
 
   const body = await response.json();
-  expect(body.profile.email).toBe("owner@example.com");
+  expect(body.profile.email).toBe(E2E_USER_EMAIL);
 });

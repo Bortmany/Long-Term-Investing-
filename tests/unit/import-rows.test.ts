@@ -1,11 +1,17 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   validateMappedRow,
   validateMappedRows,
   type KnownInstrument,
   type MappedImportRow,
 } from "@/lib/import-rows";
-import { toTransactionRecord } from "@/lib/transaction-schema";
+import {
+  FUTURE_TRADE_DATE_MESSAGE,
+  isTradeDateInFuture,
+  latestAllowedTradeDay,
+  toTransactionRecord,
+  transactionInputSchema,
+} from "@/lib/transaction-schema";
 
 const instruments: KnownInstrument[] = [
   { id: "id-aapl", ticker: "AAPL", market: "US", currency: "USD" },
@@ -149,7 +155,7 @@ describe("validateMappedRow — error cases", () => {
     const badCurrency = validateMappedRow({ ...base, currency: "EUR" }, 1, instruments);
     expect(badCurrency.ok).toBe(false);
     if (badCurrency.ok) return;
-    expect(badCurrency.issues[0]).toMatch(/OMR, USD, SAR or AED/);
+    expect(badCurrency.issues[0]).toMatch(/OMR, USD, SAR, AED or QAR/);
   });
 
   it("flags a negative quantity", () => {
@@ -194,5 +200,77 @@ describe("validateMappedRows", () => {
     expect(report.errorCount).toBe(1);
     expect(report.results[0]).toMatchObject({ row: 1, ok: true });
     expect(report.results[1]).toMatchObject({ row: 2, ok: false });
+  });
+});
+
+// --- Future-dated trades: one shared rule, every door -----------------------
+describe("trade dates in the future are refused", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const goodBuy: MappedImportRow = {
+    ticker: "AAPL",
+    market: "US",
+    type: "BUY",
+    quantity: "1",
+    pricePerUnit: "10",
+    currency: "USD",
+  };
+
+  it("refuses the year 2099 in the import with the exact sentence", () => {
+    const result = validateMappedRow({ ...goodBuy, tradeDate: "2099-01-01" }, 1, instruments);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.issues).toEqual(["Trade date is in the future. Check the date."]);
+    expect(FUTURE_TRADE_DATE_MESSAGE).toBe("Trade date is in the future. Check the date.");
+  });
+
+  it("accepts today, refuses tomorrow-everywhere, with a fixed clock", () => {
+    // 1 Oct 2026, 12:00 UTC. At UTC+14 it is already 2 Oct 02:00.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-01T12:00:00Z"));
+
+    const today = validateMappedRow({ ...goodBuy, tradeDate: "2026-10-01" }, 1, instruments);
+    expect(today.ok).toBe(true);
+
+    // 2 Oct has already begun in UTC+14, so it is accepted...
+    const oneAhead = validateMappedRow({ ...goodBuy, tradeDate: "2026-10-02" }, 1, instruments);
+    expect(oneAhead.ok).toBe(true);
+
+    // ...but 3 Oct has not begun anywhere yet.
+    const twoAhead = validateMappedRow({ ...goodBuy, tradeDate: "2026-10-03" }, 1, instruments);
+    expect(twoAhead.ok).toBe(false);
+  });
+
+  it("one day ahead is accepted only when that day has begun somewhere", () => {
+    // 09:59 UTC: UTC+14 is 23:59 on the SAME day, so the next day has not begun anywhere.
+    const before = new Date("2026-10-01T09:59:00Z");
+    expect(isTradeDateInFuture(new Date("2026-10-02"), before)).toBe(true);
+    expect(isTradeDateInFuture(new Date("2026-10-01"), before)).toBe(false);
+    // 10:00 UTC: UTC+14 just turned midnight into 2 Oct.
+    const after = new Date("2026-10-01T10:00:00Z");
+    expect(isTradeDateInFuture(new Date("2026-10-02"), after)).toBe(false);
+    expect(isTradeDateInFuture(new Date("2026-10-03"), after)).toBe(true);
+    expect(latestAllowedTradeDay(after).toISOString()).toBe("2026-10-02T00:00:00.000Z");
+  });
+
+  it("the Add Transaction / edit path refuses the same date through the same schema", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-01T12:00:00Z"));
+    const input = {
+      type: "DEPOSIT",
+      amount: 100,
+      currency: "OMR",
+    };
+    const future = transactionInputSchema.safeParse({ ...input, tradeDate: new Date("2099-01-01") });
+    expect(future.success).toBe(false);
+    if (!future.success) {
+      expect(future.error.issues.map((i) => i.message)).toEqual([FUTURE_TRADE_DATE_MESSAGE]);
+    }
+    // A plain string (what a form or API might send) is refused too.
+    expect(transactionInputSchema.safeParse({ ...input, tradeDate: "2099-01-01" }).success).toBe(false);
+    // Today is fine.
+    expect(transactionInputSchema.safeParse({ ...input, tradeDate: new Date("2026-10-01") }).success).toBe(true);
   });
 });

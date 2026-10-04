@@ -20,6 +20,8 @@ export function StockSectionNav({ sections }: { sections: SectionNavItem[] }) {
   const [activeId, setActiveId] = React.useState(sections[0]?.id ?? "");
   // A plain string so the effect below has one stable dependency (a fresh
   // array arrives from the server component on every render).
+  const strip = React.useRef<HTMLUListElement>(null);
+  const [moreAhead, setMoreAhead] = React.useState(false);
   const sectionKey = sections.map((section) => section.id).join(",");
 
   React.useEffect(() => {
@@ -47,6 +49,25 @@ export function StockSectionNav({ sections }: { sections: SectionNavItem[] }) {
     return () => observer.disconnect();
   }, [sectionKey]);
 
+  // Right-edge fade while more chips are off-screen (direction-aware).
+  React.useEffect(() => {
+    const box = strip.current;
+    if (!box) return;
+    const update = () =>
+      setMoreAhead(
+        box.scrollWidth - box.clientWidth - Math.abs(box.scrollLeft) > 1,
+      );
+    update();
+    box.addEventListener("scroll", update, { passive: true });
+    const observer =
+      typeof ResizeObserver === "function" ? new ResizeObserver(update) : null;
+    observer?.observe(box);
+    return () => {
+      box.removeEventListener("scroll", update);
+      observer?.disconnect();
+    };
+  }, [sectionKey]);
+
   function handleClick(event: React.MouseEvent<HTMLAnchorElement>, id: string) {
     const element = document.getElementById(id);
     if (!element) return; // let the plain link do its job
@@ -63,7 +84,12 @@ export function StockSectionNav({ sections }: { sections: SectionNavItem[] }) {
       aria-label="Sections of this page"
       className="sticky top-14 z-20 -mx-4 border-b border-slate-200 bg-white/95 px-4 py-2 backdrop-blur sm:-mx-6 sm:px-6 md:top-0 lg:-mx-8 lg:px-8 dark:border-slate-800 dark:bg-slate-950/95"
     >
-      <ul className="flex gap-1 overflow-x-auto">
+      <div className="relative">
+      <ul
+        ref={strip}
+        data-allow-scroll="section-nav"
+        className="flex min-w-0 max-w-full gap-1 overflow-x-auto overscroll-x-contain"
+      >
         {sections.map((section) => {
           const active = section.id === activeId;
           return (
@@ -73,7 +99,7 @@ export function StockSectionNav({ sections }: { sections: SectionNavItem[] }) {
                 onClick={(event) => handleClick(event, section.id)}
                 aria-current={active ? "true" : undefined}
                 className={cn(
-                  "block whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
+                  "inline-flex min-h-11 items-center whitespace-nowrap rounded-md px-3 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
                   active
                     ? "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300"
                     : "text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800",
@@ -85,6 +111,14 @@ export function StockSectionNav({ sections }: { sections: SectionNavItem[] }) {
           );
         })}
       </ul>
+      <div
+        aria-hidden="true"
+        className={cn(
+          "pointer-events-none absolute inset-y-0 end-0 w-6 bg-gradient-to-l from-white to-transparent transition-opacity rtl:bg-gradient-to-r dark:from-slate-950",
+          moreAhead ? "opacity-100" : "opacity-0",
+        )}
+      />
+      </div>
     </nav>
   );
 }

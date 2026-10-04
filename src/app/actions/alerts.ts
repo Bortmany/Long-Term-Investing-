@@ -10,10 +10,12 @@ import { prisma } from "@/lib/prisma";
 import {
   actionError,
   actionOk,
+  type ActionFailure,
   NOT_SIGNED_IN_ERROR,
   type ActionResult,
 } from "@/lib/action-result";
 import { getSessionUserId } from "@/lib/user-portfolio";
+import { PRO_FEATURE_LABELS, requirePro } from "@/lib/plan-access";
 import {
   rateLimit,
   rateLimitMessage,
@@ -61,8 +63,18 @@ type AlertWriteData = {
 async function buildAlertData(
   userId: string,
   data: AlertInput,
-): Promise<{ ok: true; data: AlertWriteData } | { ok: false; error: string }> {
+  /** The kind the alert already has when editing; undefined when creating. */
+  existingKind?: AlertInput["kind"],
+): Promise<{ ok: true; data: AlertWriteData } | ActionFailure> {
   if (data.kind === "THESIS_REVIEW_DUE") {
+    // "Time to review" alerts are Pro — enforced here on the server for a new
+    // one (or turning another alert into one). Editing an existing one's
+    // interval stays allowed so a downgraded user can still tidy up; the
+    // alert engine simply doesn't check it while they're on Free.
+    if (existingKind !== "THESIS_REVIEW_DUE") {
+      const pro = await requirePro(userId, PRO_FEATURE_LABELS.reviewAlert);
+      if (!pro.ok) return pro;
+    }
     const thesis = await prisma.thesis.findFirst({ where: { id: data.thesisId, userId } });
     if (!thesis) return { ok: false, error: "That thesis could not be found." };
     return {
@@ -108,7 +120,7 @@ export async function createAlert(input: AlertInput): Promise<ActionResult<{ id:
   }
 
   const built = await buildAlertData(userId, parsed.data);
-  if (!built.ok) return actionError(built.error);
+  if (!built.ok) return built;
 
   const created = await prisma.alert.create({ data: { userId, ...built.data } });
 
@@ -140,8 +152,8 @@ export async function updateAlert(
     return actionError(parsed.error.issues[0]?.message ?? "Please check the alert details.");
   }
 
-  const built = await buildAlertData(userId, parsed.data);
-  if (!built.ok) return actionError(built.error);
+  const built = await buildAlertData(userId, parsed.data, existing.kind);
+  if (!built.ok) return built;
 
   await prisma.alert.update({ where: { id: existing.id }, data: built.data });
 

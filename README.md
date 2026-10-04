@@ -93,8 +93,9 @@ docs/              Conventions, build plan, roadmap, designs, research.
 
 3. **Environment.** Copy `.env.example` to `.env` and fill in the values —
    see the table below. At minimum you need `DATABASE_URL`, a generated
-   `BETTER_AUTH_SECRET`, and (to seed the demo) a `SEED_DEMO_PASSWORD` of
-   at least 12 characters.
+   `BETTER_AUTH_SECRET`, and (outside production, to seed the demo) a
+   `SEED_DEMO_PASSWORD` of at least 12 characters. The production seed
+   creates no demo user and doesn't need it.
 
 4. **Install, apply migrations, add demo data:**
 
@@ -114,13 +115,12 @@ docs/              Conventions, build plan, roadmap, designs, research.
    npm run dev
    ```
 
-   Open http://localhost:3000. The seed creates a demo login
-   (`owner@example.com`, password from `SEED_DEMO_PASSWORD` in your `.env`)
-   with a year of sample transactions across six stocks in three currencies.
-
-   Seeding needs `ALLOW_SIGNUPS="true"` set (the seed creates its user
-   through the normal sign-up path; `.env.example` already has it) — see the
-   sign-ups note below.
+   Open http://localhost:3000. On your own machine the seed creates a demo
+   login (`owner@example.com`, password from `SEED_DEMO_PASSWORD` in your
+   `.env`, email already confirmed) with a year of sample transactions across
+   six stocks in three currencies. In production (`NODE_ENV="production"`)
+   the seed creates **no** demo login — only the shared sample prices and
+   exchange rates, labelled "sample data".
 
 ## Environment variables
 
@@ -132,16 +132,72 @@ version:
 | `DATABASE_URL` | PostgreSQL connection string. |
 | `BETTER_AUTH_SECRET` | Secret that signs sign-in session cookies. Generate with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`. Required — the app refuses to start in production without it. |
 | `BETTER_AUTH_URL` | The public URL the app runs at. |
-| `ALLOW_SIGNUPS` | Gates `/sign-up`. Sign-ups are **closed by default**; only the literal string `"true"` opens them. Needed temporarily while seeding; never set `"true"` on a public deployment. |
+| `SIGNUPS_PAUSED` | The off-switch for new accounts. Sign-ups are **open by default**; the literal string `"true"` pauses them (existing people can still sign in). |
+| `SEED_DEMO_PASSWORD` | Password for the local demo login the seed creates. Never used in production. |
+| `E2E_TEST_PASSWORD` | Password for the end-to-end tests' own local login (`e2e-test@investiq.test`). Local test runs only. |
 | `FMP_API_KEY` | Financial Modeling Prep key for live US stock prices/fundamentals. Empty = manual/sample prices only, clearly badged. |
+| `TWELVE_DATA_API_KEY` | Twelve Data key for live Gulf share prices (Tadawul, ADX, QSE; Dubai only if you name it). Empty = the connection is off and Gulf prices stay typed-in or sample. Do not put a paid key on the live site until Twelve Data confirms in writing that showing prices to signed-in users is licensed; the free key is for your own Mac only. Muscat has no data supplier, so it is always typed-in. |
+| `TWELVE_DATA_MARKETS` | Which markets to send to Twelve Data, comma-separated. Empty = `TADAWUL,ADX,QSE`. Add `DFM` only once you have their dearer plan. |
+| `TWELVE_DATA_PUBLIC_DISPLAY_LICENSED` / `FMP_PUBLIC_DISPLAY_LICENSED` | Set to the literal `"true"` only when that supplier's written licence allows showing their prices to signed-out visitors (the public stock pages read these). Empty = no. |
+| `TWELVE_DATA_BASE_URL` | Developer-only: point at the stand-in test server (`scripts/fake-twelve-data.mjs`). Ignored in production. |
+| `BROKER_TOKEN_KEY` | Encrypts the saved Interactive Brokers tokens. Make one with `openssl rand -base64 32`. Empty = the broker connection is off. Never reuse `BETTER_AUTH_SECRET`, and keep a copy away from the database: if it is lost, everyone just has to reconnect. |
+| `IBKR_FLEX_BASE_URL` | Developer-only: point the broker connection at the pretend IBKR server (see below). Ignored in production. |
+| `MUSAFFA_API_KEY` | Key for the optional Pro Sharia screen badge. Verdicts are bought from Musaffa, never worked out here. Empty = every badge says "Not screened", the daily refresh answers a dormant 503 and nothing is ever sent. Do not set it on the live site until Musaffa has given written permission to show their verdicts. |
+| `MUSAFFA_API_BASE_URL` | Optional: Musaffa's sandbox address while testing (must be https). Empty = their normal address. |
+| `SHARIA_VENDOR` | Which supplier is active. Empty = `musaffa`; any other value turns the screen off. |
 | `ANTHROPIC_API_KEY` | Enables the AI features (health scores, committee, thesis checks, weekly reviews). Empty = every AI surface shows an honest "AI features are off" notice instead of a made-up result. |
 | `SENTRY_DSN` / `NEXT_PUBLIC_SENTRY_DSN` | Error tracking. Empty = tracking stays off, nothing is sent anywhere. |
 | `REDIS_URL` | Shared rate-limit store for multi-server deployments. Empty = a fast in-memory limiter scoped to one server process. |
 | `TRUST_PROXY_HEADERS` | Whether to trust `X-Forwarded-For`/`X-Real-IP` for rate-limiting. Only set `"true"` behind a proxy you control that overwrites the header (e.g. Railway). |
-| `CRON_SECRET` | Bearer secret for the scheduled endpoints (`/api/cron/weekly-review`, `/api/cron/check-alerts`). Empty = both answer a dormant 503. |
+| `CRON_SECRET` | Bearer secret for the scheduled endpoints (`/api/cron/weekly-review`, `/api/cron/check-alerts`, `/api/cron/sharia-refresh`). Empty = they answer a dormant 503. |
 | `RESEND_API_KEY` / `RESEND_FROM` | Optional weekly-review email via Resend. Either empty = email stays off. |
 | `PRIVACY_CONTACT_EMAIL` | Contact address shown on `/privacy` and `/terms`. Empty = the owner's default address. |
 | `SEED_DEMO_PASSWORD` | Password for the seeded demo login, used only by `prisma db seed`. Must be at least 12 characters; the seed refuses to run without it. |
+
+### Scheduled jobs (cron)
+
+Each job is a `POST` with the header `Authorization: Bearer <CRON_SECRET>`;
+without `CRON_SECRET` they answer a dormant 503. `weekly-review.yml.example`
+and `check-alerts.yml.example` in `.github/workflows/` show how to schedule
+the first two.
+
+- `POST /api/cron/weekly-review` and `POST /api/cron/check-alerts` — see the examples above.
+- `POST /api/cron/sharia-refresh` — **daily**. Refreshes the Sharia verdicts
+  for the stocks held or watched by people who are on Pro right now **and**
+  have the Sharia switch on; nobody else's stocks are sent to the supplier.
+  At most 500 stocks a run, 5 at once. It answers 503 (dormant) without
+  `MUSAFFA_API_KEY`, after the `CRON_SECRET` check, and makes no outside call.
+
+### Plans and billing (payments are OFF by default)
+
+Billing is on only when `BILLING_ENABLED` is `"true"` **and** all four Stripe values are set. A live key (`sk_live_`) outside production counts as off.
+
+| Variable | Purpose |
+|---|---|
+| `GLOBAL_AI_DAILY_CAP` | Most new AI analyses across all users per UTC day. Default 100; `0` pauses AI for everyone. |
+| `BILLING_ENABLED` | The literal `"true"` (plus the four values below) turns payments on. Empty = off. |
+| `STRIPE_SECRET_KEY` | Stripe secret key (`sk_test_...` or `sk_live_...`). Never commit it. |
+| `STRIPE_WEBHOOK_SECRET` | Signing secret for the `/api/billing/webhook` endpoint. |
+| `STRIPE_PRICE_PRO_MONTHLY` / `STRIPE_PRICE_PRO_YEARLY` | Stripe price ids for Pro. |
+
+Give someone Pro (or put them back on Free) by hand, with billing on or off:
+
+```bash
+npm run plan:set -- --email someone@example.com --plan PRO
+npm run plan:set -- --email someone@example.com --plan FREE
+# add --force for a user who has a Stripe subscription
+```
+
+## Helper commands
+
+```
+npm run catalogue:sync   # create/correct the shared stock rows for the public stock list (safe to run twice; reads DATABASE_URL; touches no user data)
+npm run dev:fake-ibkr    # a pretend Interactive Brokers server on this computer, for trying the broker connection by hand
+```
+
+For `dev:fake-ibkr`, set `IBKR_FLEX_BASE_URL` in `.env` to the address it
+prints (for example `http://127.0.0.1:4010`), then connect with the pretend
+token `FAKE-TOKEN-OK` (any query id). It refuses to run in production.
 
 ## Checks
 
@@ -172,7 +228,10 @@ used. A red cross on a pull request means one step failed. The browser tests
 are left out there, as they are in `npm run verify`.
 
 Browsers for the smoke tests are preinstalled — never run
-`playwright install` on this machine.
+`playwright install` on this machine. If Playwright can't find a browser,
+point it at one that is already installed by setting
+`PLAYWRIGHT_CHROMIUM_PATH` to that Chromium (or headless shell) file, for
+example `PLAYWRIGHT_CHROMIUM_PATH=/path/to/chrome npm run test:e2e`.
 
 ## Deployment (Railway)
 
@@ -184,23 +243,33 @@ Browsers for the smoke tests are preinstalled — never run
   `npx prisma migrate deploy`.
 - **Start:** `npm start`.
 - **Health check:** `GET /api/health`, given up to 5 minutes — it reports
-  database connectivity plus whether Sentry, cron and email are configured
-  or dormant, and whether sign-ups are open or closed.
+  database connectivity. Signed-in users (or a caller with the cron
+  secret) also see whether Sentry, cron and email are configured or
+  dormant, whether sign-ups are open or paused, and the billing mode.
 - **If it crashes:** Railway restarts it, up to 5 times.
 
 Set the environment variables from the table above in Railway's dashboard
 before the first deploy (including `TRUST_PROXY_HEADERS="true"`, since the
-app sits behind Railway's proxy). `ALLOW_SIGNUPS` should **not** be
-`"true"` on a public deployment — see the note below. `GO-LIVE.md` has the
-full checklist.
+app sits behind Railway's proxy), plus `RESEND_API_KEY` / `RESEND_FROM` —
+without email, the live site refuses sign-ups (see the note below).
+`GO-LIVE.md` has the full checklist.
 
-## Sign-ups are closed by default
+## Sign-ups are open by default
 
-`/sign-up` shows a "registration is closed" message and the server rejects
-sign-up attempts, unless `ALLOW_SIGNUPS` is set to the literal string
-`"true"`. Any other value, including leaving it unset, keeps sign-ups
-closed. This is deliberate: the app is meant to run as a single owner's
-private tool unless someone has explicitly decided to open it up.
+Anyone can create an account at `/sign-up`. With email set up
+(`RESEND_API_KEY` + `RESEND_FROM`), a new account must confirm its email
+address before it can sign in, and "Forgot password?" emails a reset link.
+Three safeguards:
+
+- `SIGNUPS_PAUSED="true"` pauses new sign-ups: the page says so and the
+  server refuses attempts. Existing people can still sign in.
+- In production, sign-ups are refused automatically while email isn't set
+  up, because nobody could confirm their address.
+- Sign-ups are limited to 5 an hour per browser (or IP behind a trusted
+  proxy), and confirmation/reset emails to 5 an hour per address.
+
+On your own machine without email, sign-ups still work: the page shows a
+note that email isn't set up, and the new account is signed straight in.
 
 ## Privacy & data controls
 

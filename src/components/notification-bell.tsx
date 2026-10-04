@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { SourceBadge, type SourceBadgeVariant } from "@/components/source-badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { describePriceProvider } from "@/lib/data/provider-info";
 import { formatShortDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -44,11 +45,13 @@ export type NotificationBellItem = {
  * The reverse of src/lib/data's badgeForPriceSource. "SEED" is handled only
  * for type completeness — the alert engine can never actually write it (see
  * the guarantee in src/lib/alerts/evaluate.ts): an alert never fires on
- * sample data, so a stored Notification's priceSource is always FMP/MANUAL.
+ * sample data, so a stored Notification's priceSource is always
+ * FMP/TWELVE_DATA/MANUAL.
  */
 function badgeVariantForPriceSource(source: PriceSource): SourceBadgeVariant {
   switch (source) {
     case "FMP":
+    case "TWELVE_DATA":
       return "live";
     case "MANUAL":
       return "manual";
@@ -180,6 +183,18 @@ export function NotificationBell({
                       size="sm"
                       variant={badgeVariantForPriceSource(item.priceSource)}
                       date={item.priceAsOf ? formatShortDate(item.priceAsOf) : undefined}
+                      // A notification doesn't keep the market, so a Twelve
+                      // Data price gets the cautious wording: named provider,
+                      // "delayed", its own date, never a number of minutes.
+                      detail={
+                        item.priceAsOf
+                          ? (describePriceProvider({
+                              priceSource: item.priceSource,
+                              market: "OTHER",
+                              asOf: item.priceAsOf,
+                            }) ?? undefined)
+                          : undefined
+                      }
                     />
                   ) : null}
                 </div>

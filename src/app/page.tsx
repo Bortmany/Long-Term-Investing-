@@ -14,20 +14,28 @@ import {
   Users,
 } from "lucide-react";
 
-import { auth } from "@/lib/auth";
+import { auth, getSignUpStatus } from "@/lib/auth";
+import { isBillingEnabled } from "@/lib/billing/config";
+import { getLegalContactEmail } from "@/lib/legal-contact";
 import { AiDisclaimer } from "@/components/ai-disclaimer";
+import { LandingCta } from "@/components/landing/landing-cta";
+import {
+  POSITIONING_LINE,
+  readBillingEnabledSafely,
+  readSignUpStatusSafely,
+} from "@/components/landing/landing-copy";
+import { LandingFooter } from "@/components/landing/landing-footer";
+import { PlansSection } from "@/components/landing/plans-section";
 import { Reveal } from "@/components/landing/reveal";
 import { SourceBadge } from "@/components/source-badge";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export const metadata: Metadata = {
   title: "InvestIQ AI — calm, honest long-term investing",
-  description:
-    "A private long-term investing companion for portfolios across the US, Muscat, Tadawul and Dubai markets. Every number carries its source.",
+  description: `${POSITIONING_LINE} Track portfolios across the US, Muscat, Saudi, Dubai, Abu Dhabi and Qatar markets. Every number carries its source.`,
 };
 
 // The interactive demo pulls in recharts, so it's lazy-loaded and never
@@ -63,6 +71,8 @@ const MARKETS = [
   { code: "MSX", country: "Oman", exchange: "Muscat Stock Exchange" },
   { code: "TASI", country: "Saudi Arabia", exchange: "Tadawul" },
   { code: "DFM", country: "UAE", exchange: "Dubai Financial Market" },
+  { code: "ADX", country: "UAE", exchange: "Abu Dhabi Securities Exchange" },
+  { code: "QSE", country: "Qatar", exchange: "Qatar Stock Exchange" },
 ];
 
 const COMMITTEE_SEATS = [
@@ -78,7 +88,7 @@ const HOW_IT_WORKS = [
   {
     icon: ReceiptText,
     title: "Record what you actually did",
-    body: "Buys, sells, deposits, dividends received — you enter transactions and nothing else. No balances to maintain, no numbers to remember.",
+    body: "Purchases, sales, deposits, dividends received — you enter transactions and nothing else. No balances to maintain, no numbers to remember.",
   },
   {
     icon: Calculator,
@@ -100,6 +110,13 @@ export default async function LandingPage() {
     redirect("/dashboard");
   }
 
+  // Read on the server for every visit (the session read above already makes
+  // this page render per request). If either can't be read, fall back to the
+  // honest version: sign-ups shown as paused, Pro shown as not on sale.
+  const signUpStatus = readSignUpStatusSafely(getSignUpStatus);
+  const billingEnabled = readBillingEnabledSafely(() => isBillingEnabled());
+  const contactEmail = getLegalContactEmail();
+
   return (
     <div className="min-h-screen bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-50">
       {/* Header */}
@@ -107,8 +124,14 @@ export default async function LandingPage() {
         <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-6">
           <p className="text-lg font-semibold tracking-tight">InvestIQ AI</p>
           <div className="flex items-center gap-1">
+            <Link
+              href="#plans"
+              className="hidden min-h-11 items-center px-3 text-sm font-medium text-slate-600 hover:text-slate-900 hover:underline md:inline-flex dark:text-slate-400 dark:hover:text-slate-50"
+            >
+              Plans
+            </Link>
             <ThemeToggle placement="topbar" />
-            <Button asChild variant="ghost" size="sm">
+            <Button asChild variant="ghost" size="lg" className="px-3">
               <Link href="/sign-in">Sign in</Link>
             </Button>
           </div>
@@ -123,17 +146,15 @@ export default async function LandingPage() {
             Long-term investing, minus the noise.
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-pretty text-base text-slate-500 dark:text-slate-400 sm:text-lg">
-            A private companion for portfolios that span New York, Muscat, Tadawul and Dubai.
-            It derives your cash and dividends from what you actually did — and never shows
-            you a number without saying where it came from.
+            Track portfolios across New York, Muscat, Tadawul, Dubai, Abu Dhabi and Qatar. Your cash and dividends
+            are worked out from what you actually did, and no number ever appears without saying
+            where it came from.
           </p>
-          <div className="mt-10 flex flex-col items-center gap-3">
-            <Button asChild size="lg">
-              <Link href="/sign-in">Sign in</Link>
-            </Button>
-            <p className="text-sm text-slate-500 dark:text-slate-400">
-              New accounts are invitation-only for now.
-            </p>
+          <p className="mx-auto mt-4 max-w-2xl text-sm font-medium text-slate-900 dark:text-slate-50">
+            {POSITIONING_LINE}
+          </p>
+          <div className="mt-10">
+            <LandingCta signUpStatus={signUpStatus} />
           </div>
         </section>
 
@@ -220,10 +241,10 @@ export default async function LandingPage() {
                     Six AI analysts argue it out
                   </h2>
                   <p className="mt-3 text-slate-500 dark:text-slate-400">
-                    Before a buy or sell, an AI committee reads the same data and votes
-                    independently — you see every vote and every disagreement, not a smoothed-over
-                    summary. Each analysis is saved with its date, model and data freshness, and
-                    is never quietly regenerated behind your back.
+                    Before you decide, six AI analysts review the same data and each gives its
+                    view. You see every view and every disagreement, not a smoothed-over summary.
+                    Each analysis is saved with its date, model and data freshness, and is never
+                    quietly regenerated behind your back.
                   </p>
                   <div className="mt-5">
                     <AiDisclaimer />
@@ -249,6 +270,10 @@ export default async function LandingPage() {
           </div>
         </section>
 
+        {/* Plans: Free and Pro — right after the AI section, so the visitor has
+            just read what the AI does before seeing what it costs. */}
+        <PlansSection billingEnabled={billingEnabled} signUpStatus={signUpStatus} />
+
         {/* Multi-market */}
         <section className="border-t border-slate-200 dark:border-slate-800">
           <div className="mx-auto max-w-5xl px-6 py-20 sm:py-24">
@@ -268,9 +293,9 @@ export default async function LandingPage() {
                 </p>
               </div>
             </Reveal>
-            <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {MARKETS.map((market, index) => (
-                <Reveal key={market.country} delay={index * 75}>
+                <Reveal key={market.code} delay={index * 75}>
                   <Card className="h-full">
                     <CardContent className="p-5">
                       <p className="inline-flex rounded-md border border-slate-200 px-2 py-1 font-mono text-xs font-medium text-slate-600 dark:border-slate-800 dark:text-slate-400">
@@ -311,7 +336,7 @@ export default async function LandingPage() {
                   <p className="mt-4">
                     <Link
                       href="/privacy"
-                      className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
+                      className="inline-flex min-h-11 items-center text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
                     >
                       Read the privacy page
                     </Link>
@@ -359,44 +384,15 @@ export default async function LandingPage() {
               <h2 className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl">
                 Calm compounding starts with honest numbers.
               </h2>
-              <div className="mt-8 flex flex-col items-center gap-3">
-                <Button asChild size="lg">
-                  <Link href="/sign-in">Sign in</Link>
-                </Button>
-                <p className="text-sm text-slate-500 dark:text-slate-400">
-                  Don&apos;t have an account? Access is by invitation while InvestIQ AI is
-                  private — check back for open registration.
-                </p>
+              <div className="mt-8">
+                <LandingCta signUpStatus={signUpStatus} />
               </div>
             </Reveal>
           </div>
         </section>
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-slate-200 dark:border-slate-800">
-        <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-4 px-6 py-8 sm:flex-row">
-          <div className="flex items-center gap-3">
-            <p className="text-sm font-semibold tracking-tight">InvestIQ AI</p>
-            <Badge variant="secondary" className="font-normal">
-              Private beta
-            </Badge>
-          </div>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
-            <Link href="/privacy" className="hover:underline">
-              Privacy
-            </Link>
-            {" · "}
-            <Link href="/terms" className="hover:underline">
-              Terms
-            </Link>
-            {" · "}
-            <Link href="/sign-in" className="hover:underline">
-              Sign in
-            </Link>
-          </p>
-        </div>
-      </footer>
+      <LandingFooter contactEmail={contactEmail} />
     </div>
   );
 }

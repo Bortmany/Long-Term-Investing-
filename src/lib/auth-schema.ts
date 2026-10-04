@@ -49,5 +49,76 @@ export const signUpSchema = z.object({
   password: passwordSchema,
 });
 
+/** Reset-password form: new password twice, same rules as sign-up. */
+export const resetPasswordSchema = z
+  .object({
+    password: passwordSchema,
+    confirm: z.string({ error: "Enter your new password again." }).min(1, "Enter your new password again."),
+  })
+  .refine((value) => value.password === value.confirm, {
+    message: "The two passwords don't match.",
+    path: ["confirm"],
+  });
+
+/** Forgot-password and "send a new link" forms: just the email. */
+export const emailOnlySchema = z.object({ email: emailSchema });
+
 export type SignInInput = z.infer<typeof signInSchema>;
 export type SignUpInput = z.infer<typeof signUpSchema>;
+
+// ---------------------------------------------------------------------------
+// Account-access wording, kept as whole sentences in ONE place (go-public
+// spec: never glue fragments; easy to translate later). Used by both the
+// server (src/app/api/auth/[...all]/route.ts) and the screens.
+// ---------------------------------------------------------------------------
+
+/** Whether the account email for a sign-up / sign-in actually went out. */
+export type EmailDelivery = "sent" | "failed" | "rate_limited" | "not_needed";
+
+export const SIGNUPS_PAUSED_TITLE = "New sign-ups are paused right now";
+export const SIGNUPS_PAUSED_MESSAGE =
+  "We've paused new accounts for a little while. If you already have an account, you can sign in as usual.";
+export const SIGNUPS_UNAVAILABLE_TITLE = "Sign-ups are unavailable right now";
+export const SIGNUPS_UNAVAILABLE_MESSAGE =
+  "New sign-ups are unavailable right now because we can't send confirmation emails. Please check back soon.";
+export const EMAIL_NOT_SET_UP_NOTE =
+  "Email isn't set up on this server, so we can't confirm your address or send password resets.";
+
+/** Shown on the resend screens when email isn't set up (the server refuses, nothing is sent). */
+export const EMAIL_NOT_SET_UP_RESEND_MESSAGE =
+  "Email isn't set up on this server, so we can't send a confirmation link. Please contact us for help.";
+
+export const TOO_MANY_ATTEMPTS_MESSAGE = "Too many attempts. Please wait a few minutes and try again.";
+export const SERVER_ERROR_NOTHING_SAVED =
+  "Something went wrong on our side. Nothing was saved. Please try again.";
+export const SERVER_ERROR_MESSAGE = "Something went wrong on our side. Please try again.";
+
+/** Server-side wording (no address); screens show the fuller sentences below. */
+export const EMAIL_SEND_LIMITED_MESSAGE =
+  "You've asked for several emails. Please wait about an hour and try again.";
+export const EMAIL_SEND_FAILED_MESSAGE = "We couldn't send the email just now. Please try again in a minute.";
+
+export function emailSendFailedMessage(contact: string): string {
+  return `We couldn't send the email just now. Try Resend in a minute. If it keeps failing, contact us at ${contact}.`;
+}
+export function emailSendLimitedMessage(contact: string): string {
+  return `You've asked for several emails. Please wait about an hour or contact us at ${contact}.`;
+}
+export function resetSendLimitedMessage(contact: string): string {
+  return `You've asked for several reset links. Please wait about an hour or contact us at ${contact}.`;
+}
+
+export const UNCONFIRMED_SENT_MESSAGE = "Please confirm your email first. We've sent you a new link.";
+export const UNCONFIRMED_FAILED_MESSAGE =
+  "Please confirm your email first. We tried to send you a new link but couldn't. Try again below.";
+export const UNCONFIRMED_LIMITED_MESSAGE =
+  "Please confirm your email first. We've already sent you several links in the last hour, so please check your inbox and spam folder.";
+export const INCORRECT_CREDENTIALS_MESSAGE = "Incorrect email or password.";
+
+/** "0:42" style countdown label text. */
+export function formatCountdown(seconds: number): string {
+  const safe = Math.max(0, Math.ceil(seconds));
+  const minutes = Math.floor(safe / 60);
+  const rest = safe % 60;
+  return `${minutes}:${String(rest).padStart(2, "0")}`;
+}

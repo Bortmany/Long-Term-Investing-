@@ -126,3 +126,79 @@ describe("computePortfolioValue", () => {
     expect(result.totalValue).toBeCloseTo(900, 8);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Step 3: holdings valued through the rial, and holdings with no route.
+// Made-up test rates, not real ones.
+// ---------------------------------------------------------------------------
+describe("computePortfolioValue through the rial", () => {
+  const armcoTxns: TxnInput[] = [
+    { type: "BUY", instrumentId: "armco", quantity: 250, pricePerUnit: 28, amount: 7000, currency: "SAR", fee: 0, tradeDate: d("2026-01-10") },
+  ];
+  const armcoPrice: PriceInput[] = [
+    { instrumentId: "armco", price: 30, currency: "SAR", asOf: d("2026-07-10"), source: "MANUAL" },
+  ];
+  const sarOmr: FxRateInput = { base: "SAR", quote: "OMR", rate: 0.1, asOf: d("2026-07-01") };
+  const usdOmr: FxRateInput = { base: "USD", quote: "OMR", rate: 0.4, asOf: d("2026-07-05") };
+
+  it("includes a holding valued only through the rial, with the price's own source", () => {
+    const result = computePortfolioValue({
+      transactions: armcoTxns,
+      prices: armcoPrice,
+      fxRates: [sarOmr, usdOmr],
+      baseCurrency: "USD",
+    });
+    // 250 × 30 SAR = 7500 SAR → × 0.25 = 1875 USD
+    expect(result.complete).toBe(true);
+    expect(result.missing).toEqual([]);
+    expect(result.holdingsValue).toBeCloseTo(1875, 6);
+    const valuation = result.holdings[0].valuation;
+    expect(valuation.ok).toBe(true);
+    if (valuation.ok) {
+      expect(valuation.marketValue).toBeCloseTo(1875, 6);
+      // The badge still comes from the PRICE (typed-in), not from the FX route.
+      expect(valuation.source).toEqual({ kind: "manual", asOf: d("2026-07-10") });
+      // The older leg's date, and the route is reported.
+      expect(valuation.fxRateAsOf).toEqual(d("2026-07-01"));
+      expect(valuation.fxViaHub?.via).toBe("OMR");
+    }
+    // (the SAR cash left after the buy also converts, so "derived" is there too)
+    expect(result.sources).toContainEqual({ kind: "manual", asOf: d("2026-07-10") });
+  });
+
+  it("keeps complete:false and lists the holding when there is no route", () => {
+    // SAR→OMR exists but OMR→USD does not.
+    const result = computePortfolioValue({
+      transactions: armcoTxns,
+      prices: armcoPrice,
+      fxRates: [sarOmr],
+      baseCurrency: "USD",
+    });
+    expect(result.complete).toBe(false);
+    expect(result.holdingsValue).toBe(0);
+    expect(result.missing).toContainEqual({
+      instrumentId: "armco",
+      currency: "SAR",
+      reason: "missing_fx_rate",
+    });
+    expect(result.holdings[0].valuation).toEqual({
+      ok: false,
+      reason: "missing_fx_rate",
+      from: "SAR",
+      to: "USD",
+    });
+  });
+
+  it("values a QAR holding in OMR with a direct QAR/OMR row", () => {
+    const result = computePortfolioValue({
+      transactions: [
+        { type: "BUY", instrumentId: "qnbk", quantity: 100, pricePerUnit: 18, amount: 1800, currency: "QAR", fee: 0, tradeDate: d("2026-02-01") },
+      ],
+      prices: [{ instrumentId: "qnbk", price: 20, currency: "QAR", asOf: d("2026-07-10"), source: "SEED" }],
+      fxRates: [{ base: "QAR", quote: "OMR", rate: 0.1, asOf: d("2026-07-01") }],
+      baseCurrency: "OMR",
+    });
+    expect(result.complete).toBe(true);
+    expect(result.holdingsValue).toBeCloseTo(200, 8);
+  });
+});

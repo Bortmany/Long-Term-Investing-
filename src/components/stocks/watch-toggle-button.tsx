@@ -10,6 +10,13 @@ import { LoaderCircle, Star, StarOff } from "lucide-react";
 import { addToWatchlist, removeFromWatchlist } from "@/app/actions/stocks";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useToast } from "@/components/ui/toast";
+import {
+  backOnWatchlistMessage,
+  removedToastMessage,
+  undoFailureMessage,
+  watchFailureMessage,
+} from "@/lib/stocks/watch-messages";
 
 export function WatchToggleButton({
   instrumentId,
@@ -25,6 +32,7 @@ export function WatchToggleButton({
 }) {
   const [watched, setWatched] = React.useState(initialWatched);
   const [isPending, startTransition] = React.useTransition();
+  const { toast } = useToast();
 
   function handleClick() {
     if (isPending) return;
@@ -34,8 +42,40 @@ export function WatchToggleButton({
         ? await addToWatchlist(instrumentId)
         : await removeFromWatchlist(instrumentId);
       // Optimistic only on success — a failure (rare: session lapsed, rate
-      // limited) leaves the star showing the true, unchanged state.
-      if (result.ok) setWatched(next);
+      // limited) leaves the star showing the true, unchanged state, and now
+      // says so instead of failing silently.
+      if (!result.ok) {
+        toast({
+          tone: "error",
+          message: watchFailureMessage(result.error),
+        });
+        return;
+      }
+      setWatched(next);
+      if (!next) {
+        // Un-watching offers an Undo. It calls the SAME addToWatchlist server
+        // action as the star, so the 30-a-minute watchlist-write limit applies
+        // to it too — there is no other route back. If the limiter refuses,
+        // the toast says so in the standard "Too many requests" sentence.
+        toast({
+          message: removedToastMessage(ticker),
+          action: {
+            label: "Undo",
+            ariaLabel: `Undo removing ${ticker}`,
+            run: async () => {
+              const back = await addToWatchlist(instrumentId);
+              if (back.ok) {
+                setWatched(true);
+                return { message: backOnWatchlistMessage(ticker) };
+              }
+              return {
+                tone: "error",
+                message: undoFailureMessage(ticker, back.error),
+              };
+            },
+          },
+        });
+      }
     });
   }
 
@@ -47,6 +87,7 @@ export function WatchToggleButton({
         type="button"
         variant="outline"
         size="sm"
+        className="h-11"
         disabled={isPending}
         onClick={handleClick}
       >
@@ -72,7 +113,7 @@ export function WatchToggleButton({
           type="button"
           variant="ghost"
           size="icon"
-          className="size-9"
+          className="size-11"
           disabled={isPending}
           onClick={handleClick}
           aria-label={label}

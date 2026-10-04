@@ -35,7 +35,7 @@ const WEEKLY_REVIEW_INSTRUCTIONS =
   "percentages are already computed for you in delta.sectorAllocation and are " +
   "shown to the investor separately as a table — describe the shift " +
   "qualitatively, don't restate the exact numbers as if reproducing them " +
-  "yourself); suggestedActions the investor might consider; and a short, calm " +
+  "yourself); suggestedActions — despite the field name, write 2-4 short QUESTIONS the investor could ask themselves (not actions or instructions, never telling them to buy, sell or hold anything); and a short, calm " +
   "behavioralNote — one observation about the investor's own behavior pattern " +
   "(e.g. chasing recent winners, concentration creeping up, ignoring cash " +
   "drag), stated gently, never alarmist.";

@@ -128,7 +128,7 @@ export function PortfolioXray() {
               aria-pressed={selected}
               disabled={!selected && atLimit}
               className={cn(
-                "flex min-h-11 items-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors",
+                "flex min-h-11 min-w-11 items-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors",
                 "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background outline-none",
                 selected
                   ? "border-blue-600 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-950 dark:text-blue-300"

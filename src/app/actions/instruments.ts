@@ -7,6 +7,7 @@
 // by hand instead.
 
 import { Prisma, Currency, InstrumentType, Market } from "@prisma/client";
+import { currencyListSentence, marketListSentence } from "@/lib/markets";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
@@ -43,8 +44,8 @@ const createInstrumentSchema = z.object({
     .trim()
     .min(1, "Enter the company or fund name.")
     .max(200, "Names are limited to 200 characters."),
-  market: z.enum(Market, { error: "Pick a market (US, MSX, TADAWUL, DFM or OTHER)." }),
-  currency: z.enum(Currency, { error: "Pick a valid currency (OMR, USD, SAR or AED)." }),
+  market: z.enum(Market, { error: marketListSentence() }),
+  currency: z.enum(Currency, { error: currencyListSentence() }),
   type: z.enum(InstrumentType, { error: "Pick a type (Stock, ETF or REIT)." }),
   sector: z.string().trim().max(100).optional(),
   country: z.string().trim().max(100).optional(),
@@ -53,13 +54,16 @@ const createInstrumentSchema = z.object({
 export type CreateInstrumentInput = z.input<typeof createInstrumentSchema>;
 
 /**
- * Track a new instrument. Tickers are stored uppercase and must be unique
- * per market — trying to add a duplicate returns a friendly error instead
- * of crashing.
+ * Track a new instrument. Tickers are stored uppercase and are unique per
+ * market. Typing a ticker that already exists is NOT an error: it succeeds
+ * with `alreadyExisted: true` and the existing row's id, so the caller can
+ * simply carry on (for example, add it to the watchlist). Only the id and the
+ * ticker the person typed come back — never the stored name, so nobody sees
+ * what another account typed in.
  */
 export async function createInstrument(
   input: CreateInstrumentInput,
-): Promise<ActionResult<{ id: string; ticker: string }>> {
+): Promise<ActionResult<{ id: string; ticker: string; alreadyExisted: boolean }>> {
   const userId = await getSessionUserId();
   if (!userId) return actionError(NOT_SIGNED_IN_ERROR);
 
@@ -88,15 +92,21 @@ export async function createInstrument(
     revalidatePath("/portfolio");
     revalidatePath("/stocks");
     revalidatePath("/watchlist");
-    return actionOk({ id: created.id, ticker: created.ticker });
+    return actionOk({ id: created.id, ticker: created.ticker, alreadyExisted: false });
   } catch (error) {
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&
       error.code === "P2002"
     ) {
-      return actionError(
-        `${data.ticker} on ${data.market} is already tracked — no need to add it again.`,
-      );
+      // Duplicate ticker + market: hand back the existing row's id (and the
+      // ticker as typed) instead of an error. Nothing else about it is returned.
+      const existing = await prisma.instrument.findUnique({
+        where: { ticker_market: { ticker: data.ticker, market: data.market } },
+        select: { id: true },
+      });
+      if (existing) {
+        return actionOk({ id: existing.id, ticker: data.ticker, alreadyExisted: true });
+      }
     }
     throw error;
   }
@@ -163,7 +173,7 @@ export async function prefillInstrumentProfile(
     if (!apiKey) {
       return unavailable(
         "no_api_key",
-        "Profile prefill needs an FMP_API_KEY — fill the details in by hand.",
+        "Automatic fill-in isn't switched on yet. Please fill the details in by hand.",
       );
     }
     return unavailable(
@@ -172,7 +182,7 @@ export async function prefillInstrumentProfile(
     );
   }
 
-  // If this ticker is already tracked, use its real row (so the profile
+  // If this ticker already exists, use its real row (so the profile
   // lands in the fundamentals cache); otherwise use a throwaway store so
   // nothing is written for an instrument that does not exist yet.
   const existing = await prisma.instrument.findUnique({

@@ -5,6 +5,7 @@
 // Follows the same skeleton as src/app/actions/transactions.ts: session →
 // rate limit → zod parse → existence/ownership check → mutate → revalidate.
 
+import { getVisibleInstrument } from "@/lib/stocks/visible-instruments";
 import { revalidatePath } from "next/cache";
 import type { Instrument } from "@prisma/client";
 import { z } from "zod";
@@ -60,10 +61,14 @@ async function instrumentExists(instrumentId: string): Promise<boolean> {
   return count > 0;
 }
 
-/** Start watching an instrument. Idempotent — watching twice is a no-op, not an error. */
+/**
+ * Start watching an instrument. Idempotent — watching twice is a no-op, not an
+ * error; `alreadyWatching` tells the caller which one happened (it only ever
+ * describes THIS user's own watchlist).
+ */
 export async function addToWatchlist(
   instrumentId: string,
-): Promise<ActionResult<{ id: string }>> {
+): Promise<ActionResult<{ id: string; alreadyWatching: boolean }>> {
   const userId = await getSessionUserId();
   if (!userId) return actionError(NOT_SIGNED_IN_ERROR);
 
@@ -84,6 +89,11 @@ export async function addToWatchlist(
     return actionError("That stock could not be found.");
   }
 
+  const alreadyWatching =
+    (await prisma.watchlistItem.count({
+      where: { userId, instrumentId: parsed.data },
+    })) > 0;
+
   await prisma.watchlistItem.upsert({
     where: { userId_instrumentId: { userId, instrumentId: parsed.data } },
     create: { userId, instrumentId: parsed.data },
@@ -91,7 +101,7 @@ export async function addToWatchlist(
   });
 
   revalidateStockPages(parsed.data);
-  return actionOk({ id: parsed.data });
+  return actionOk({ id: parsed.data, alreadyWatching });
 }
 
 /** Stop watching an instrument. Scoped to the signed-in user's own row — nothing else can be touched. */
@@ -187,8 +197,9 @@ const STOCK_SCORE_INSTRUCTIONS =
   "concentration risk within this company), dividendQuality (sustainability and " +
   "coverage of its dividend, if any), risk (volatility, leverage, sector/macro " +
   "risk), cash (balance-sheet liquidity and cash generation). Then list concrete " +
-  "strengths and evidence-backed recommendations for an investor considering or " +
-  "holding this stock.";
+  "strengths and evidence-backed points to consider when researching this " +
+  "stock (put them in the `recommendations` field, but phrase them as points to " +
+  "consider, never as instructions to buy, sell or hold).";
 
 async function buildStockScoreInput(
   instrument: Instrument,
@@ -335,9 +346,7 @@ export async function generateStockScore(
     );
   }
 
-  const instrument = await prisma.instrument.findUnique({
-    where: { id: parsed.data },
-  });
+  const instrument = await getVisibleInstrument(userId, parsed.data);
   if (!instrument) return actionError("That stock could not be found.");
 
   const result = await runAnalysis({
@@ -419,7 +428,7 @@ export async function generateNewsSummary(
     return actionError(parsed.error.issues[0]?.message ?? "Pick a stock first.");
   }
 
-  const instrument = await prisma.instrument.findUnique({ where: { id: parsed.data } });
+  const instrument = await getVisibleInstrument(userId, parsed.data);
   if (!instrument) return actionError("That stock could not be found.");
 
   const ref = {

@@ -1,0 +1,19 @@
+{
+  "symbol": "EMAAR",
+  "name": "Emaar Properties (MADE-UP SAMPLE REPLY)",
+  "exchange": "XDFM",
+  "mic_code": "XDFM",
+  "currency": "AED",
+  "datetime": "2026-09-28 15:00:00",
+  "timestamp": 1790593200,
+  "open": "13.00",
+  "high": "13.20",
+  "low": "12.95",
+  "close": "13.10",
+  "volume": "6500000",
+  "previous_close": "13.05",
+  "change": "0.05",
+  "percent_change": "0.38314",
+  "average_volume": "6000000",
+  "is_market_open": true
+}

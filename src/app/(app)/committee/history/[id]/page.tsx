@@ -1,7 +1,6 @@
 import { headers } from "next/headers";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import { FileSearch } from "lucide-react";
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -12,9 +11,7 @@ import {
   committeeOutputSchema,
   sellAnalysisSchema,
 } from "@/lib/ai/schemas";
-import { badgePropsForValueSource } from "@/components/source-badge";
-import { EmptyState } from "@/components/empty-state";
-import { Button } from "@/components/ui/button";
+import { badgePropsForPrice } from "@/components/source-badge";
 import { CommitteeResultPanel } from "@/components/committee/committee-result-panel";
 import { DecisionRecordHeader } from "@/components/committee/decision-record-header";
 import { BuyAnalysisPanel, type CurrentPriceInfo } from "@/components/committee/buy-analysis-panel";
@@ -24,9 +21,9 @@ const HISTORY_TYPES = ["COMMITTEE", "BUY_ANALYSIS", "SELL_ANALYSIS"] as const;
 
 /** Plain-English name for each kind of saved run, used in the record header. */
 const KIND_LABELS: Record<(typeof HISTORY_TYPES)[number], string> = {
-  COMMITTEE: "Investment Committee decision",
-  BUY_ANALYSIS: "Buy analysis",
-  SELL_ANALYSIS: "Sell analysis",
+  COMMITTEE: "Committee view",
+  BUY_ANALYSIS: "Upside check",
+  SELL_ANALYSIS: "Downside check",
 };
 
 export async function generateMetadata({
@@ -47,23 +44,8 @@ export async function generateMetadata({
   };
 }
 
-function notFound() {
-  return (
-    <EmptyState
-      icon={FileSearch}
-      heading="Run not found"
-      sentence="This analysis run doesn't exist or has been removed."
-      action={
-        <Button asChild>
-          <Link href="/committee">Back to Committee</Link>
-        </Button>
-      }
-    />
-  );
-}
-
 /**
- * Read-only view of ONE past Committee / Buy Analysis / Sell Analysis run,
+ * Read-only view of ONE past Committee / Upside check / Downside check run,
  * by AiAnalysis id (ui-spec §6.5). Ownership-checked — a client-supplied id
  * is never trusted on its own — and honestly "not found" for anything that
  * doesn't belong to the signed-in user, was never one of these three types,
@@ -170,10 +152,7 @@ export default async function CommitteeHistoryPage({
           ok: true,
           price: quoteResult.data.price,
           currency: quoteResult.data.currency,
-          badge: badgePropsForValueSource({
-            kind: quoteResult.data.source,
-            asOf: quoteResult.data.asOf,
-          }),
+          badge: badgePropsForPrice(quoteResult.data, instrument.market),
         }
       : { ok: false, reason: quoteResult.message ?? quoteResult.unavailable };
 

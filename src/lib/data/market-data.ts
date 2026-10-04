@@ -4,13 +4,13 @@
 //   - quotes go through PriceCache with a 15-minute TTL,
 //   - profile / statements / dividends go through FundamentalsCache with a
 //     7-day TTL,
-//   - callers never talk to FMP directly.
+//   - callers never talk to FMP or Twelve Data directly.
 //
 // GOLDEN RULE: on any miss where the source is unavailable, the typed
 // "unavailable" result is returned — never a fabricated number. If a stale
 // cached value exists it is returned with its honest as-of date and badge.
 
-import { Currency, type PriceSource } from "@prisma/client";
+import { Currency, type Market, type PriceSource } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
   areFundamentalsFresh,
@@ -20,6 +20,11 @@ import {
 } from "./cache";
 import { createManualProvider, createPrismaPriceStore, type ManualPriceStore } from "./manual";
 import { createFmpProvider, fetchFmpFxRate, fetchFmpNews } from "./fmp";
+import { createTwelveDataProvider } from "./twelve-data";
+import {
+  twelveDataBaseUrlFromEnv,
+  twelveDataRoutingFromEnv,
+} from "./provider-info";
 import {
   badgeForPriceSource,
   resolveProviderName,
@@ -113,6 +118,11 @@ export function createPrismaMarketDataStore(): MarketDataCacheStore {
 export type MarketDataDeps = {
   store?: MarketDataCacheStore;
   fmpApiKey?: string | null;
+  /**
+   * Twelve Data settings (key + enabled markets). Unset means "read them
+   * from the environment"; with no key the connection stays dormant.
+   */
+  twelveData?: { apiKey: string | null | undefined; markets?: readonly Market[] } | null;
   fetchFn?: typeof fetch;
   now?: Date;
   /** Test override for the routed provider. */
@@ -126,12 +136,20 @@ function resolveDeps(instrument: InstrumentRef, deps: MarketDataDeps) {
     deps.fmpApiKey !== undefined
       ? deps.fmpApiKey
       : (process.env.FMP_API_KEY ?? null);
-  const providerName = resolveProviderName(instrument.market, apiKey || null);
+  const twelveData =
+    deps.twelveData !== undefined ? deps.twelveData : twelveDataRoutingFromEnv();
+  const providerName = resolveProviderName(instrument.market, apiKey || null, twelveData);
   const provider =
     deps.provider ??
     (providerName === "fmp"
       ? createFmpProvider({ apiKey, fetchFn: deps.fetchFn })
-      : createManualProvider(store));
+      : providerName === "twelve-data"
+        ? createTwelveDataProvider({
+            apiKey: twelveData?.apiKey,
+            fetchFn: deps.fetchFn,
+            baseUrl: twelveDataBaseUrlFromEnv(),
+          })
+        : createManualProvider(store));
   return { store, now, provider, providerName, apiKey };
 }
 
@@ -151,48 +169,56 @@ export async function getQuote(
     return provider.getQuote(instrument);
   }
 
-  // FMP-routed: serve from cache while fresh (15-minute TTL).
+  // Provider-routed (FMP or Twelve Data): serve from the cache while fresh
+  // (15-minute TTL). "Fresh" only counts a stored price that came from the
+  // provider we are routed to — a seeded or other provider's price never
+  // passes for a fresh answer.
+  const routedSource: PriceSource = providerName === "fmp" ? "FMP" : "TWELVE_DATA";
   const cached = await store.getLatestPrice(instrument.id);
-  if (cached && cached.source === "FMP" && isQuoteFresh(cached.fetchedAt, now)) {
-    return {
-      ok: true,
-      data: {
-        price: cached.price,
-        currency: cached.currency,
-        asOf: cached.asOf,
-        source: badgeForPriceSource(cached.source),
-        fetchedAt: cached.fetchedAt,
-      },
-    };
+  if (cached && cached.source === routedSource && isQuoteFresh(cached.fetchedAt, now)) {
+    return { ok: true, data: quoteFromStored(cached) };
   }
 
   const fresh = await provider.getQuote(instrument);
   if (fresh.ok) {
+    // The ONLY thing written to the shared price table on this path is a
+    // price from the routed provider, labelled with that provider. A user's
+    // typed-in price never goes through here.
     await store.savePrice(instrument.id, {
       price: fresh.data.price,
       currency: fresh.data.currency,
       asOf: fresh.data.asOf,
-      source: "FMP",
+      source: routedSource,
       fetchedAt: now,
     });
-    return fresh;
+    return { ok: true, data: { ...fresh.data, priceSource: routedSource } };
   }
 
   // Provider failed. If we hold ANY older stored price, return it with its
-  // honest badge and as-of date rather than nothing — but never invent one.
+  // honest badge, its own as-of date and the fallback flag rather than
+  // nothing — but never invent one.
   if (cached) {
-    return {
-      ok: true,
-      data: {
-        price: cached.price,
-        currency: cached.currency,
-        asOf: cached.asOf,
-        source: badgeForPriceSource(cached.source),
-        fetchedAt: cached.fetchedAt,
-      },
-    };
+    return { ok: true, data: { ...quoteFromStored(cached), fallback: true } };
   }
   return fresh;
+}
+
+/** A stored price as a Quote, carrying its true origin. */
+function quoteFromStored(stored: {
+  price: number;
+  currency: InstrumentRef["currency"];
+  asOf: Date;
+  source: PriceSource;
+  fetchedAt: Date;
+}): Quote {
+  return {
+    price: stored.price,
+    currency: stored.currency,
+    asOf: stored.asOf,
+    source: badgeForPriceSource(stored.source),
+    fetchedAt: stored.fetchedAt,
+    priceSource: stored.source,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -205,7 +231,13 @@ export async function getPriceHistory(
   range: { from: Date; to: Date },
   deps: MarketDataDeps = {},
 ): Promise<DataResult<PricePoint[]>> {
-  const { provider } = resolveDeps(instrument, deps);
+  const { provider, providerName, store } = resolveDeps(instrument, deps);
+  // Twelve Data does not supply history here (keeps licence exposure and
+  // credit use small): its stocks' history is the prices already stored,
+  // read the same way typed-in markets are.
+  if (providerName === "twelve-data" && !deps.provider) {
+    return createManualProvider(store).getPriceHistory(instrument, range);
+  }
   return provider.getPriceHistory(instrument, range);
 }
 

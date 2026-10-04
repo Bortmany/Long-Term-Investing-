@@ -27,8 +27,10 @@ import { getAiClient, type AiClientResult, type AiMessagesClient } from "@/lib/a
 import {
   computeInputHash,
   defaultStore,
+  limitInfoFrom,
   stableStringify,
   type AiAnalysisStore,
+  type RunAnalysisLimitInfo,
   type RunAnalysisUnavailableReason,
 } from "@/lib/ai/analysis";
 import { computeConsensus } from "@/lib/ai/consensus";
@@ -48,7 +50,7 @@ import {
 const MAX_OUTPUT_TOKENS = 4096;
 
 const NO_KEY_MESSAGE =
-  "AI features are turned off (no ANTHROPIC_API_KEY configured). Nothing here was faked.";
+  "AI analysis isn't switched on for this site yet. Nothing here was faked.";
 const PROVIDER_ERROR_MESSAGE =
   "Something went wrong convening the committee. Your previous committee run (if any) is unaffected.";
 
@@ -71,7 +73,13 @@ export type RunCommitteeParams = {
 
 export type RunCommitteeResult =
   | { ok: true; data: CommitteeOutput; analysis: AiAnalysis }
-  | { ok: false; unavailable: RunAnalysisUnavailableReason; message: string };
+  | {
+      ok: false;
+      unavailable: RunAnalysisUnavailableReason;
+      message: string;
+      /** Set only when a spend limit refused the run. */
+      limit?: RunAnalysisLimitInfo;
+    };
 
 export type RunCommitteeDeps = {
   store?: AiAnalysisStore;
@@ -143,6 +151,11 @@ async function callPersona(
   }
 }
 
+const VIEW_LABELS: Record<string, string> = { BUY: "POSITIVE", HOLD: "NEUTRAL", SELL: "NEGATIVE" };
+function viewLabel(stored: string): string {
+  return VIEW_LABELS[stored] ?? stored;
+}
+
 /** The synthesis call's prose parts, or null on any failure (same discipline as callPersona). */
 async function callSynthesis(
   client: AiMessagesClient,
@@ -169,8 +182,10 @@ async function callSynthesis(
           content: stableStringify({
             instructions: COMMITTEE_SYNTHESIS_INSTRUCTIONS,
             snapshot,
-            votes,
-            consensus: { verdict: consensus.verdict, consensusScore: consensus.score },
+            // Stored BUY/HOLD/SELL are shown to the model as the new wording
+            // (advice-wording decision) so its prose uses the same labels.
+            votes: votes.map((v) => ({ ...v, recommendation: viewLabel(v.recommendation) })),
+            consensus: { view: viewLabel(consensus.verdict), consensusScore: consensus.score },
             thesisAttached: hasThesis,
           }),
         },
@@ -234,14 +249,35 @@ export async function runCommittee(
   // once here, before any of the seven calls, never per-call.
   const capResult = await spendCap(params.userId, undefined, now);
   if (!capResult.ok) {
-    return { ok: false, unavailable: "spend_cap", message: capResult.message };
+    return {
+      ok: false,
+      unavailable: "spend_cap",
+      message: capResult.message,
+      limit: limitInfoFrom(capResult),
+    };
   }
 
+  // The cap reserved a slot for this run; give it back however the run ends
+  // (saved or failed) — from then on the saved row itself is what counts.
+  try {
+    return await conveneAndPersist(params, clientResult.client, store, input, inputHash, dataAsOf);
+  } finally {
+    capResult.release?.();
+  }
+}
+
+/** The seven model calls → assemble → persist half of runCommittee (only after the cap said yes). */
+async function conveneAndPersist(
+  params: RunCommitteeParams,
+  client: AiMessagesClient,
+  store: AiAnalysisStore,
+  input: unknown,
+  inputHash: string,
+  dataAsOf: Date,
+): Promise<RunCommitteeResult> {
   // SIX persona calls, in parallel.
   const personaResults = await Promise.all(
-    COMMITTEE_PERSONAS.map((persona) =>
-      callPersona(clientResult.client, params.model, persona, input),
-    ),
+    COMMITTEE_PERSONAS.map((persona) => callPersona(client, params.model, persona, input)),
   );
 
   if (personaResults.some((vote) => vote === null)) {
@@ -271,7 +307,7 @@ export async function runCommittee(
     );
 
   const synthesis = await callSynthesis(
-    clientResult.client,
+    client,
     params.model,
     input,
     taggedVotes,

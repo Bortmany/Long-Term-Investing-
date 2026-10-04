@@ -1,11 +1,13 @@
-// Past Runs table (ui-spec §6.5) — every Committee / Buy Analysis / Sell
-// Analysis run for the currently-selected instrument, newest first.
+// Past Runs table (ui-spec §6.5) — every Committee / Upside check / Downside
+// check run for the currently-selected instrument, newest first.
 // Server-renderable (no client state needed) — each row's cells are wrapped
 // in a Link to /committee/history/[id] so the whole row reads as clickable.
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ResponsiveRows } from "@/components/ui/responsive-rows";
+import { RowCard } from "@/components/ui/row-card";
 import {
   Table,
   TableBody,
@@ -34,8 +36,8 @@ export type PastRunRow = {
 
 const TYPE_LABELS: Record<PastRunType, string> = {
   COMMITTEE: "Committee",
-  BUY_ANALYSIS: "Buy Analysis",
-  SELL_ANALYSIS: "Sell Analysis",
+  BUY_ANALYSIS: "Upside check",
+  SELL_ANALYSIS: "Downside check",
 };
 
 function ResultCell({ type, output }: { type: PastRunType; output: unknown }) {
@@ -50,14 +52,14 @@ function ResultCell({ type, output }: { type: PastRunType; output: unknown }) {
   if (type === "BUY_ANALYSIS") {
     const parsed = buyAnalysisSchema.safeParse(output);
     return parsed.success ? (
-      <span className="tabular-nums">{parsed.data.score}/100</span>
+      <span data-figure className="tabular-nums">{parsed.data.score}/100</span>
     ) : (
       <span className="text-slate-400">—</span>
     );
   }
   const parsed = sellAnalysisSchema.safeParse(output);
   return parsed.success ? (
-    <span className="tabular-nums">{parsed.data.sellScore}/100</span>
+    <span data-figure className="tabular-nums">{parsed.data.sellScore}/100</span>
   ) : (
     <span className="text-slate-400">—</span>
   );
@@ -77,6 +79,32 @@ export function PastRunsTable({ rows }: { rows: PastRunRow[] }) {
             No runs yet for this stock.
           </p>
         ) : (
+          <ResponsiveRows
+            listLabel="Past runs"
+            cards={rows.map((row) => (
+              // The whole card is one link (the date link's invisible layer covers it).
+              <RowCard
+                key={row.id}
+                density="compact"
+                chevron
+                identity={
+                  <Link
+                    href={`/committee/history/${row.id}`}
+                    className="inline-flex min-h-11 items-center text-sm font-medium after:absolute after:inset-0 after:rounded-lg after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-ring"
+                  >
+                    {formatShortDate(row.createdAt)}
+                  </Link>
+                }
+                headline={<Badge variant="secondary">{TYPE_LABELS[row.type]}</Badge>}
+                badges={
+                  <span className="text-sm">
+                    <ResultCell type={row.type} output={row.output} />
+                  </span>
+                }
+                meta={row.model}
+              />
+            ))}
+            table={
           <Table>
             <TableHeader>
               <TableRow>
@@ -113,6 +141,8 @@ export function PastRunsTable({ rows }: { rows: PastRunRow[] }) {
               ))}
             </TableBody>
           </Table>
+            }
+          />
         )}
       </CardContent>
     </Card>

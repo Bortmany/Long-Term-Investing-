@@ -1,7 +1,7 @@
 "use server";
 
 // Manually record a price for an instrument (the pricing path for MSX /
-// TADAWUL / DFM / OTHER instruments, and for US ones without an FMP key).
+// TADAWUL / DFM / ADX / QSE / OTHER instruments, and for US ones without an FMP key).
 //
 // SECURITY (docs/CONVENTIONS.md, golden rule): a hand-entered price is stored
 // in the USER-SCOPED ManualPrice table, NOT the shared PriceCache. The shared

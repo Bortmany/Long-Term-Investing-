@@ -5,6 +5,7 @@ import {
   ALERT_SWEEP_MAX_INSTRUMENTS,
   createPrismaAlertStore,
   sweepAlerts,
+  THESIS_ALERT_NEEDS_PRO_OUTCOME,
   type AlertRecord,
   type AlertStore,
   type RecordFireParams,
@@ -182,7 +183,10 @@ describe("sweepAlerts — the notification keeps the settings the alert had when
         intervalDays: 90,
       }),
     ]);
-    await sweepAlerts({ userId: USER_ID }, { store, getQuoteFn: vi.fn(), now: NOW });
+    await sweepAlerts(
+      { userId: USER_ID },
+      { store, getQuoteFn: vi.fn(), now: NOW, isProFn: async () => true },
+    );
     expect(notifications).toHaveLength(1);
     expect(notifications[0].rule).toEqual({ kind: "THESIS_REVIEW_DUE", threshold: null, intervalDays: 90 });
   });
@@ -337,5 +341,42 @@ describe("sweepAlerts — per-sweep instrument cap", () => {
     expect(getQuoteFn).toHaveBeenCalledTimes(ALERT_SWEEP_MAX_INSTRUMENTS);
     expect(summary.evaluated).toBe(ALERT_SWEEP_MAX_INSTRUMENTS);
     expect(summary.skippedInstruments).toBe(1);
+  });
+});
+
+describe("sweepAlerts — \"time to review\" alerts are Pro (go-public B1)", () => {
+  const dueThesisAlert = () =>
+    makeAlertRecord({
+      id: "alert-free-1",
+      kind: "THESIS_REVIEW_DUE",
+      thesisId: "thesis-free-1",
+      thesis: {
+        id: "thesis-free-1",
+        createdAt: new Date(NOW.getTime() - 200 * 86_400_000),
+        instrument: { ticker: "AAPL" },
+      },
+      intervalDays: 90,
+    });
+
+  it("a Free user's alert is skipped with the honest outcome, never deleted and never fired", async () => {
+    const { store, alerts, outcomes, notifications } = makeFakeAlertStore([dueThesisAlert()]);
+    const isProFn = vi.fn(async () => false);
+
+    await sweepAlerts({ userId: USER_ID }, { store, getQuoteFn: vi.fn(), now: NOW, isProFn });
+
+    expect(notifications).toHaveLength(0);
+    expect(outcomes.get("alert-free-1")).toBe(THESIS_ALERT_NEEDS_PRO_OUTCOME);
+    expect(THESIS_ALERT_NEEDS_PRO_OUTCOME).toBe("Not checked, this needs the Pro plan");
+    // Still there — a downgrade never deletes anything.
+    expect(alerts.map((a) => a.id)).toContain("alert-free-1");
+  });
+
+  it("the same alert fires for a Pro user", async () => {
+    const { store, notifications } = makeFakeAlertStore([dueThesisAlert()]);
+    await sweepAlerts(
+      { userId: USER_ID },
+      { store, getQuoteFn: vi.fn(), now: NOW, isProFn: async () => true },
+    );
+    expect(notifications).toHaveLength(1);
   });
 });

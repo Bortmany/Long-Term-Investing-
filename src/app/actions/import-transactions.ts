@@ -17,13 +17,12 @@ import {
   type ActionResult,
 } from "@/lib/action-result";
 import {
+  MAX_IMPORT_REFERENCE_LENGTH,
   applyOversellProjection,
-  findImportOversell,
-  toTransactionRecord,
   validateMappedRows,
 } from "@/lib/import-rows";
 import { computeHoldings, fromPrismaTransaction } from "@/lib/portfolio";
-import { lockPortfolioForWrite } from "@/lib/portfolio-lock";
+import { commitImportRows, loadKnownInstruments } from "@/lib/import-commit";
 // TYPE-ONLY import (import type), so these symbols are ERASED from the compiled
 // server bundle. In a "use server" file a value-level import/re-export of a
 // type is a runtime landmine: the server-action transform can emit a real
@@ -33,10 +32,9 @@ import { lockPortfolioForWrite } from "@/lib/portfolio-lock";
 // live only in @/lib/import-rows; UI code imports them straight from there.
 import type {
   ImportValidationReport,
-  KnownInstrument,
   MappedImportRow,
 } from "@/lib/import-rows";
-import { getOrCreatePortfolio, getSessionUserId } from "@/lib/user-portfolio";
+import { getSessionUserId } from "@/lib/user-portfolio";
 import {
   IMPORT_RATE_LIMIT,
   rateLimit,
@@ -49,28 +47,59 @@ import {
 // (numbers, dates, ticker resolution) still happens in src/lib/import-rows.ts;
 // this only proves the top-level input is a bounded array of the right shape
 // before any of it is read. The 2000-row cap keeps a single import bounded.
+// The server (not only the browser's 5 MB file check) caps the size of every
+// free-text field, so a hand-made request can't push a huge string through.
+// Limits are generous for real data: tickers/ids are short, a note matches the
+// 500-character limit of the Add Transaction form, numbers and dates are tiny.
+const MAX_ROW_LINE = 1_000_000;
+function capped(maxLength: number, label: string) {
+  return z
+    .string()
+    .max(maxLength, `${label} is too long (the limit is ${maxLength} characters).`)
+    .optional();
+}
+
 const importArgsSchema = z
   .array(
     z.object({
-      ticker: z.string().optional(),
-      market: z.string().optional(),
-      type: z.string().optional(),
-      quantity: z.string().optional(),
-      pricePerUnit: z.string().optional(),
-      amount: z.string().optional(),
-      currency: z.string().optional(),
-      fee: z.string().optional(),
-      tradeDate: z.string().optional(),
-      note: z.string().optional(),
+      ticker: capped(32, "A ticker"),
+      market: capped(32, "A market"),
+      type: capped(32, "A transaction type"),
+      quantity: capped(64, "A quantity"),
+      pricePerUnit: capped(64, "A price"),
+      amount: capped(64, "An amount"),
+      currency: capped(16, "A currency"),
+      fee: capped(64, "A fee"),
+      tradeDate: capped(64, "A trade date"),
+      note: capped(500, "A note"),
+      // Broker-preset / fingerprint reference, stored only to stop the same
+      // line being imported twice. Length-capped; `line` is for messages and
+      // is never stored.
+      reference: z
+        .string()
+        .max(
+          MAX_IMPORT_REFERENCE_LENGTH,
+          `A row reference is too long (the limit is ${MAX_IMPORT_REFERENCE_LENGTH} characters).`,
+        )
+        .optional(),
+      line: z.number().int().min(0).max(MAX_ROW_LINE).optional(),
     }),
   )
   .max(2000, "That's more rows than one import allows (max 2000). Split the file and try again.");
 
-async function loadKnownInstruments(): Promise<KnownInstrument[]> {
-  const rows = await prisma.instrument.findMany({
-    select: { id: true, ticker: true, market: true, currency: true },
-  });
-  return rows;
+/** Plain-English refusal for a bad argument shape, naming the row when known. */
+function argsErrorMessage(error: z.ZodError): string {
+  const issue = error.issues[0];
+  if (!issue) {
+    return "Those import rows aren't in the expected format. Refresh the page and try again.";
+  }
+  const rowIndex = issue.path[0];
+  // The row-count cap has no row in its path: its own message says it all.
+  if (typeof rowIndex !== "number") return issue.message;
+  if (issue.code === "too_big" && issue.path.length > 1) {
+    return `Row ${rowIndex + 1}: ${issue.message} Shorten it or leave that row out, then try again.`;
+  }
+  return `Row ${rowIndex + 1} isn't in the expected format. Refresh the page and try again.`;
 }
 
 /**
@@ -99,7 +128,7 @@ async function loadStartingQuantities(userId: string): Promise<Map<string, numbe
 /**
  * Dry-run validation of mapped CSV rows — NOTHING is written. Each row comes
  * back with ok/issues so the import screen can show exactly what to fix.
- * Tickers are resolved against the instruments already tracked in the app.
+ * Tickers are resolved against the instruments that already exist in the app.
  */
 export async function validateImportRows(
   mappedRows: MappedImportRow[],
@@ -115,10 +144,7 @@ export async function validateImportRows(
   // per-row validation loop or an unbounded instrument-table read.
   const parsedArgs = importArgsSchema.safeParse(mappedRows);
   if (!parsedArgs.success) {
-    return actionError(
-      parsedArgs.error.issues[0]?.message ??
-        "Those import rows aren't in the expected format. Refresh the page and try again.",
-    );
+    return actionError(argsErrorMessage(parsedArgs.error));
   }
   const rows = parsedArgs.data;
   if (rows.length === 0) {
@@ -144,7 +170,7 @@ export async function validateImportRows(
  */
 export async function importTransactions(
   mappedRows: MappedImportRow[],
-): Promise<ActionResult<{ imported: number }>> {
+): Promise<ActionResult<{ imported: number; alreadyImportedCount: number }>> {
   const userId = await getSessionUserId();
   if (!userId) return actionError(NOT_SIGNED_IN_ERROR);
 
@@ -154,73 +180,54 @@ export async function importTransactions(
   // Top-level shape guard on this action's own arguments.
   const parsedArgs = importArgsSchema.safeParse(mappedRows);
   if (!parsedArgs.success) {
-    return actionError(
-      parsedArgs.error.issues[0]?.message ??
-        "Those import rows aren't in the expected format. Refresh the page and try again.",
-    );
+    return actionError(argsErrorMessage(parsedArgs.error));
   }
   const rows = parsedArgs.data;
   if (rows.length === 0) {
     return actionError("There are no rows to import.");
   }
 
-  const instruments = await loadKnownInstruments();
-  const report = validateMappedRows(rows, instruments);
-
-  const failed = report.results.filter((r) => !r.ok);
-  if (failed.length > 0) {
-    const first = failed[0];
-    const firstIssue = first.ok ? "" : first.issues[0];
-    return actionError(
-      `Nothing was imported: ${failed.length} of ${report.total} row${
-        report.total === 1 ? "" : "s"
-      } ${failed.length === 1 ? "has" : "have"} problems (first: row ${first.row} — ${firstIssue}). Fix them or leave them out, then try again.`,
-    );
-  }
-
-  const portfolio = await getOrCreatePortfolio(userId);
-  const records = report.results.flatMap((result) =>
-    result.ok ? [toTransactionRecord(result.parsed)] : [],
-  );
-
-  // One transaction that does BOTH the oversell check and the write while
-  // holding a lock on this portfolio — so it's atomic:
-  //   1. Lock the portfolio row (concurrent imports/sells wait their turn).
-  //   2. Re-read the existing holdings INSIDE the lock (never a stale read).
-  //   3. Walk the batch in order and reject any SELL that exceeds what's held
-  //      at that point (existing shares + earlier BUYs in this same file) —
-  //      the same guard the single-transaction path runs. A missed SELL here
-  //      would invent cash the account never earned (golden rule).
-  //   4. Only if every row is within its position, write them all — one
-  //      failure imports nothing.
-  const outcome = await prisma.$transaction(async (tx) => {
-    await lockPortfolioForWrite(tx, portfolio.id);
-
-    const existing = await tx.transaction.findMany({
-      where: { portfolioId: portfolio.id },
-    });
-    const startingQuantities = new Map<string, number>();
-    for (const holding of computeHoldings(existing.map(fromPrismaTransaction))) {
-      startingQuantities.set(holding.instrumentId, holding.quantity);
-    }
-
-    const oversell = findImportOversell(report.results, startingQuantities);
-    if (oversell) {
-      return {
-        ok: false as const,
-        error: `Nothing was imported: ${oversell.message}`,
-      };
-    }
-
-    await tx.transaction.createMany({
-      data: records.map((record) => ({ ...record, portfolioId: portfolio.id })),
-    });
-    return { ok: true as const };
-  });
+  // Validation, the portfolio lock, the oversell guard and the write all live
+  // in the shared commit path (also used by the broker sync).
+  const outcome = await commitImportRows(userId, rows);
 
   if (!outcome.ok) return actionError(outcome.error);
 
   revalidatePath("/portfolio");
   revalidatePath("/dashboard");
-  return actionOk({ imported: records.length });
+  return actionOk({
+    imported: outcome.imported,
+    alreadyImportedCount: outcome.alreadyImportedCount,
+  });
+}
+
+/**
+ * The import references already stored in the signed-in user's portfolio, so
+ * the import screen can show repeats as "Already imported" before anything is
+ * sent. The browser sends nothing: the portfolio is found from the SESSION
+ * user (the same lookup the dry run uses). Reads only — never creates a
+ * portfolio, so a brand-new account simply has nothing imported yet.
+ */
+export async function getKnownImportReferences(): Promise<
+  ActionResult<{ references: string[] }>
+> {
+  const userId = await getSessionUserId();
+  if (!userId) return actionError(NOT_SIGNED_IN_ERROR);
+
+  const limited = rateLimit(userKey("tx-known-refs", userId), IMPORT_RATE_LIMIT);
+  if (!limited.ok) return actionError(rateLimitMessage(limited.retryAfterSeconds));
+
+  const portfolio = await prisma.portfolio.findFirst({
+    where: { userId },
+    orderBy: { createdAt: "asc" },
+    select: { id: true },
+  });
+  if (!portfolio) return actionOk({ references: [] });
+
+  const rows = await prisma.transaction.findMany({
+    where: { portfolioId: portfolio.id, importReference: { not: null } },
+    select: { importReference: true },
+  });
+  const references = rows.flatMap((row) => (row.importReference ? [row.importReference] : []));
+  return actionOk({ references });
 }

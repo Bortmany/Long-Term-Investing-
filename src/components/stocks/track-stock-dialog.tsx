@@ -10,6 +10,12 @@
 import * as React from "react";
 import { LoaderCircle, Plus } from "lucide-react";
 import type { Currency, Market } from "@prisma/client";
+import {
+  CURRENCY_VALUES,
+  defaultCurrencyForMarket,
+  marketLabel,
+  sortMarkets,
+} from "@/lib/markets";
 
 import { addToWatchlist } from "@/app/actions/stocks";
 import {
@@ -20,6 +26,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -27,37 +34,17 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, type SelectOption } from "@/components/ui/select";
-
-function marketLabel(market: Market): string {
-  switch (market) {
-    case "US":
-      return "US";
-    case "MSX":
-      return "MSX (Muscat)";
-    case "TADAWUL":
-      return "Tadawul (Saudi)";
-    case "DFM":
-      return "DFM (Dubai)";
-    case "OTHER":
-      return "Other";
-  }
-}
-
-/** A sensible default currency per market — overridden by FMP prefill when it succeeds. */
-function defaultCurrencyForMarket(market: Market): Currency {
-  switch (market) {
-    case "US":
-      return "USD";
-    case "MSX":
-      return "OMR";
-    case "TADAWUL":
-      return "SAR";
-    case "DFM":
-      return "AED";
-    case "OTHER":
-      return "USD";
-  }
-}
+import { useToast } from "@/components/ui/toast";
+import { trackedToastMessage } from "@/lib/stocks/watch-messages";
+import { cn } from "@/lib/utils";
+import {
+  AUTO_CHANGE_RING_CLASS,
+  CURRENCY_HINT,
+  HintedControl,
+  MARKET_HINT,
+  PREFILL_HINT,
+  useAutoChangeRing,
+} from "./dialog-hints";
 
 export function TrackStockDialog({ markets }: { markets: Market[] }) {
   const [open, setOpen] = React.useState(false);
@@ -67,6 +54,7 @@ export function TrackStockDialog({ markets }: { markets: Market[] }) {
   const [currency, setCurrency] = React.useState<Currency>(
     defaultCurrencyForMarket(market),
   );
+  const currencyRing = useAutoChangeRing();
   const [sector, setSector] = React.useState<string | undefined>(undefined);
   const [country, setCountry] = React.useState<string | undefined>(undefined);
 
@@ -77,6 +65,7 @@ export function TrackStockDialog({ markets }: { markets: Market[] }) {
   const [error, setError] = React.useState<string | null>(null);
   const [isPrefilling, startPrefilling] = React.useTransition();
   const [isSaving, startSaving] = React.useTransition();
+  const { toast } = useToast();
 
   function reset() {
     setTicker("");
@@ -93,7 +82,11 @@ export function TrackStockDialog({ markets }: { markets: Market[] }) {
   function handleMarketChange(value: string) {
     const nextMarket = value as Market;
     setMarket(nextMarket);
-    setCurrency(defaultCurrencyForMarket(nextMarket));
+    const suggested = defaultCurrencyForMarket(nextMarket);
+    if (suggested !== currency) {
+      setCurrency(suggested);
+      currencyRing.pulse();
+    }
   }
 
   function handlePrefill() {
@@ -139,19 +132,29 @@ export function TrackStockDialog({ markets }: { markets: Market[] }) {
         setError(created.error);
         return;
       }
+      // New stock or one InvestIQ already had: both end the same way — the
+      // stock goes on THIS user's watchlist through the same rate-limited
+      // action the star uses. The message uses only the ticker the person
+      // typed, never a stored name (it may have been typed by someone else).
+      const typedTicker = created.data.ticker;
       const watched = await addToWatchlist(created.data.id);
       if (!watched.ok) {
         setError(watched.error);
         return;
       }
+      toast({ message: trackedToastMessage(typedTicker, watched.data.alreadyWatching) });
       reset();
       setOpen(false);
     });
   }
 
-  const marketOptions: SelectOption[] = markets.map((m) => ({
+  const marketOptions: SelectOption[] = sortMarkets(markets).map((m) => ({
     value: m,
     label: marketLabel(m),
+  }));
+  const currencyOptions: SelectOption[] = CURRENCY_VALUES.map((c) => ({
+    value: c,
+    label: c,
   }));
   const busy = isSaving;
 
@@ -167,16 +170,20 @@ export function TrackStockDialog({ markets }: { markets: Market[] }) {
         }
       }}
     >
-      <Button type="button" onClick={() => setOpen(true)}>
+      <Button type="button" size="lg" onClick={() => setOpen(true)}>
         <Plus aria-hidden="true" />
         Track a Stock
       </Button>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Track a Stock</DialogTitle>
+          <DialogDescription>
+            Add a stock to your watchlist. If InvestIQ already has it, we&apos;ll just add it for
+            you.
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2">
             <div>
               <Label htmlFor="track-ticker" className="mb-1.5">
                 Ticker
@@ -189,25 +196,48 @@ export function TrackStockDialog({ markets }: { markets: Market[] }) {
                   setTicker(event.target.value.toUpperCase())
                 }
                 placeholder="AAPL"
+                className="h-11"
               />
             </div>
             <div>
               <Label htmlFor="track-market" className="mb-1.5">
                 Market
               </Label>
-              <Select
-                id="track-market"
-                value={market}
-                onValueChange={handleMarketChange}
-                options={marketOptions}
-              />
+              <HintedControl hint={MARKET_HINT}>
+                <Select
+                  id="track-market"
+                  value={market}
+                  onValueChange={handleMarketChange}
+                  options={marketOptions}
+                  className="[&_select]:h-11"
+                />
+              </HintedControl>
             </div>
           </div>
           <div>
+            <Label htmlFor="track-currency" className="mb-1.5">
+              Currency
+            </Label>
+            <HintedControl hint={CURRENCY_HINT}>
+              <Select
+                id="track-currency"
+                value={currency}
+                onValueChange={(value) => setCurrency(value as Currency)}
+                options={currencyOptions}
+                className={cn(
+                  "[&_select]:h-11",
+                  currencyRing.active && AUTO_CHANGE_RING_CLASS,
+                )}
+              />
+            </HintedControl>
+          </div>
+          <div>
+            <HintedControl hint={PREFILL_HINT} className="w-auto">
             <Button
               type="button"
               variant="outline"
               size="sm"
+              className="min-h-11"
               onClick={handlePrefill}
               disabled={isPrefilling || !ticker.trim()}
             >
@@ -220,6 +250,7 @@ export function TrackStockDialog({ markets }: { markets: Market[] }) {
                 "Prefill from FMP"
               )}
             </Button>
+            </HintedControl>
           </div>
           {/* Golden rule: prefill failure is stated honestly, never a made-up name. */}
           {prefillError ? (
@@ -241,15 +272,21 @@ export function TrackStockDialog({ markets }: { markets: Market[] }) {
               value={name}
               onChange={(event) => setName(event.target.value)}
               placeholder="Apple Inc."
+              className="h-11"
             />
+            <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
+              If InvestIQ already has this stock, we&apos;ll use the name it already has.
+            </p>
           </div>
           {error ? (
             <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
           ) : null}
-          <DialogFooter>
+          <DialogFooter className="flex-col-reverse gap-2 sm:flex-row sm:gap-3">
             <Button
               type="button"
               variant="outline"
+              size="lg"
+              className="w-full sm:w-auto"
               disabled={busy}
               onClick={() => {
                 reset();
@@ -258,14 +295,19 @@ export function TrackStockDialog({ markets }: { markets: Market[] }) {
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={busy}>
+            <Button
+              type="submit"
+              size="lg"
+              className="w-full sm:w-auto"
+              disabled={busy}
+            >
               {isSaving ? (
                 <>
                   <LoaderCircle className="animate-spin" aria-hidden="true" />
                   Adding…
                 </>
               ) : (
-                "Add"
+                "Add to watchlist"
               )}
             </Button>
           </DialogFooter>
