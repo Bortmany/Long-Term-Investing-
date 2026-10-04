@@ -117,7 +117,9 @@ export function AiPanel({
   // no footer. When a stored analysis DOES exist it keeps rendering below
   // (with its caption and disclaimer): hiding real, already-saved results
   // would be the opposite of honest. Only the generate action goes away.
-  if (!hasKey && !analysis) {
+  // A Free user on a Pro-only panel sees the Pro notice first (the key only
+  // matters to someone who could actually run it).
+  if (!hasKey && !analysis && !proNotice) {
     return (
       <Card className={className}>
         <CardHeader>

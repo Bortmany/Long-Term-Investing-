@@ -446,7 +446,7 @@ export function FileStep({
                 Add another file
               </Button>
               <p className="text-xs text-slate-500 dark:text-slate-400" aria-live="polite">
-                {files.length} {files.length === 1 ? "file" : "files"} ready
+                {fileCountLine(files)}
               </p>
             </div>
           ) : null}
@@ -586,4 +586,14 @@ function NoticeAlert({
 /** Used by the wizard to find a broker's display name. */
 export function brokerName(id: PresetId): string {
   return PRESET_CARDS.find((c) => c.id === id)?.name ?? id;
+}
+
+/** "1 file ready" counts only files that are fine; a mismatched file is not ready. */
+export function fileCountLine(files: readonly { problem?: string }[]): string {
+  const good = files.filter((f) => !f.problem).length;
+  const bad = files.length - good;
+  const noun = (n: number) => (n === 1 ? "file" : "files");
+  if (bad === 0) return `${good} ${noun(good)} ready`;
+  if (good === 0) return `${bad} ${noun(bad)} can't be used`;
+  return `${good} ${noun(good)} ready, ${bad} can't be used`;
 }

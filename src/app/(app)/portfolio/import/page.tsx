@@ -1,8 +1,8 @@
+import { listVisibleInstruments } from "@/lib/stocks/visible-instruments";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
 import { loadImportBrokerLink } from "@/lib/broker/import-link";
 import { ImportWizard } from "@/components/import/import-wizard";
 
@@ -22,10 +22,7 @@ export default async function ImportPage() {
   // browser can match a broker's tickers to them. Which rows were already
   // imported is looked up on the server from the signed-in user's own
   // portfolio — never from anything the browser sends.
-  const instruments = await prisma.instrument.findMany({
-    select: { ticker: true, market: true },
-    orderBy: { ticker: "asc" },
-  });
+  const instruments = await listVisibleInstruments(session.user.id);
 
   const brokerLink = await loadImportBrokerLink(session.user.id);
 

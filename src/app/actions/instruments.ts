@@ -173,7 +173,7 @@ export async function prefillInstrumentProfile(
     if (!apiKey) {
       return unavailable(
         "no_api_key",
-        "Profile prefill needs an FMP_API_KEY — fill the details in by hand.",
+        "Automatic fill-in isn't switched on yet. Please fill the details in by hand.",
       );
     }
     return unavailable(

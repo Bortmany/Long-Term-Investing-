@@ -5,6 +5,7 @@
 // src/app/actions/stocks.ts / transactions.ts: session → rate limit → zod
 // parse → ownership check → mutate → revalidate.
 
+import { getVisibleInstrument } from "@/lib/stocks/visible-instruments";
 import { revalidatePath } from "next/cache";
 import type { Instrument, Prisma, Thesis } from "@prisma/client";
 import { z } from "zod";
@@ -100,9 +101,7 @@ export async function createThesis(input: {
     );
   }
 
-  const instrument = await prisma.instrument.findUnique({
-    where: { id: parsed.data.instrumentId },
-  });
+  const instrument = await getVisibleInstrument(userId, parsed.data.instrumentId);
   if (!instrument) return actionError("That stock could not be found.");
 
   const created = await prisma.thesis.create({

@@ -17,7 +17,9 @@ import {
 import { anonymousRateLimitId } from "@/lib/anon-rate-id";
 import { logger } from "@/lib/logger";
 import { authEmailStore, type AuthEmailStore } from "@/lib/email/auth-emails";
+import { isEmailConfigured } from "@/lib/email/send";
 import {
+  EMAIL_NOT_SET_UP_RESEND_MESSAGE,
   EMAIL_SEND_FAILED_MESSAGE,
   EMAIL_SEND_LIMITED_MESSAGE,
   SIGNUPS_PAUSED_MESSAGE,
@@ -151,6 +153,16 @@ export async function POST(request: Request): Promise<Response> {
   const isResendConfirmation = pathname.endsWith("/send-verification-email");
   const isResetRequest =
     pathname.endsWith("/request-password-reset") || pathname.endsWith("/forget-password");
+
+  // --- Resend confirmation with no email set up -> say so, honestly ------
+  // Nothing can be sent, so never answer "sent" (Better Auth would answer
+  // "ok" even for an address it never emailed).
+  if (isResendConfirmation && !isEmailConfigured()) {
+    return NextResponse.json(
+      { message: EMAIL_NOT_SET_UP_RESEND_MESSAGE, code: "EMAIL_NOT_SET_UP" },
+      { status: 503 },
+    );
+  }
 
   // --- Sign-ups paused or unavailable → refused on the server too --------
   if (isSignUp) {

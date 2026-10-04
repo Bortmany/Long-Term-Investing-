@@ -10,6 +10,15 @@ import { formatUsd } from "@/components/landing/landing-copy";
 export const REFUND_LINE =
   "You can cancel Pro at any time from Manage billing and keep Pro until the end of the period you paid for; if you're not satisfied, ask within 14 days of any payment for a full refund of that payment. Payments are handled by Stripe (shown as 'Link') as our reseller, which may also issue refunds where the law requires.";
 
+/** Shown instead of the cancel-and-refund line while billing is off (nothing can be bought yet). */
+export const REFUND_LINE_BILLING_OFF =
+  "Pro is not on sale yet, so there is nothing to cancel or refund today. When Pro opens, these terms will explain how to cancel and how refunds work before you pay.";
+
+/** The cancel-and-refund sentence on /terms, following the live billing flag. */
+export function termsRefundSentence(billingEnabled: boolean): string {
+  return billingEnabled ? REFUND_LINE : REFUND_LINE_BILLING_OFF;
+}
+
 export const TERMS_POSITIONING_SENTENCE =
   "InvestIQ is portfolio tracking and research software, not personalised advice.";
 

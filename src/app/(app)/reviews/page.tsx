@@ -67,7 +67,9 @@ export default async function ReviewsPage() {
   // Nothing stored: the usual empty state with the run button, or — with no
   // key — the standard no-key page (nothing to list, nothing to run).
   if (rows.length === 0) {
-    if (!hasAiKey) {
+    // A Free user sees the "part of Pro" notice (through the button below)
+    // before the no-key page: the key only matters to someone who can run it.
+    if (!hasAiKey && userIsPro) {
       return (
         <div className="space-y-6">
           <h1 className="text-2xl font-semibold">Reviews</h1>
@@ -159,7 +161,7 @@ export default async function ReviewsPage() {
 
       {/* Past reviews above stay visible; this only explains why the run
           button is switched off. */}
-      {!hasAiKey ? <ConnectKeyNotice /> : null}
+      {!hasAiKey && userIsPro ? <ConnectKeyNotice /> : null}
     </div>
   );
 }

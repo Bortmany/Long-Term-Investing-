@@ -1,3 +1,4 @@
+import { listVisibleInstruments } from "@/lib/stocks/visible-instruments";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { Currency, InstrumentType, Market, TransactionType } from "@prisma/client";
@@ -39,7 +40,11 @@ export const metadata = { title: "Portfolio — InvestIQ AI" };
 // holding through the pure portfolio math (golden rule: unvalued rows are
 // SAID to be unavailable, never padded), then hands plain data to the
 // client-side view that owns the dialogs and filters.
-export default async function PortfolioPage() {
+export default async function PortfolioPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ add?: string | string[] }>;
+}) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) {
     redirect("/sign-in");
@@ -50,12 +55,11 @@ export default async function PortfolioPage() {
   // valuation — including this user's own manual price/FX overrides only) so
   // the two pages' totals always agree. Null means no portfolio yet.
   const computation = await loadPortfolioComputation(session.user.id);
+  const openAddOnLoad = (await searchParams).add === "1";
 
-  // Instruments are shared reference data (no userId column) — the dialog's
-  // pickers list all of them.
-  const instrumentRows = await prisma.instrument.findMany({
-    orderBy: { ticker: "asc" },
-  });
+  // Instruments are shared (partly user-typed) reference data, so the dialog's
+  // pickers list only the public list plus this user's own stocks.
+  const instrumentRows = await listVisibleInstruments(session.user.id);
   const instruments: InstrumentOptionData[] = instrumentRows.map((i) => ({
     id: i.id,
     ticker: i.ticker,
@@ -83,6 +87,7 @@ export default async function PortfolioPage() {
         holdingsBadge={{ variant: "derived" }}
         transactions={[]}
         instruments={instruments}
+        openAddOnLoad={openAddOnLoad}
         currencies={currencies}
         markets={markets}
         instrumentTypes={instrumentTypes}
@@ -272,6 +277,7 @@ export default async function PortfolioPage() {
         }
         transactions={transactionData}
         instruments={instruments}
+        openAddOnLoad={openAddOnLoad}
         currencies={currencies}
         markets={markets}
         instrumentTypes={instrumentTypes}

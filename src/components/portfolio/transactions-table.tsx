@@ -323,15 +323,22 @@ export function TransactionsTable({
                     <TableCell className="text-right tabular-nums">
                       {formatPlainAmount(row.fee, row.currency)}
                     </TableCell>
-                    <TableCell className="max-w-28">
-                      {row.note ? (
-                        <Tooltip>
-                          <TooltipTrigger className="block truncate">{row.note}</TooltipTrigger>
-                          <TooltipContent>{row.note}</TooltipContent>
-                        </Tooltip>
-                      ) : (
-                        <span className="text-slate-400">—</span>
-                      )}
+                    <TableCell>
+                      {/* A max-width on the cell itself is ignored by auto table layout,
+                          so the note sits in a fixed-width box: long text is cut with "…"
+                          instead of running under the Source tag and the row menu. */}
+                      <div className="w-28 min-[1440px]:w-40">
+                        {row.note ? (
+                          <Tooltip className="block w-full">
+                            <TooltipTrigger className="block w-full truncate text-left">
+                              {row.note}
+                            </TooltipTrigger>
+                            <TooltipContent>{row.note}</TooltipContent>
+                          </Tooltip>
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
+                      </div>
                     </TableCell>
                     {showSource ? (
                       <TableCell>

@@ -286,7 +286,7 @@ export default async function PrivacyPage() {
             You can download a complete copy of everything this app stores
             about you, or permanently delete your account and everything in
             it, at any time from the{" "}
-            <Link href="/settings" data-tap-exempt="in-text" className="text-blue-600 hover:underline dark:text-blue-400">
+            <Link href="/settings" className="inline-flex min-h-11 items-center text-blue-600 hover:underline dark:text-blue-400">
               Settings
             </Link>{" "}
             page — look for the &quot;Your data&quot; and &quot;Danger&quot; cards. The download
@@ -320,9 +320,7 @@ export default async function PrivacyPage() {
             InvestIQ AI is run by a single operator. If you have questions
             about your data, email{" "}
             <a
-              href={`mailto:${contactEmail}`}
-              data-tap-exempt="in-text"
-              className="text-blue-600 hover:underline dark:text-blue-400"
+              href={`mailto:${contactEmail}`} className="inline-flex min-h-11 items-center text-blue-600 hover:underline dark:text-blue-400"
             >
               {contactEmail}
             </a>

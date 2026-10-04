@@ -18,6 +18,8 @@ vi.mock("@/lib/auth", () => ({
   auth: { handler: (request: Request) => handler(request) },
   getSignUpStatus: () => signUpStatus,
 }));
+let emailConfigured = true;
+vi.mock("@/lib/email/send", () => ({ isEmailConfigured: () => emailConfigured }));
 vi.mock("@/lib/anon-rate-id", () => ({
   anonymousRateLimitId: async () => callerId,
 }));
@@ -38,6 +40,7 @@ function post(path: string, body: Record<string, unknown>): Request {
 
 beforeEach(() => {
   signUpStatus = { open: true };
+  emailConfigured = true;
   callerId = unique("caller");
   handler.mockReset();
   handler.mockImplementation(async () => Response.json({ status: true }));
@@ -169,5 +172,23 @@ describe("honest email delivery reporting", () => {
       expect(res.status).toBe(403);
       expect((await res.json()).emailDelivery).toBe("sent");
     }
+  });
+});
+
+describe("resend confirmation when email is not set up", () => {
+  it("answers 503 EMAIL_NOT_SET_UP and never runs Better Auth (no false sent)", async () => {
+    emailConfigured = false;
+    const res = await POST(post("/send-verification-email", { email: `${unique("x")}@example.com` }));
+    const body = await res.json();
+    expect(res.status).toBe(503);
+    expect(body.code).toBe("EMAIL_NOT_SET_UP");
+    expect(body.message).toMatch(/isn't set up/);
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("with email set up the resend still goes through", async () => {
+    const res = await POST(post("/send-verification-email", { email: `${unique("x")}@example.com` }));
+    expect(res.status).toBe(200);
+    expect(handler).toHaveBeenCalled();
   });
 });

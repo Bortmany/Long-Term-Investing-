@@ -162,7 +162,7 @@ export function computeInputHash(input: unknown): string {
 // --- Plain-English messages (never fabricate data; always say why) ---------
 
 const NO_KEY_MESSAGE =
-  "AI features are turned off (no ANTHROPIC_API_KEY configured). Nothing here was faked.";
+  "AI analysis isn't switched on for this site yet. Nothing here was faked.";
 const PROVIDER_ERROR_MESSAGE =
   "Something went wrong generating this analysis. Your previous analysis (if any) is unaffected.";
 const SCHEMA_MISMATCH_MESSAGE =

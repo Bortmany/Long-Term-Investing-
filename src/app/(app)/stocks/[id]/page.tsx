@@ -1,12 +1,12 @@
 import { SamplePriceCaption } from "@/components/stocks/sample-price-caption";
 import { headers } from "next/headers";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { ChartLine } from "lucide-react";
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getVisibleInstrument } from "@/lib/stocks/visible-instruments";
 import {
   getDividendHistory,
   getFinancialStatements,
@@ -22,7 +22,6 @@ import {
   badgePropsForValueSource,
   SourceBadge,
 } from "@/components/source-badge";
-import { EmptyState } from "@/components/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { ReceivedDividendsCard } from "@/components/stocks/received-dividends-card";
 import { ShariaBadge } from "@/components/sharia/sharia-badge";
@@ -84,7 +83,11 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const instrument = await prisma.instrument.findUnique({ where: { id } });
+  // Only name a stock in the tab title if this person may see it.
+  const session = await auth.api.getSession({ headers: await headers() });
+  const instrument = session
+    ? await getVisibleInstrument(session.user.id, id)
+    : null;
   return {
     title: instrument
       ? `${instrument.ticker} — InvestIQ AI`
@@ -151,23 +154,12 @@ export default async function StockDetailPage({
   const userId = session.user.id;
   const { id } = await params;
 
-  const instrument = await prisma.instrument.findUnique({ where: { id } });
-
-  // Never a fabricated page for a stock that doesn't exist — an honest
-  // message with a way back, still inside the app shell.
+  // A stock outside this person's view (not on the public list and not
+  // referenced by them) is "not found" — same answer as a stock that doesn't
+  // exist, so another person's private ticker is never revealed.
+  const instrument = await getVisibleInstrument(userId, id);
   if (!instrument) {
-    return (
-      <EmptyState
-        icon={ChartLine}
-        heading="Stock not found"
-        sentence="This stock doesn't exist or has been removed."
-        action={
-          <Button asChild>
-            <Link href="/stocks">Back to Stocks</Link>
-          </Button>
-        }
-      />
-    );
+    notFound();
   }
 
   const ref = {

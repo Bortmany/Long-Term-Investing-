@@ -280,6 +280,13 @@ export function TransactionDialog({
       ? currencyMismatchMessage({ type, currency }, chosenInstrument)
       : null;
 
+  // Changing the currency clears an old "wrong currency" refusal straight
+  // away; the live hint above then says whether the new choice is fine.
+  function changeCurrency(next: Currency) {
+    setCurrency(next);
+    setFormError(null);
+  }
+
   function validate(): Record<string, string> {
     const errors: Record<string, string> = {};
     const typeLabel = transactionTypeLabel(type);
@@ -670,7 +677,7 @@ export function TransactionDialog({
                   <Select
                     id="tx-currency"
                     value={currency}
-                    onValueChange={(value) => setCurrency(value as Currency)}
+                    onValueChange={(value) => changeCurrency(value as Currency)}
                     options={currencyOptions}
                   />
                 </div>
@@ -736,7 +743,7 @@ export function TransactionDialog({
                 <Select
                   id="tx-currency"
                   value={currency}
-                  onValueChange={(value) => setCurrency(value as Currency)}
+                  onValueChange={(value) => changeCurrency(value as Currency)}
                   options={currencyOptions}
                 />
               </div>
@@ -770,7 +777,7 @@ export function TransactionDialog({
                 <Select
                   id="tx-currency"
                   value={currency}
-                  onValueChange={(value) => setCurrency(value as Currency)}
+                  onValueChange={(value) => changeCurrency(value as Currency)}
                   options={currencyOptions}
                 />
               </div>

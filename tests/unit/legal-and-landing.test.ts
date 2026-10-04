@@ -27,6 +27,7 @@ import {
   PRO_NOT_ON_SALE_TERMS,
   PRO_ON_SALE_TERMS,
   REFUND_LINE,
+  termsRefundSentence,
   termsPaymentStatusSentence,
 } from "@/components/landing/legal-copy";
 
@@ -202,7 +203,13 @@ describe("/terms", () => {
     const match = decision.match(/\*\*Refund line for the terms:\*\* "(.+)"\s*$/m);
     expect(match).not.toBeNull();
     expect(REFUND_LINE).toBe(match![1]);
-    expect(read("src/app/terms/page.tsx")).toContain("{REFUND_LINE}");
+    expect(termsRefundSentence(true)).toBe(REFUND_LINE);
+    expect(read("src/app/terms/page.tsx")).toContain("termsRefundSentence(billingEnabled)");
+  });
+
+  it("while billing is off, /terms does not tell people to cancel from Manage billing", () => {
+    expect(termsRefundSentence(false)).not.toContain("Manage billing");
+    expect(termsRefundSentence(false)).toContain("not on sale yet");
   });
 
   it("keeps the Not financial advice section and adds the positioning sentence", () => {

@@ -9,6 +9,7 @@ import { useState } from "react";
 import { CircleAlert, LoaderCircle } from "lucide-react";
 
 import {
+  EMAIL_NOT_SET_UP_RESEND_MESSAGE,
   SERVER_ERROR_MESSAGE,
   TOO_MANY_ATTEMPTS_MESSAGE,
   emailOnlySchema,
@@ -55,6 +56,7 @@ export function BadLinkCard({ title, contactEmail }: { title: string; contactEma
     const { result } = await requestConfirmationEmail(parsed.data.email);
     setPending(false);
     if (result === "sent") setSentTo(parsed.data.email);
+    else if (result === "not_set_up") setError(EMAIL_NOT_SET_UP_RESEND_MESSAGE);
     else if (result === "failed") setError(emailSendFailedMessage(contactEmail));
     else if (result === "limited") setError(emailSendLimitedMessage(contactEmail));
     else if (result === "slow_down") setError(TOO_MANY_ATTEMPTS_MESSAGE);

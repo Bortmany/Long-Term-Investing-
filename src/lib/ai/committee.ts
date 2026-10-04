@@ -50,7 +50,7 @@ import {
 const MAX_OUTPUT_TOKENS = 4096;
 
 const NO_KEY_MESSAGE =
-  "AI features are turned off (no ANTHROPIC_API_KEY configured). Nothing here was faked.";
+  "AI analysis isn't switched on for this site yet. Nothing here was faked.";
 const PROVIDER_ERROR_MESSAGE =
   "Something went wrong convening the committee. Your previous committee run (if any) is unaffected.";
 

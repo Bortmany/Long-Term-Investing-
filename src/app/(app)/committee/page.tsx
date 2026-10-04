@@ -1,3 +1,4 @@
+import { listVisibleInstruments } from "@/lib/stocks/visible-instruments";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -56,7 +57,7 @@ export default async function CommitteePage({
   const mode = parseMode(modeParam);
 
   const [instruments, portfolio] = await Promise.all([
-    prisma.instrument.findMany({ orderBy: { ticker: "asc" } }),
+    listVisibleInstruments(userId),
     prisma.portfolio.findFirst({ where: { userId }, orderBy: { createdAt: "asc" } }),
   ]);
   const hasAiKey = getAiClient().ok;

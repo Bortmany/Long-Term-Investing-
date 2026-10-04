@@ -181,8 +181,11 @@ export function ThesesList({ rows }: { rows: ThesisListRow[] }) {
             {filtered.map((row) => (
               <TableRow key={row.id}>
                 <TableCell className="whitespace-normal break-words font-medium">
-                  <Link href={`/theses/${row.id}`} className="hover:underline">
-                    <span className="font-mono">{row.ticker}</span>{" "}
+                  <Link
+                    href={`/theses/${row.id}`}
+                    className="-my-2.5 inline-flex min-h-11 flex-wrap items-center gap-x-1 hover:underline"
+                  >
+                    <span className="font-mono">{row.ticker}</span>
                     <span className="text-slate-500 dark:text-slate-400">{row.name}</span>
                   </Link>
                 </TableCell>

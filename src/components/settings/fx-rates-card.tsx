@@ -213,7 +213,9 @@ export function FxRatesCard({
               </Button>
             </TooltipTrigger>
             <TooltipContent>
-              Add an FMP_API_KEY to your environment to fetch live FX rates.
+              {process.env.NODE_ENV !== "production"
+                ? "Add an FMP_API_KEY to your environment to fetch live FX rates."
+                : "Live exchange rates aren't switched on yet."}
             </TooltipContent>
           </Tooltip>
         )}

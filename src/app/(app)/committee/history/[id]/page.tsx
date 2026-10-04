@@ -24,7 +24,7 @@ const HISTORY_TYPES = ["COMMITTEE", "BUY_ANALYSIS", "SELL_ANALYSIS"] as const;
 
 /** Plain-English name for each kind of saved run, used in the record header. */
 const KIND_LABELS: Record<(typeof HISTORY_TYPES)[number], string> = {
-  COMMITTEE: "Investment Committee view",
+  COMMITTEE: "Committee view",
   BUY_ANALYSIS: "Upside check",
   SELL_ANALYSIS: "Downside check",
 };

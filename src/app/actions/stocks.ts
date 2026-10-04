@@ -5,6 +5,7 @@
 // Follows the same skeleton as src/app/actions/transactions.ts: session →
 // rate limit → zod parse → existence/ownership check → mutate → revalidate.
 
+import { getVisibleInstrument } from "@/lib/stocks/visible-instruments";
 import { revalidatePath } from "next/cache";
 import type { Instrument } from "@prisma/client";
 import { z } from "zod";
@@ -345,9 +346,7 @@ export async function generateStockScore(
     );
   }
 
-  const instrument = await prisma.instrument.findUnique({
-    where: { id: parsed.data },
-  });
+  const instrument = await getVisibleInstrument(userId, parsed.data);
   if (!instrument) return actionError("That stock could not be found.");
 
   const result = await runAnalysis({
@@ -429,7 +428,7 @@ export async function generateNewsSummary(
     return actionError(parsed.error.issues[0]?.message ?? "Pick a stock first.");
   }
 
-  const instrument = await prisma.instrument.findUnique({ where: { id: parsed.data } });
+  const instrument = await getVisibleInstrument(userId, parsed.data);
   if (!instrument) return actionError("That stock could not be found.");
 
   const ref = {

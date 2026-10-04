@@ -84,6 +84,10 @@ export const SIGNUPS_UNAVAILABLE_MESSAGE =
 export const EMAIL_NOT_SET_UP_NOTE =
   "Email isn't set up on this server, so we can't confirm your address or send password resets.";
 
+/** Shown on the resend screens when email isn't set up (the server refuses, nothing is sent). */
+export const EMAIL_NOT_SET_UP_RESEND_MESSAGE =
+  "Email isn't set up on this server, so we can't send a confirmation link. Please contact us for help.";
+
 export const TOO_MANY_ATTEMPTS_MESSAGE = "Too many attempts. Please wait a few minutes and try again.";
 export const SERVER_ERROR_NOTHING_SAVED =
   "Something went wrong on our side. Nothing was saved. Please try again.";

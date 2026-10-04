@@ -13,6 +13,7 @@ import { LoaderCircle, Mail } from "lucide-react";
 
 import { authClient } from "@/lib/auth-client";
 import {
+  EMAIL_NOT_SET_UP_RESEND_MESSAGE,
   SERVER_ERROR_MESSAGE,
   TOO_MANY_ATTEMPTS_MESSAGE,
   emailSendFailedMessage,
@@ -33,10 +34,11 @@ type Outcome =
   | { kind: "resent" }
   | { kind: "failed" }
   | { kind: "limited" }
+  | { kind: "not_set_up" }
   | { kind: "slow_down" }
   | { kind: "error" };
 
-export type ResendResult = "sent" | "failed" | "limited" | "slow_down" | "error";
+export type ResendResult = "sent" | "failed" | "not_set_up" | "limited" | "slow_down" | "error";
 
 /**
  * Ask the server for a fresh confirmation link and say honestly what
@@ -54,6 +56,7 @@ export async function requestConfirmationEmail(
     const retry = (error as { retryAfterSeconds?: number }).retryAfterSeconds;
     return { result: "slow_down", retryAfterSeconds: retry };
   }
+  if (error.code === "EMAIL_NOT_SET_UP") return { result: "not_set_up" };
   if (error.code === "EMAIL_SEND_FAILED") return { result: "failed" };
   return { result: "error" };
 }
@@ -83,7 +86,10 @@ export function CheckInboxCard({
   const disabled = pending || waiting || limited;
 
   // The lead sentence must match what really happened to the LAST email.
-  const lastSendFailed = outcome.kind === "failed" || (outcome.kind === "none" && sent === "failed");
+  const lastSendFailed =
+    outcome.kind === "not_set_up" ||
+    outcome.kind === "failed" ||
+    (outcome.kind === "none" && sent === "failed");
   const lead = lastSendFailed
     ? "We couldn't send the confirmation link to"
     : limited
@@ -101,6 +107,8 @@ export function CheckInboxCard({
     } else if (result === "failed") {
       setOutcome({ kind: "failed" });
       cooldown.start(RESEND_WAIT_SECONDS);
+    } else if (result === "not_set_up") {
+      setOutcome({ kind: "not_set_up" });
     } else if (result === "limited") {
       setOutcome({ kind: "limited" });
     } else if (result === "slow_down") {
@@ -122,7 +130,9 @@ export function CheckInboxCard({
     );
   } else if (outcome.kind !== "none" || sent !== "sent") {
     const message =
-      outcome.kind === "failed"
+      outcome.kind === "not_set_up"
+        ? EMAIL_NOT_SET_UP_RESEND_MESSAGE
+        : outcome.kind === "failed"
         ? emailSendFailedMessage(contactEmail)
         : outcome.kind === "limited"
           ? emailSendLimitedMessage(contactEmail)

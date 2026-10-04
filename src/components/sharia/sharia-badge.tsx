@@ -28,11 +28,11 @@ import {
 
 const LOOKS: Record<ShariaState, string> = {
   compliant:
-    "border border-slate-400 bg-slate-100 text-slate-800 hover:bg-slate-200 aria-expanded:bg-slate-200 dark:border-slate-500 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700 dark:aria-expanded:bg-slate-700",
+    "border border-slate-400 bg-slate-100 text-slate-800 group-hover:bg-slate-200 group-aria-expanded:bg-slate-200 dark:border-slate-500 dark:bg-slate-800 dark:text-slate-100 dark:group-hover:bg-slate-700 dark:group-aria-expanded:bg-slate-700",
   not_compliant:
-    "border border-slate-700 bg-white text-slate-900 hover:bg-slate-100 aria-expanded:bg-slate-100 dark:border-slate-300 dark:bg-slate-900 dark:text-slate-50 dark:hover:bg-slate-800 dark:aria-expanded:bg-slate-800",
+    "border border-slate-700 bg-white text-slate-900 group-hover:bg-slate-100 group-aria-expanded:bg-slate-100 dark:border-slate-300 dark:bg-slate-900 dark:text-slate-50 dark:group-hover:bg-slate-800 dark:group-aria-expanded:bg-slate-800",
   not_screened:
-    "border border-dashed border-slate-300 bg-transparent text-slate-600 hover:bg-slate-100 aria-expanded:bg-slate-100 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:aria-expanded:bg-slate-800",
+    "border border-dashed border-slate-300 bg-transparent text-slate-600 group-hover:bg-slate-100 group-aria-expanded:bg-slate-100 dark:border-slate-700 dark:text-slate-400 dark:group-hover:bg-slate-800 dark:group-aria-expanded:bg-slate-800",
 };
 
 // The same looks without hover states, for the non-interactive copy in the panel.
@@ -78,17 +78,20 @@ export function ShariaBadge({ data, className }: { data: ShariaBadgeData; classN
           aria-label={BADGE_ACCESSIBLE_NAMES[data.state]}
           onClick={() => setOpen((value) => !value)}
           data-sharia-state={data.state}
-          // The invisible ::before widens the tap area to at least 44px
-          // without making the 24px pill (or a table row) any taller.
-          className={cn(
-            "relative z-10 inline-flex h-6 items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium outline-none transition-colors",
-            "before:absolute before:-inset-x-1 before:-inset-y-2.5 before:content-['']",
-            "focus-visible:ring-2 focus-visible:ring-ring active:brightness-95",
-            LOOKS[data.state],
-          )}
+          // The button itself is at least 44px tall (a real hit area, not a
+          // pseudo-element); the visible 24px pill sits inside it, and the
+          // negative margin keeps a table row from growing taller.
+          className="group relative z-10 -my-2.5 inline-flex min-h-11 min-w-11 items-center justify-center rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <Pill state={data.state} />
-          <Info className="size-3 shrink-0 text-slate-400 dark:text-slate-500" aria-hidden="true" />
+          <span
+            className={cn(
+              "inline-flex h-6 items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium transition-colors group-active:brightness-95",
+              LOOKS[data.state],
+            )}
+          >
+            <Pill state={data.state} />
+            <Info className="size-3 shrink-0 text-slate-400 dark:text-slate-500" aria-hidden="true" />
+          </span>
         </button>
         <TooltipContent side="bottom">{BADGE_HOVER_HINT}</TooltipContent>
       </Tooltip>

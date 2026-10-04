@@ -14,7 +14,7 @@ export const TABLE_ROW_LINKED =
 
 /** On the ticker <Link> inside a linked table row. */
 export const TABLE_ROW_LINK =
-  "font-mono font-medium text-blue-600 after:absolute after:inset-0 after:content-[''] hover:underline focus-visible:underline focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-ring dark:text-blue-400";
+  "-my-2.5 inline-flex min-h-11 items-center font-mono font-medium text-blue-600 after:absolute after:inset-0 after:content-[''] hover:underline focus-visible:underline focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-ring dark:text-blue-400";
 
 /** On a wrapper around any button or menu in a linked row: sits above the link layer. */
 export const TABLE_ROW_RAISED = "relative z-10";

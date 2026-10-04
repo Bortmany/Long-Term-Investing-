@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { Coins, Inbox } from "lucide-react";
 
 import { auth } from "@/lib/auth";
@@ -38,6 +39,7 @@ import {
 } from "@/components/source-badge";
 import { FxViaHubHint } from "@/components/portfolio/fx-via-hub-hint";
 import { EmptyState } from "@/components/empty-state";
+import { Button } from "@/components/ui/button";
 import { EmailConfirmedNotice } from "@/components/auth/email-confirmed-notice";
 import { ExplainerTip } from "@/components/explainer-tip";
 import { LatestReviewCard } from "@/components/latest-review-card";
@@ -147,6 +149,16 @@ export default async function DashboardPage({
           icon={Inbox}
           heading="No portfolio yet"
           sentence="Your portfolio will appear here once it's set up."
+          action={
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <Button asChild size="lg">
+                <Link href="/portfolio?add=1">Add your first transaction</Link>
+              </Button>
+              <Button asChild size="lg" variant="outline">
+                <Link href="/portfolio/import">Import from your broker</Link>
+              </Button>
+            </div>
+          }
         />
       </>
     );

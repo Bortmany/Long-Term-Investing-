@@ -7,6 +7,7 @@
 // pure ratio functions the stock/thesis pages use → generate (or reuse) →
 // revalidate.
 
+import { getVisibleInstrument } from "@/lib/stocks/visible-instruments";
 import { revalidatePath } from "next/cache";
 import type { Instrument, Thesis } from "@prisma/client";
 import { z } from "zod";
@@ -227,7 +228,7 @@ export async function conveneCommittee(
     return actionError(parsed.error.issues[0]?.message ?? "Pick a stock first.");
   }
 
-  const instrument = await prisma.instrument.findUnique({ where: { id: parsed.data } });
+  const instrument = await getVisibleInstrument(userId, parsed.data);
   if (!instrument) return actionError("That stock could not be found.");
 
   const thesis = await prisma.thesis.findFirst({
@@ -299,7 +300,7 @@ export async function runBuyAnalysis(
     return actionError(parsed.error.issues[0]?.message ?? "Pick a stock first.");
   }
 
-  const instrument = await prisma.instrument.findUnique({ where: { id: parsed.data } });
+  const instrument = await getVisibleInstrument(userId, parsed.data);
   if (!instrument) return actionError("That stock could not be found.");
 
   const result = await runAnalysis({
@@ -434,7 +435,7 @@ export async function runSellAnalysis(
     return actionError(parsed.error.issues[0]?.message ?? "Pick a stock first.");
   }
 
-  const instrument = await prisma.instrument.findUnique({ where: { id: parsed.data } });
+  const instrument = await getVisibleInstrument(userId, parsed.data);
   if (!instrument) return actionError("That stock could not be found.");
 
   const result = await runAnalysis({

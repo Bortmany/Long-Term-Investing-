@@ -7,11 +7,11 @@ import { getLegalContactEmail } from "@/lib/legal-contact";
 import { PLAN_FEATURES } from "@/lib/plans";
 import { readBillingEnabledSafely } from "@/components/landing/landing-copy";
 import {
-  REFUND_LINE,
   TERMS_POSITIONING_SENTENCE,
   aiFairUseSentence,
   proPriceSentence,
   termsPaymentStatusSentence,
+  termsRefundSentence,
 } from "@/components/landing/legal-copy";
 
 export const metadata = { title: "Terms of Use — InvestIQ AI" };
@@ -108,7 +108,7 @@ export default async function TermsPage() {
             Pro renews automatically at the end of each month or year you
             chose, at the price shown when you subscribed, until you cancel.
           </p>
-          <p className="mt-2">{REFUND_LINE}</p>
+          <p className="mt-2">{termsRefundSentence(billingEnabled)}</p>
         </section>
 
         <section>
@@ -164,7 +164,7 @@ export default async function TermsPage() {
           </h2>
           <p className="mt-2">
             You can close your account at any time from the{" "}
-            <Link href="/settings" data-tap-exempt="in-text" className="text-blue-600 hover:underline dark:text-blue-400">
+            <Link href="/settings" className="inline-flex min-h-11 items-center text-blue-600 hover:underline dark:text-blue-400">
               Settings
             </Link>{" "}
             page (&quot;Danger&quot; card). This permanently deletes your account,
@@ -194,14 +194,12 @@ export default async function TermsPage() {
             InvestIQ AI is run by a single operator. If you have questions
             about these terms, email{" "}
             <a
-              href={`mailto:${contactEmail}`}
-              data-tap-exempt="in-text"
-              className="text-blue-600 hover:underline dark:text-blue-400"
+              href={`mailto:${contactEmail}`} className="inline-flex min-h-11 items-center text-blue-600 hover:underline dark:text-blue-400"
             >
               {contactEmail}
             </a>
             . See also the{" "}
-            <Link href="/privacy" data-tap-exempt="in-text" className="text-blue-600 hover:underline dark:text-blue-400">
+            <Link href="/privacy" className="inline-flex min-h-11 items-center text-blue-600 hover:underline dark:text-blue-400">
               Privacy Policy
             </Link>
             .

@@ -37,6 +37,7 @@ export function PortfolioView({
   instrumentTypes,
   transactionTypes,
   brokerConnected = false,
+  openAddOnLoad = false,
 }: {
   baseCurrency: Currency;
   /** Amber "couldn't be valued" banner, built on the server; null/absent when nothing is missing. */
@@ -54,13 +55,15 @@ export function PortfolioView({
   transactionTypes: TransactionType[];
   /** The user has a saved broker connection (chooses the "From broker" wording). */
   brokerConnected?: boolean;
+  /** Open the Add Transaction dialog straight away (the dashboard's "Add your first transaction" link). */
+  openAddOnLoad?: boolean;
 }) {
   // Which dialogs are open. The transaction dialog is one component for both
   // Add (editing = null) and Edit (editing = the row).
   const [txDialog, setTxDialog] = React.useState<{
     open: boolean;
     editing: TransactionRowData | null;
-  }>({ open: false, editing: null });
+  }>({ open: openAddOnLoad, editing: null });
   const [priceTarget, setPriceTarget] = React.useState<HoldingRowData | null>(null);
   const [deleteTarget, setDeleteTarget] = React.useState<TransactionRowData | null>(null);
 
