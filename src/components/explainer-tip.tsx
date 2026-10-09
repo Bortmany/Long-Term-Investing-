@@ -40,11 +40,13 @@ export function ExplainerTip({
         onClick={() => setOpen(true)}
         aria-label={`What is ${entry.term}?`}
         className={cn(
-          "inline-flex size-[14px] shrink-0 items-center justify-center text-slate-400 outline-none transition-colors hover:text-slate-600 focus-visible:ring-2 focus-visible:ring-ring dark:text-slate-500 dark:hover:text-slate-300",
+          // 14px look, 44x44 hit box: the box is 44px but pulled in by 15px on
+          // every side (-m-[15px]) so the layout around the icon doesn't move.
+          "-m-[15px] inline-flex size-11 shrink-0 items-center justify-center rounded-full text-slate-400 outline-none transition-colors hover:text-slate-600 focus-visible:ring-2 focus-visible:ring-ring dark:text-slate-500 dark:hover:text-slate-300",
           className,
         )}
       >
-        <CircleQuestionMark className="size-full" aria-hidden="true" />
+        <CircleQuestionMark className="size-[14px]" aria-hidden="true" />
       </button>
 
       <Dialog open={open} onOpenChange={setOpen}>

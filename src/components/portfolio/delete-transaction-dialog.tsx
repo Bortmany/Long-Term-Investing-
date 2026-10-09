@@ -16,6 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { fromBrokerDeleteLine } from "@/lib/broker/tag-text";
 import { formatMoney, formatQuantity, formatShortDate } from "@/lib/format";
 import { transactionTypeLabel, type TransactionRowData } from "./types";
 
@@ -42,11 +43,15 @@ function describeTransaction(t: TransactionRowData): string {
 
 export function DeleteTransactionDialog({
   transaction,
+  brokerConnected = false,
   onClose,
 }: {
   transaction: TransactionRowData;
+  /** The user still has a saved broker connection (decides the "sync adds it back" line). */
+  brokerConnected?: boolean;
   onClose: () => void;
 }) {
+  const syncLine = transaction.syncedFrom ? fromBrokerDeleteLine(brokerConnected) : null;
   const [error, setError] = React.useState<string | null>(null);
   const [isDeleting, startDeleting] = React.useTransition();
 
@@ -73,7 +78,8 @@ export function DeleteTransactionDialog({
         <DialogHeader>
           <DialogTitle>Delete transaction?</DialogTitle>
           <DialogDescription>
-            {describeTransaction(transaction)} This can&apos;t be undone.
+            {describeTransaction(transaction)}
+            {syncLine ? ` ${syncLine}` : ""} This can&apos;t be undone.
           </DialogDescription>
         </DialogHeader>
         {error ? (

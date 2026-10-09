@@ -1,0 +1,19 @@
+{
+  "symbol": "FAB",
+  "name": "First Abu Dhabi Bank (MADE-UP SAMPLE REPLY)",
+  "exchange": "XADS",
+  "mic_code": "XADS",
+  "currency": "AED",
+  "datetime": "2026-09-28 14:20:00",
+  "timestamp": 1790590800,
+  "open": "14.20",
+  "high": "14.40",
+  "low": "14.15",
+  "close": "14.32",
+  "volume": "4321000",
+  "previous_close": "14.25",
+  "change": "0.07",
+  "percent_change": "0.49123",
+  "average_volume": "4000000",
+  "is_market_open": true
+}

@@ -8,6 +8,7 @@
 
 import { Currency } from "@prisma/client";
 import { z } from "zod";
+import { currencyListSentence } from "@/lib/markets";
 
 // Shared field pieces -------------------------------------------------------
 
@@ -19,12 +20,57 @@ import { z } from "zod";
 export const MONEY_MAX = 100_000_000_000; // 1e11
 
 const currencySchema = z.enum(Currency, {
-  error: "Pick a valid currency (OMR, USD, SAR or AED).",
+  error: currencyListSentence(),
 });
+
+// The "not in the future" rule ---------------------------------------------
+//
+// A trade date is refused only if that calendar day has not yet begun ANYWHERE
+// on Earth. The furthest-ahead clock is UTC+14, so the latest day we accept is
+// "today" as seen at UTC+14. This way someone in Oman typing today's date just
+// after midnight (or someone in Auckland) is never wrongly refused, but a date
+// like 2099 always is. This one rule lives here, in the shared schema, so the
+// Add Transaction form, editing, and the CSV import (both its dry run and its
+// final save) all use it and none can bypass it.
+
+export const FUTURE_TRADE_DATE_MESSAGE =
+  "Trade date is in the future. Check the date.";
+
+const MS_PER_HOUR = 3_600_000;
+const MS_PER_DAY = 24 * MS_PER_HOUR;
+const EARTH_LEADING_OFFSET_HOURS = 14; // UTC+14 is the first place each new day starts
+
+/** Midnight (UTC) that starts the calendar day a given moment falls in. */
+function startOfUtcDay(ms: number): number {
+  return Math.floor(ms / MS_PER_DAY) * MS_PER_DAY;
+}
+
+/**
+ * The latest trade day we accept, as midnight UTC of that calendar day:
+ * today's date at UTC+14. `now` can be passed in so tests use a fixed clock.
+ */
+export function latestAllowedTradeDay(now: Date = new Date()): Date {
+  return new Date(
+    startOfUtcDay(now.getTime() + EARTH_LEADING_OFFSET_HOURS * MS_PER_HOUR),
+  );
+}
+
+/** True when the trade date's calendar day has not begun anywhere on Earth yet. */
+export function isTradeDateInFuture(
+  tradeDate: Date,
+  now: Date = new Date(),
+): boolean {
+  const time = tradeDate.getTime();
+  if (Number.isNaN(time)) return false; // an unreadable date gets its own message
+  return startOfUtcDay(time) > latestAllowedTradeDay(now).getTime();
+}
 
 const tradeDateSchema = z.coerce
   .date({ error: "Enter a valid trade date." })
-  .refine((d) => !Number.isNaN(d.getTime()), "Enter a valid trade date.");
+  .refine((d) => !Number.isNaN(d.getTime()), "Enter a valid trade date.")
+  // `new Date()` is read each time the rule runs, so tests can fix the clock
+  // (vi.setSystemTime) or call isTradeDateInFuture directly with their own `now`.
+  .refine((d) => !isTradeDateInFuture(d), FUTURE_TRADE_DATE_MESSAGE);
 
 const noteSchema = z
   .string()

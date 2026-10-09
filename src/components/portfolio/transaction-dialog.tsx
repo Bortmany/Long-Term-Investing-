@@ -29,7 +29,22 @@ import { Label } from "@/components/ui/label";
 import { Select, type SelectOption } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { formatMoney } from "@/lib/format";
-import type { TransactionInput } from "@/lib/transaction-schema";
+import {
+  FUTURE_TRADE_DATE_MESSAGE,
+  isTradeDateInFuture,
+  type TransactionInput,
+} from "@/lib/transaction-schema";
+import { defaultCurrencyForMarket, marketLabel, sortCurrencies, sortMarkets } from "@/lib/markets";
+import {
+  AUTO_CHANGE_RING_CLASS,
+  CURRENCY_HINT,
+  HintedControl,
+  MARKET_HINT,
+  PREFILL_HINT,
+  useAutoChangeRing,
+} from "@/components/stocks/dialog-hints";
+import { currencyMismatchMessage, visibleFormError } from "@/lib/instrument-currency";
+import { cn } from "@/lib/utils";
 import { transactionTypeLabel, type InstrumentOptionData, type TransactionRowData } from "./types";
 
 const NEW_INSTRUMENT_VALUE = "__new__";
@@ -50,21 +65,6 @@ function toDateInputValue(date: Date): string {
   const month = String(date.getUTCMonth() + 1).padStart(2, "0");
   const day = String(date.getUTCDate()).padStart(2, "0");
   return `${date.getUTCFullYear()}-${month}-${day}`;
-}
-
-function marketLabel(market: Market): string {
-  switch (market) {
-    case "US":
-      return "US";
-    case "MSX":
-      return "MSX (Muscat)";
-    case "TADAWUL":
-      return "Tadawul (Saudi)";
-    case "DFM":
-      return "DFM (Dubai)";
-    case "OTHER":
-      return "Other";
-  }
 }
 
 function instrumentTypeLabel(type: InstrumentType): string {
@@ -136,6 +136,7 @@ export function TransactionDialog({
   // --- Inline "track a new instrument" panel ---
   const [showNewInstrument, setShowNewInstrument] = React.useState(false);
   const [newTicker, setNewTicker] = React.useState("");
+  const newCurrencyRing = useAutoChangeRing();
   const [newMarket, setNewMarket] = React.useState<Market>(markets[0] ?? "US");
   const [newName, setNewName] = React.useState("");
   const [newCurrency, setNewCurrency] = React.useState<Currency>(
@@ -218,18 +219,37 @@ export function TransactionDialog({
         setNewInstrumentError(result.error);
         return;
       }
-      const created: InstrumentOptionData = {
-        id: result.data.id,
-        ticker: result.data.ticker,
-        name: newName.trim(),
-        currency: newCurrency,
-        market: newMarket,
-      };
-      setLocalInstruments((prev) =>
-        [...prev, created].sort((a, b) => a.ticker.localeCompare(b.ticker)),
-      );
+      // Duplicate ticker+market: reuse the stored row's id. The server never
+      // returns the stored name/currency, so we must not present what was typed
+      // as if it were the stored instrument.
+      const existingOption = result.data.alreadyExisted
+        ? localInstruments.find((i) => i.id === result.data.id)
+        : undefined;
+      const created: InstrumentOptionData =
+        existingOption ??
+        (result.data.alreadyExisted
+          ? {
+              id: result.data.id,
+              ticker: result.data.ticker,
+              name: result.data.ticker,
+              currency,
+              market: newMarket,
+            }
+          : {
+              id: result.data.id,
+              ticker: result.data.ticker,
+              name: newName.trim(),
+              currency: newCurrency,
+              market: newMarket,
+            });
+      if (!existingOption) {
+        setLocalInstruments((prev) =>
+          [...prev, created].sort((a, b) => a.ticker.localeCompare(b.ticker)),
+        );
+      }
       setInstrumentId(created.id);
-      setCurrency(created.currency);
+      // Only default the currency from a known stored instrument or a new row.
+      if (existingOption || !result.data.alreadyExisted) setCurrency(created.currency);
       setShowNewInstrument(false);
       setNewTicker("");
       setNewName("");
@@ -252,12 +272,30 @@ export function TransactionDialog({
     return type === "SELL" ? gross - feeNum : gross + feeNum;
   }, [type, quantity, pricePerUnit, fee]);
 
+  // A buy or sell must be in the stock's own currency; the server refuses
+  // anything else, so say so before they press Save.
+  const chosenInstrument = localInstruments.find((i) => i.id === instrumentId);
+  const currencyHint =
+    chosenInstrument && typeIsTrade(type)
+      ? currencyMismatchMessage({ type, currency }, chosenInstrument)
+      : null;
+
+  // Changing the currency clears an old "wrong currency" refusal straight
+  // away; the live hint above then says whether the new choice is fine.
+  function changeCurrency(next: Currency) {
+    setCurrency(next);
+    setFormError(null);
+  }
+
   function validate(): Record<string, string> {
     const errors: Record<string, string> = {};
     const typeLabel = transactionTypeLabel(type);
 
     if (!tradeDate) {
       errors.tradeDate = "Enter a trade date.";
+    } else if (isTradeDateInFuture(new Date(tradeDate))) {
+      // Same shared rule the server enforces (src/lib/transaction-schema.ts).
+      errors.tradeDate = FUTURE_TRADE_DATE_MESSAGE;
     }
     if (typeRequiresInstrument(type) && !instrumentId) {
       errors.instrumentId = `Pick an instrument for ${typeLabel} transactions.`;
@@ -352,8 +390,8 @@ export function TransactionDialog({
     { value: NEW_INSTRUMENT_VALUE, label: "+ Track a new instrument…" },
   ];
 
-  const currencyOptions: SelectOption[] = currencies.map((c) => ({ value: c, label: c }));
-  const marketOptions: SelectOption[] = markets.map((m) => ({ value: m, label: marketLabel(m) }));
+  const currencyOptions: SelectOption[] = sortCurrencies(currencies).map((c) => ({ value: c, label: c }));
+  const marketOptions: SelectOption[] = sortMarkets(markets).map((m) => ({ value: m, label: marketLabel(m) }));
   const instrumentTypeOptions: SelectOption[] = instrumentTypes.map((t) => ({
     value: t,
     label: instrumentTypeLabel(t),
@@ -423,7 +461,7 @@ export function TransactionDialog({
                       Cancel
                     </Button>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 min-[480px]:grid-cols-2 gap-3">
                     <div>
                       <Label htmlFor="new-inst-ticker" className="mb-1.5">
                         Ticker
@@ -433,25 +471,40 @@ export function TransactionDialog({
                         value={newTicker}
                         onChange={(event) => setNewTicker(event.target.value.toUpperCase())}
                         placeholder="AAPL"
+                        className="h-11"
                       />
                     </div>
                     <div>
                       <Label htmlFor="new-inst-market" className="mb-1.5">
                         Market
                       </Label>
+                      <HintedControl hint={MARKET_HINT}>
                       <Select
                         id="new-inst-market"
+                        className="[&_select]:h-11"
                         value={newMarket}
-                        onValueChange={(value) => setNewMarket(value as Market)}
+                        onValueChange={(value) => {
+                          // Picking a market pre-selects its usual currency (still changeable).
+                          const nextMarket = value as Market;
+                          setNewMarket(nextMarket);
+                          const suggested = defaultCurrencyForMarket(nextMarket);
+                          if (currencies.includes(suggested) && suggested !== newCurrency) {
+                            setNewCurrency(suggested);
+                            newCurrencyRing.pulse();
+                          }
+                        }}
                         options={marketOptions}
                       />
+                      </HintedControl>
                     </div>
                   </div>
                   <div>
+                    <HintedControl hint={PREFILL_HINT} className="w-auto">
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
+                      className="min-h-11"
                       onClick={handlePrefill}
                       disabled={isPrefilling || !newTicker.trim()}
                     >
@@ -464,6 +517,7 @@ export function TransactionDialog({
                         "Prefill from FMP"
                       )}
                     </Button>
+                    </HintedControl>
                   </div>
                   {/* Golden rule: prefill failure is stated honestly, never a
                       made-up name — the owner just fills the fields by hand. */}
@@ -482,6 +536,7 @@ export function TransactionDialog({
                       value={newName}
                       onChange={(event) => setNewName(event.target.value)}
                       placeholder="Apple Inc."
+                      className="h-11"
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
@@ -489,12 +544,18 @@ export function TransactionDialog({
                       <Label htmlFor="new-inst-currency" className="mb-1.5">
                         Currency
                       </Label>
-                      <Select
-                        id="new-inst-currency"
-                        value={newCurrency}
-                        onValueChange={(value) => setNewCurrency(value as Currency)}
-                        options={currencyOptions}
-                      />
+                      <HintedControl hint={CURRENCY_HINT}>
+                        <Select
+                          id="new-inst-currency"
+                          value={newCurrency}
+                          onValueChange={(value) => setNewCurrency(value as Currency)}
+                          options={currencyOptions}
+                          className={cn(
+                            "[&_select]:h-11",
+                            newCurrencyRing.active && AUTO_CHANGE_RING_CLASS,
+                          )}
+                        />
+                      </HintedControl>
                     </div>
                     <div>
                       <Label htmlFor="new-inst-type" className="mb-1.5">
@@ -616,11 +677,16 @@ export function TransactionDialog({
                   <Select
                     id="tx-currency"
                     value={currency}
-                    onValueChange={(value) => setCurrency(value as Currency)}
+                    onValueChange={(value) => changeCurrency(value as Currency)}
                     options={currencyOptions}
                   />
                 </div>
               </div>
+              {currencyHint ? (
+                <p role="status" className="text-xs text-amber-700 dark:text-amber-400">
+                  {currencyHint}
+                </p>
+              ) : null}
               {/* Amount is NEVER a separate input — always computed here, and
                   independently re-derived server-side, so it can never drift.
                   Shown in the transaction's OWN currency (matching the
@@ -677,7 +743,7 @@ export function TransactionDialog({
                 <Select
                   id="tx-currency"
                   value={currency}
-                  onValueChange={(value) => setCurrency(value as Currency)}
+                  onValueChange={(value) => changeCurrency(value as Currency)}
                   options={currencyOptions}
                 />
               </div>
@@ -711,7 +777,7 @@ export function TransactionDialog({
                 <Select
                   id="tx-currency"
                   value={currency}
-                  onValueChange={(value) => setCurrency(value as Currency)}
+                  onValueChange={(value) => changeCurrency(value as Currency)}
                   options={currencyOptions}
                 />
               </div>
@@ -726,6 +792,8 @@ export function TransactionDialog({
               id="tx-trade-date"
               type="date"
               value={tradeDate}
+              aria-invalid={fieldErrors.tradeDate ? true : undefined}
+              className={fieldErrors.tradeDate ? "h-11 border-red-600 dark:border-red-400" : "h-11"}
               onChange={(event) => setTradeDate(event.target.value)}
             />
             {fieldErrors.tradeDate ? (
@@ -747,8 +815,11 @@ export function TransactionDialog({
             />
           </div>
 
-          {formError ? (
-            <p className="text-sm text-red-600 dark:text-red-400">{formError}</p>
+          {/* The wrong-currency refusal already shows as the amber hint; don't repeat it. */}
+          {visibleFormError(formError, currencyHint) ? (
+            <p className="text-sm text-red-600 dark:text-red-400">
+              {visibleFormError(formError, currencyHint)}
+            </p>
           ) : null}
 
           <DialogFooter>

@@ -13,7 +13,7 @@
 type LogLevel = "debug" | "info" | "warn" | "error";
 
 const SECRET_KEY_PATTERN =
-  /(secret|token|password|passwd|api[-_]?key|apikey|authorization|cookie|dsn|session|credential)/i;
+  /(secret|token|password|passwd|api[-_]?key|apikey|authorization|cookie|dsn|session|credential|encrypted|ciphertext)/i;
 
 const REDACTED = "[redacted]";
 
@@ -53,6 +53,25 @@ function write(
   else console.log(serialized);
 }
 
+// Handled failures (a payment event that could not be applied, a broker sync
+// that failed, a Sharia refresh that stopped) are logged and never thrown, so
+// Sentry's automatic capture would not see them. Forward every error-level
+// line to Sentry too, using the SAME redacted context as the log line, so an
+// alert fires without anyone reading the logs. Inert with no SENTRY_DSN.
+function forwardToSentry(message: string, context?: Record<string, unknown>): void {
+  if (!process.env.SENTRY_DSN) return;
+  import("@sentry/nextjs")
+    .then((Sentry) =>
+      Sentry.captureMessage(message, {
+        level: "error",
+        ...(context ? { extra: redact(context) as Record<string, unknown> } : {}),
+      }),
+    )
+    .catch(() => {
+      // Error reporting must never break the request that hit the error.
+    });
+}
+
 export const logger = {
   debug: (message: string, context?: Record<string, unknown>) =>
     write("debug", message, context),
@@ -60,6 +79,13 @@ export const logger = {
     write("info", message, context),
   warn: (message: string, context?: Record<string, unknown>) =>
     write("warn", message, context),
-  error: (message: string, context?: Record<string, unknown>) =>
-    write("error", message, context),
+  /** `alert: false` skips Sentry for errors Next already reports itself. */
+  error: (
+    message: string,
+    context?: Record<string, unknown>,
+    options?: { alert?: boolean },
+  ) => {
+    write("error", message, context);
+    if (options?.alert !== false) forwardToSentry(message, context);
+  },
 };

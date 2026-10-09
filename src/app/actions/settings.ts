@@ -5,6 +5,7 @@
 // "unavailable", never a silent 1.0.
 
 import { Prisma, Currency } from "@prisma/client";
+import { currencyListSentence } from "@/lib/markets";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
@@ -63,10 +64,10 @@ export async function setBaseCurrency(
   if (limited) return limited;
 
   const parsed = z
-    .enum(Currency, { error: "Pick a valid currency (OMR, USD, SAR or AED)." })
+    .enum(Currency, { error: currencyListSentence() })
     .safeParse(currency);
   if (!parsed.success) {
-    return actionError("Pick a valid currency (OMR, USD, SAR or AED).");
+    return actionError(currencyListSentence());
   }
 
   const portfolio = await getOrCreatePortfolio(userId);

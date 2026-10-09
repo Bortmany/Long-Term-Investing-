@@ -1,16 +1,17 @@
 import { expect, test } from "@playwright/test";
+import { E2E_USER_PASSWORD } from "./test-user";
 
-// The demo login's password is never hardcoded — it comes from the same
-// SEED_DEMO_PASSWORD the seed script used (same idiom as theses.spec.ts).
+// The e2e test login (tests/e2e/test-user.ts) is never hardcoded here — its
+// password comes from E2E_TEST_PASSWORD (same idiom as theses.spec.ts).
 try {
   process.loadEnvFile();
 } catch {
   // no .env file — rely on the environment
 }
 
-const DEMO_PASSWORD = process.env.SEED_DEMO_PASSWORD;
+const DEMO_PASSWORD = E2E_USER_PASSWORD;
 
-// Every test starts already signed in as the demo user — see
+// Every test starts already signed in as the e2e test user — see
 // tests/e2e/global-setup.ts. No per-file sign-in helper anymore.
 
 test("the picker is honest about no API key, and a mode+instrument URL pre-selects both", async ({
@@ -18,7 +19,7 @@ test("the picker is honest about no API key, and a mode+instrument URL pre-selec
 }) => {
   test.skip(
     !DEMO_PASSWORD,
-    "Set SEED_DEMO_PASSWORD in .env (the one used when seeding) to run this test",
+    "Set E2E_TEST_PASSWORD in .env to run this test",
   );
 
   await page.goto("/committee");
@@ -37,7 +38,7 @@ test("the picker is honest about no API key, and a mode+instrument URL pre-selec
   await expect(page.getByText("AI features are turned off").first()).toBeVisible();
 
   // Pull the real instrument id InvestIQ just navigated to, then visit the
-  // exact deep link the Portfolio holdings row's "Sell analysis" action uses
+  // exact deep link the Portfolio holdings row's "Downside check" action uses
   // (?instrument=<id>&mode=sell) and confirm both arrive pre-selected.
   const url = new URL(page.url());
   const instrumentId = url.searchParams.get("instrument");
@@ -45,7 +46,7 @@ test("the picker is honest about no API key, and a mode+instrument URL pre-selec
 
   await page.goto(`/committee?instrument=${instrumentId}&mode=sell`);
   await expect(page).toHaveURL(new RegExp(`instrument=${instrumentId}&mode=sell`));
-  await expect(page.getByRole("heading", { name: "Sell Analysis" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Downside check" })).toBeVisible();
   // Still an honest no-key state on this deep-linked mode too.
   await expect(page.getByText("AI features are turned off").first()).toBeVisible();
 });

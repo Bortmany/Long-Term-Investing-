@@ -1,18 +1,27 @@
+import { listVisibleInstruments } from "@/lib/stocks/visible-instruments";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { Currency, InstrumentType, Market, TransactionType } from "@prisma/client";
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { badgeForPriceSource, resolveProviderName } from "@/lib/data";
+import { badgeForPriceSource, describePriceProvider, resolveProviderName } from "@/lib/data";
 import {
+  collectUnvaluedItems,
+  computeTrailingDividendIncome,
   convertAmount,
+  describeUnvalued,
   fromPrismaTransaction,
+  fxViaHubNote,
   type PriceInput,
 } from "@/lib/portfolio";
 import { loadPortfolioComputation } from "@/lib/portfolio-market-data";
-import { badgePropsForValueSources } from "@/components/source-badge";
+import { getShariaBadgeData } from "@/lib/sharia/badge-data";
+import { badgePropsForHoldingValue, badgePropsForValueSources } from "@/components/source-badge";
 import { PortfolioView } from "@/components/portfolio/portfolio-view";
+import { BrokerReconnectNotice } from "@/components/portfolio/broker-reconnect-notice";
+import { loadBrokerPortfolioInfo } from "@/lib/broker/transaction-tags";
+import { UnvaluedBanner } from "@/components/portfolio/unvalued-banner";
 import type {
   HoldingRowData,
   InstrumentOptionData,
@@ -31,7 +40,11 @@ export const metadata = { title: "Portfolio — InvestIQ AI" };
 // holding through the pure portfolio math (golden rule: unvalued rows are
 // SAID to be unavailable, never padded), then hands plain data to the
 // client-side view that owns the dialogs and filters.
-export default async function PortfolioPage() {
+export default async function PortfolioPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ add?: string | string[] }>;
+}) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) {
     redirect("/sign-in");
@@ -42,12 +55,11 @@ export default async function PortfolioPage() {
   // valuation — including this user's own manual price/FX overrides only) so
   // the two pages' totals always agree. Null means no portfolio yet.
   const computation = await loadPortfolioComputation(session.user.id);
+  const openAddOnLoad = (await searchParams).add === "1";
 
-  // Instruments are shared reference data (no userId column) — the dialog's
-  // pickers list all of them.
-  const instrumentRows = await prisma.instrument.findMany({
-    orderBy: { ticker: "asc" },
-  });
+  // Instruments are shared (partly user-typed) reference data, so the dialog's
+  // pickers list only the public list plus this user's own stocks.
+  const instrumentRows = await listVisibleInstruments(session.user.id);
   const instruments: InstrumentOptionData[] = instrumentRows.map((i) => ({
     id: i.id,
     ticker: i.ticker,
@@ -75,6 +87,7 @@ export default async function PortfolioPage() {
         holdingsBadge={{ variant: "derived" }}
         transactions={[]}
         instruments={instruments}
+        openAddOnLoad={openAddOnLoad}
         currencies={currencies}
         markets={markets}
         instrumentTypes={instrumentTypes}
@@ -83,7 +96,7 @@ export default async function PortfolioPage() {
     );
   }
 
-  const { portfolio, transactionRows, prices, fxRates, portfolioValue } =
+  const { portfolio, transactionRows, transactions, prices, fxRates, portfolioValue } =
     computation;
   const base = portfolio.baseCurrency;
 
@@ -115,6 +128,16 @@ export default async function PortfolioPage() {
             kind: badgeForPriceSource(latestPrice.source),
             asOf: latestPrice.asOf,
           },
+          // Twelve Data prices say who supplied them and how late ("end of
+          // day", "delayed"); every other source keeps its usual badge.
+          detail:
+            (instrument &&
+              describePriceProvider({
+                priceSource: latestPrice.source,
+                market: instrument.market,
+                asOf: latestPrice.asOf,
+              })) ||
+            undefined,
         }
       : { ok: false };
 
@@ -123,6 +146,12 @@ export default async function PortfolioPage() {
           ok: true,
           marketValue: holding.valuation.marketValue,
           source: holding.valuation.source,
+          // Same provider/delay wording as the price column, and the
+          // through-the-rial rate date when the conversion used that route.
+          detail: instrument
+            ? badgePropsForHoldingValue(holding.valuation, instrument.market).detail
+            : undefined,
+          fxNote: fxViaHubNote(holding.valuation) ?? undefined,
         }
       : { ok: false, reason: holding.valuation.reason };
 
@@ -174,6 +203,39 @@ export default async function PortfolioPage() {
     return bv - av;
   });
 
+  // Sharia screen badges: nothing at all unless the person has the switch on
+  // and is on Pro. Database reads only.
+  const shariaData = await getShariaBadgeData(
+    session.user.id,
+    holdings.flatMap((h) => {
+      const i = instrumentById.get(h.instrumentId);
+      return i ? [{ id: i.id, ticker: i.ticker, name: i.name, market: i.market }] : [];
+    }),
+  );
+  if (shariaData) {
+    for (const h of holdings) h.sharia = shariaData[h.instrumentId] ?? null;
+  }
+
+  // Banner (same amber box and words as the Dashboard): names every holding,
+  // cash balance or dividend that could not be valued. Null = nothing missing.
+  const dividendIncome = computeTrailingDividendIncome(transactions, {
+    baseCurrency: base,
+    fxRates,
+  });
+  const unvaluedSummary = describeUnvalued(
+    collectUnvaluedItems({
+      portfolioMissing: portfolioValue.missing,
+      dividendMissing: dividendIncome.missing,
+      labelFor: (id) => instrumentById.get(id)?.ticker ?? "Unknown instrument",
+    }),
+  );
+
+  // "From broker" tags + the reconnect notice (user-scoped; no token read).
+  const brokerInfo = await loadBrokerPortfolioInfo(
+    session.user.id,
+    [...new Set(transactionRows.map((t) => t.syncRunId).filter((id): id is string => !!id))],
+  );
+
   const transactionData: TransactionRowData[] = transactionRows.map((t) => ({
     ...fromPrismaTransaction(t),
     id: t.id,
@@ -181,6 +243,8 @@ export default async function PortfolioPage() {
       ? (instrumentById.get(t.instrumentId)?.ticker ?? null)
       : null,
     note: t.note,
+    syncedFrom: t.syncedFrom,
+    syncedOn: t.syncRunId ? (brokerInfo.runDates.get(t.syncRunId) ?? null) : null,
   }));
 
   // Health Score: read whatever is already stored — this page never
@@ -199,8 +263,11 @@ export default async function PortfolioPage() {
 
   return (
     <>
+      <BrokerReconnectNotice show={brokerInfo.needsReconnect} />
       <PortfolioView
         baseCurrency={base}
+        brokerConnected={brokerInfo.connected}
+        banner={<UnvaluedBanner summary={unvaluedSummary} priceHref="#holdings" className="mb-4" />}
         holdings={holdings}
         holdingsBadge={badgePropsForValueSources(portfolioValue.sources)}
         weightsNote={
@@ -210,6 +277,7 @@ export default async function PortfolioPage() {
         }
         transactions={transactionData}
         instruments={instruments}
+        openAddOnLoad={openAddOnLoad}
         currencies={currencies}
         markets={markets}
         instrumentTypes={instrumentTypes}

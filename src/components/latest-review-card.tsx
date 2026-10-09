@@ -41,7 +41,7 @@ export async function LatestReviewCard({ userId }: { userId: string }) {
             No weekly review yet.{" "}
             <Link
               href="/reviews"
-              className="text-blue-600 hover:underline dark:text-blue-400"
+              className="inline-flex min-h-11 items-center text-blue-600 hover:underline md:min-h-0 dark:text-blue-400"
             >
               Run your first one from Reviews →
             </Link>

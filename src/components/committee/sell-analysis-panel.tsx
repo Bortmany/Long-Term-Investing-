@@ -1,6 +1,6 @@
 "use client";
 
-// The Sell Analysis AiPanel (ui-spec §6.4, SELL_ANALYSIS). Sell Score,
+// The "Downside check" AiPanel (ui-spec §6.4, stored type SELL_ANALYSIS). Warning-signs score,
 // reasons and counterarguments are all AI judgments — per §2.5's caption
 // rule they carry NO SourceBadge; their provenance is the AiPanel caption
 // line alone.
@@ -43,8 +43,8 @@ export function SellAnalysisPanel({
 }) {
   return (
     <AiPanel
-      title="Sell Analysis"
-      actionLabel="Run Sell Analysis"
+      title="Downside check"
+      actionLabel="Run Downside check"
       pendingLabel="Analyzing…"
       analysis={analysis}
       hasKey={hasKey}
@@ -56,13 +56,13 @@ export function SellAnalysisPanel({
         <div className="space-y-6">
           <div>
             <p className="inline-flex items-center gap-1 text-sm text-slate-500 dark:text-slate-400">
-              Sell Score <ExplainerTip term="sell-score" />
+              Warning-signs score <ExplainerTip term="sell-score" />
             </p>
             <p className="mt-1 text-5xl font-semibold tabular-nums">{output.sellScore}</p>
           </div>
 
           <div>
-            <h3 className="mb-2 text-sm font-semibold">Reasons to Sell</h3>
+            <h3 className="mb-2 text-sm font-semibold">Reasons for concern</h3>
             {output.reasons.length > 0 ? (
               <EvidenceList items={output.reasons} />
             ) : (

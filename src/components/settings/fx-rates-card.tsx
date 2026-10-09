@@ -31,6 +31,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ResponsiveRows } from "@/components/ui/responsive-rows";
+import { RowCard } from "@/components/ui/row-card";
 import { Select } from "@/components/ui/select";
 import {
   Table,
@@ -40,7 +42,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 /** One stored FX rate, already converted/formatted server-side for display. */
 export type FxRateDisplayRow = {
@@ -48,6 +54,8 @@ export type FxRateDisplayRow = {
   base: Currency;
   quote: Currency;
   rate: number;
+  /** The as-of date (used to find the newest usable rate). */
+  asOf: Date;
   /** Pre-formatted as-of date, e.g. "Jul 10, 2026". */
   asOfLabel: string;
   /** Source badge props computed server-side from the row's PriceSource. */
@@ -70,6 +78,11 @@ function formatRate(rate: number): string {
   }).format(rate);
 }
 
+/** The amber sentence shown when a held/tracked currency has no rate. */
+export function missingRateSentence(code: string): string {
+  return `No rate found for ${code}. Type one in below.`;
+}
+
 /** Today's date in the local timezone as an <input type="date"> value. */
 function todayLocalIso(): string {
   const now = new Date();
@@ -83,15 +96,19 @@ export function FxRatesCard({
   currencies,
   baseCurrency,
   hasFmpKey,
+  missingRateCurrencies = [],
 }: {
   rates: FxRateDisplayRow[];
   /** The Currency enum values, passed from the server so the list can't drift from the schema. */
   currencies: Currency[];
   baseCurrency: Currency;
   hasFmpKey: boolean;
+  /** Held or tracked currencies with no usable rate into the base currency. */
+  missingRateCurrencies?: Currency[];
 }) {
   // --- Add-rate form (entries here are always source MANUAL) ---
-  const firstNonBase = currencies.find((c) => c !== baseCurrency) ?? baseCurrency;
+  const firstNonBase =
+    currencies.find((c) => c !== baseCurrency) ?? baseCurrency;
   const [newBase, setNewBase] = React.useState<string>(firstNonBase);
   const [newQuote, setNewQuote] = React.useState<string>(baseCurrency);
   const [newRate, setNewRate] = React.useState("");
@@ -176,6 +193,7 @@ export function FxRatesCard({
             variant="outline"
             onClick={handleRefresh}
             disabled={isRefreshing}
+            className="h-11 md:h-10"
           >
             {refreshButtonBody}
           </Button>
@@ -188,22 +206,38 @@ export function FxRatesCard({
                 type="button"
                 variant="outline"
                 aria-disabled="true"
-                className="cursor-not-allowed opacity-50 hover:bg-background hover:text-foreground"
+                className="h-11 cursor-not-allowed opacity-50 hover:bg-background hover:text-foreground md:h-10"
                 onClick={(event) => event.preventDefault()}
               >
                 {refreshButtonBody}
               </Button>
             </TooltipTrigger>
             <TooltipContent>
-              Add an FMP_API_KEY to your environment to fetch live FX rates.
+              {process.env.NODE_ENV !== "production"
+                ? "Add an FMP_API_KEY to your environment to fetch live FX rates."
+                : "Live exchange rates aren't switched on yet."}
             </TooltipContent>
           </Tooltip>
         )}
       </CardHeader>
       <CardContent>
         {refreshError ? (
-          <p className="mb-3 text-sm text-red-600 dark:text-red-400">{refreshError}</p>
+          <p className="mb-3 text-sm text-red-600 dark:text-red-400">
+            {refreshError}
+          </p>
         ) : null}
+        {missingRateCurrencies.map((code) => (
+          <p
+            key={`missing-${code}`}
+            className="mb-3 flex items-start gap-1.5 text-sm text-amber-700 dark:text-amber-400"
+          >
+            <TriangleAlert
+              className="mt-0.5 size-4 shrink-0"
+              aria-hidden="true"
+            />
+            <span>{missingRateSentence(code)}</span>
+          </p>
+        ))}
         {report ? (
           // Honest refresh report: exactly which pairs updated, and which
           // stayed unavailable (those never get made-up rates).
@@ -220,7 +254,10 @@ export function FxRatesCard({
                 key={`${pair.base}-${pair.quote}`}
                 className="flex items-start gap-1.5 text-amber-700 dark:text-amber-400"
               >
-                <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+                <TriangleAlert
+                  className="mt-0.5 size-4 shrink-0"
+                  aria-hidden="true"
+                />
                 <span>
                   {pair.base}→{pair.quote} couldn&apos;t be refreshed
                   {pair.message ? ` — ${pair.message}` : "."}
@@ -235,59 +272,109 @@ export function FxRatesCard({
             No FX rates stored yet — add one below.
           </p>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Base</TableHead>
-                <TableHead>Quote</TableHead>
-                <TableHead className="text-right">Rate</TableHead>
-                <TableHead>As of</TableHead>
-                <TableHead>Source</TableHead>
-                <TableHead className="w-12">
-                  <span className="sr-only">Actions</span>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rates.map((row) => (
-                <TableRow key={row.id}>
-                  <TableCell className="font-mono font-medium">{row.base}</TableCell>
-                  <TableCell className="font-mono font-medium">{row.quote}</TableCell>
-                  <TableCell className="text-right tabular-nums">
+          <ResponsiveRows
+            listLabel="FX rates"
+            table={
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Base</TableHead>
+                    <TableHead>Quote</TableHead>
+                    <TableHead className="text-right">Rate</TableHead>
+                    <TableHead>As of</TableHead>
+                    <TableHead>Source</TableHead>
+                    <TableHead className="w-12">
+                      <span className="sr-only">Actions</span>
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {rates.map((row) => (
+                    <TableRow key={row.id}>
+                      <TableCell className="font-mono font-medium">
+                        {row.base}
+                      </TableCell>
+                      <TableCell className="font-mono font-medium">
+                        {row.quote}
+                      </TableCell>
+                      <TableCell
+                        className="text-right tabular-nums"
+                        data-figure
+                      >
+                        {formatRate(row.rate)}
+                      </TableCell>
+                      <TableCell className="text-slate-600 dark:text-slate-400">
+                        {row.asOfLabel}
+                      </TableCell>
+                      <TableCell>
+                        <SourceBadge {...row.badge} />
+                      </TableCell>
+                      <TableCell>
+                        {row.deletable ? (
+                          <Tooltip>
+                            <TooltipTrigger>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="size-9"
+                                aria-label={`Delete the ${row.base} to ${row.quote} rate as of ${row.asOfLabel}`}
+                                onClick={() => {
+                                  setDeleteError(null);
+                                  setDeleting(row);
+                                }}
+                              >
+                                <Trash2 aria-hidden="true" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="left">{`Delete the ${row.base} to ${row.quote} rate`}</TooltipContent>
+                          </Tooltip>
+                        ) : null}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            }
+            cards={rates.map((row) => (
+              <RowCard
+                key={row.id}
+                density="compact"
+                identity={
+                  <span className="font-mono font-semibold">
+                    {row.base} → {row.quote}
+                  </span>
+                }
+                headline={
+                  <span className="text-base tabular-nums" data-figure>
                     {formatRate(row.rate)}
-                  </TableCell>
-                  <TableCell className="text-slate-600 dark:text-slate-400">
-                    {row.asOfLabel}
-                  </TableCell>
-                  <TableCell>
-                    <SourceBadge {...row.badge} />
-                  </TableCell>
-                  <TableCell>
-                    {row.deletable ? (
-                      <Tooltip>
-                        <TooltipTrigger>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="size-9"
-                            aria-label={`Delete the ${row.base} to ${row.quote} rate as of ${row.asOfLabel}`}
-                            onClick={() => {
-                              setDeleteError(null);
-                              setDeleting(row);
-                            }}
-                          >
-                            <Trash2 aria-hidden="true" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent side="left">{`Delete the ${row.base} to ${row.quote} rate`}</TooltipContent>
-                      </Tooltip>
-                    ) : null}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+                  </span>
+                }
+                meta={
+                  <>
+                    As of {row.asOfLabel} <SourceBadge {...row.badge} />
+                  </>
+                }
+                action={
+                  row.deletable ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="size-11"
+                      aria-label={`Delete the ${row.base} to ${row.quote} rate as of ${row.asOfLabel}`}
+                      onClick={() => {
+                        setDeleteError(null);
+                        setDeleting(row);
+                      }}
+                    >
+                      <Trash2 aria-hidden="true" />
+                    </Button>
+                  ) : undefined
+                }
+              />
+            ))}
+          />
         )}
 
         {/* Inline add-rate row — always stored as a MANUAL rate. */}
@@ -302,6 +389,7 @@ export function FxRatesCard({
                 id="fx-base"
                 value={newBase}
                 onValueChange={setNewBase}
+                className="[&_select]:h-11 md:[&_select]:h-10"
                 options={currencies.map((c) => ({ value: c, label: c }))}
               />
             </div>
@@ -313,6 +401,7 @@ export function FxRatesCard({
                 id="fx-quote"
                 value={newQuote}
                 onValueChange={setNewQuote}
+                className="[&_select]:h-11 md:[&_select]:h-10"
                 options={currencies.map((c) => ({ value: c, label: c }))}
               />
             </div>
@@ -328,6 +417,7 @@ export function FxRatesCard({
                 value={newRate}
                 onChange={(event) => setNewRate(event.target.value)}
                 placeholder="0.385"
+                className="h-11 md:h-10"
               />
             </div>
             <div className="w-40">
@@ -339,12 +429,14 @@ export function FxRatesCard({
                 type="date"
                 value={newAsOf}
                 onChange={(event) => setNewAsOf(event.target.value)}
+                className="h-11 md:h-10"
               />
             </div>
             <Button
               type="button"
               onClick={handleAdd}
               disabled={isAdding || newRate.trim() === ""}
+              className="h-11 md:h-10"
             >
               {isAdding ? (
                 <>
@@ -357,7 +449,9 @@ export function FxRatesCard({
             </Button>
           </div>
           {addError ? (
-            <p className="mt-2 text-sm text-red-600 dark:text-red-400">{addError}</p>
+            <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+              {addError}
+            </p>
           ) : null}
         </div>
       </CardContent>
@@ -379,7 +473,9 @@ export function FxRatesCard({
               </DialogDescription>
             </DialogHeader>
             {deleteError ? (
-              <p className="mt-3 text-sm text-red-600 dark:text-red-400">{deleteError}</p>
+              <p className="mt-3 text-sm text-red-600 dark:text-red-400">
+                {deleteError}
+              </p>
             ) : null}
             <DialogFooter>
               <Button

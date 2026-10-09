@@ -1,4 +1,11 @@
 import type { Currency, Market, PriceSource } from "@prisma/client";
+import {
+  DEFAULT_TWELVE_DATA_MARKETS,
+  getTwelveDataMarketEntry,
+  twelveDataBaseUrlFromEnv,
+  twelveDataRoutingFromEnv,
+  type TwelveDataRouting,
+} from "./provider-info";
 
 // ---------------------------------------------------------------------------
 // Shared result types — GOLDEN RULE support.
@@ -42,6 +49,7 @@ export type SourceBadge = "live" | "manual" | "sample";
 export function badgeForPriceSource(source: PriceSource): SourceBadge {
   switch (source) {
     case "FMP":
+    case "TWELVE_DATA":
       return "live";
     case "MANUAL":
       return "manual";
@@ -69,6 +77,18 @@ export type Quote = {
   asOf: Date;
   source: SourceBadge;
   fetchedAt: Date;
+  /**
+   * The true origin of the price (FMP, TWELVE_DATA, MANUAL, SEED). Lets the
+   * badge name the real provider and the alert engine record it correctly.
+   * Optional so older code and tests keep working: when unset, `source`
+   * ("live"/"manual"/"sample") is mapped the way it always was.
+   */
+  priceSource?: PriceSource;
+  /**
+   * True when the provider did not answer and this is the newest price we
+   * had stored, shown with its own date. The badge says so.
+   */
+  fallback?: boolean;
 };
 
 export type PricePoint = {
@@ -140,7 +160,7 @@ export type NewsArticle = {
 // ---------------------------------------------------------------------------
 
 export interface MarketDataProvider {
-  readonly name: "fmp" | "manual";
+  readonly name: "fmp" | "twelve-data" | "manual";
   getQuote(instrument: InstrumentRef): Promise<DataResult<Quote>>;
   getPriceHistory(
     instrument: InstrumentRef,
@@ -161,20 +181,33 @@ export interface MarketDataProvider {
 }
 
 // ---------------------------------------------------------------------------
-// Provider routing: US-market instruments use FMP when an API key is set,
-// everything else (MSX, TADAWUL, DFM, OTHER — and US without a key) uses
-// manually entered / seeded prices.
+// Provider routing:
+//   - US-market instrument + FMP key            -> FMP
+//   - market in the Twelve Data table, named in TWELVE_DATA_MARKETS, and a
+//     Twelve Data key is set                    -> Twelve Data
+//   - everything else (MSX and OTHER always; any market without a provider
+//     or key)                                   -> manual / seeded prices
+// Twelve Data is DORMANT: with no key the third input is absent and routing
+// is exactly what it was before it existed.
 // ---------------------------------------------------------------------------
 
-export type ProviderName = "fmp" | "manual";
+export type ProviderName = "fmp" | "twelve-data" | "manual";
 
 /** Pure routing decision — exported separately so it is unit-testable. */
 export function resolveProviderName(
   market: Market,
   fmpApiKey: string | null | undefined,
+  twelveData?: TwelveDataRouting | null,
 ): ProviderName {
   if (market === "US" && fmpApiKey) {
     return "fmp";
+  }
+  if (
+    twelveData?.apiKey &&
+    getTwelveDataMarketEntry(market) !== null &&
+    (twelveData.markets ?? DEFAULT_TWELVE_DATA_MARKETS).includes(market)
+  ) {
+    return "twelve-data";
   }
   return "manual";
 }
@@ -184,17 +217,26 @@ export function resolveProviderName(
 // instead; this is intentionally not exported from the ./index barrel.
 export async function getProvider(
   instrument: Pick<InstrumentRef, "market">,
-  options?: { fmpApiKey?: string | null },
+  options?: { fmpApiKey?: string | null; twelveData?: TwelveDataRouting | null },
 ): Promise<MarketDataProvider> {
   const apiKey =
     options?.fmpApiKey !== undefined
       ? options.fmpApiKey
       : (process.env.FMP_API_KEY ?? null);
-  const name = resolveProviderName(instrument.market, apiKey || null);
+  const twelveData =
+    options?.twelveData !== undefined ? options.twelveData : twelveDataRoutingFromEnv();
+  const name = resolveProviderName(instrument.market, apiKey || null, twelveData);
 
   if (name === "fmp") {
     const { createFmpProvider } = await import("./fmp");
     return createFmpProvider({ apiKey });
+  }
+  if (name === "twelve-data") {
+    const { createTwelveDataProvider } = await import("./twelve-data");
+    return createTwelveDataProvider({
+      apiKey: twelveData?.apiKey,
+      baseUrl: twelveDataBaseUrlFromEnv(),
+    });
   }
   const { createManualProvider } = await import("./manual");
   return createManualProvider();

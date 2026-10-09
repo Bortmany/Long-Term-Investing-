@@ -1,8 +1,9 @@
 // Allocation slices for the sector / country / market donut charts.
 //
 // Pure: takes holdings that were ALREADY valued in the base currency
-// (only pass holdings whose valuation succeeded — anything unvalued belongs
-// in the portfolio's `missing` list, never silently in a chart).
+// (only pass holdings whose valuation succeeded). Anything that could not be
+// valued is passed separately as `unvalued` and comes back beside the slices
+// (it has no size, so it is never a slice with a number).
 //
 // Instruments with a null sector/country go into an "Unknown" bucket, which
 // always sorts last. Market is a required enum, so a market allocation never
@@ -33,21 +34,38 @@ export type AllocationSlice = {
   sharePercent: number;
 };
 
+/**
+ * A holding that could not be valued (no price or no exchange rate). It has
+ * NO size — a guessed size would be a made-up number — so it is reported
+ * beside the slices, never as a slice with a value.
+ */
+export type UnvaluedHolding = {
+  instrumentId: string;
+  /** Short name to show people, e.g. the ticker. */
+  label: string;
+  reason: "missing_price" | "missing_fx_rate";
+};
+
 export type Allocation = {
   key: AllocationKey;
   /** Sum of all slice values. */
   total: number;
   /** Sorted largest-first; the "Unknown" bucket (if any) is always last. */
   slices: AllocationSlice[];
+  /** Holdings left out of the slices because they could not be valued. */
+  unvalued: UnvaluedHolding[];
 };
 
 /**
  * Group valued holdings into allocation slices by sector, country or market.
  * Returns an empty slice list for an empty portfolio (never NaN shares).
+ * `unvalued` (optional) lists holdings that could not be valued; they are
+ * passed straight through next to the slices so the screen can say so.
  */
 export function computeAllocation(
   holdings: AllocatableHolding[],
   key: AllocationKey,
+  unvalued: UnvaluedHolding[] = [],
 ): Allocation {
   const byLabel = new Map<string, number>();
 
@@ -79,5 +97,5 @@ export function computeAllocation(
       return a.label.localeCompare(b.label);
     });
 
-  return { key, total, slices };
+  return { key, total, slices, unvalued: [...unvalued] };
 }

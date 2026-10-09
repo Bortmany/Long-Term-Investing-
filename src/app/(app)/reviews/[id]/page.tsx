@@ -1,7 +1,7 @@
 import { headers } from "next/headers";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import { ArrowRight, ClipboardCheck, TrendingDown, TrendingUp, TriangleAlert } from "lucide-react";
+import { ArrowRight, TrendingDown, TrendingUp, TriangleAlert } from "lucide-react";
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -12,9 +12,7 @@ import {
   extractWeeklyReviewMeta,
 } from "@/lib/reviews/output";
 import { AiPanel } from "@/components/ai-panel";
-import { EmptyState } from "@/components/empty-state";
 import { ExplainerTip } from "@/components/explainer-tip";
-import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -41,21 +39,6 @@ export async function generateMetadata({
   return {
     title: review ? `${formatIsoWeek(review.period)} — InvestIQ AI` : "Review — InvestIQ AI",
   };
-}
-
-function notFound() {
-  return (
-    <EmptyState
-      icon={ClipboardCheck}
-      heading="Review not found"
-      sentence="This weekly review doesn't exist or has been removed."
-      action={
-        <Button asChild>
-          <Link href="/reviews">Back to Reviews</Link>
-        </Button>
-      }
-    />
-  );
 }
 
 export default async function ReviewDetailPage({
@@ -187,23 +170,23 @@ export default async function ReviewDetailPage({
               <Table className="mt-3">
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Sector</TableHead>
-                    <TableHead className="text-right">Last Week</TableHead>
-                    <TableHead className="text-right">This Week</TableHead>
-                    <TableHead className="text-right">Drift</TableHead>
+                    <TableHead className="whitespace-normal">Sector</TableHead>
+                    <TableHead className="whitespace-normal text-right">Last Week</TableHead>
+                    <TableHead className="whitespace-normal text-right">This Week</TableHead>
+                    <TableHead className="whitespace-normal text-right">Drift</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {sectorDrift.map((row) => (
                     <TableRow key={row.label}>
-                      <TableCell>{row.label}</TableCell>
-                      <TableCell className="text-right tabular-nums">
+                      <TableCell className="whitespace-normal">{row.label}</TableCell>
+                      <TableCell data-figure className="text-right tabular-nums">
                         {row.previousPercent === null ? "New" : formatPercent(row.previousPercent)}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">
+                      <TableCell data-figure className="text-right tabular-nums">
                         {formatPercent(row.currentPercent)}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">
+                      <TableCell data-figure className="text-right tabular-nums">
                         {row.driftPercent === null
                           ? "—"
                           : formatPercent(row.driftPercent, { signed: true })}
@@ -217,7 +200,7 @@ export default async function ReviewDetailPage({
 
           {output.suggestedActions.length > 0 ? (
             <div>
-              <h3 className="text-sm font-semibold">Suggested Actions</h3>
+              <h3 className="text-sm font-semibold">Questions to ask yourself</h3>
               <ul className="mt-2 space-y-1.5">
                 {output.suggestedActions.map((action, index) => (
                   <li key={index} className="flex items-start gap-2 text-sm">

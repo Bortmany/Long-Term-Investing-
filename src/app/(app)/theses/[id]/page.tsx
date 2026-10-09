@@ -1,20 +1,20 @@
 import { headers } from "next/headers";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { BookOpen } from "lucide-react";
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getQuote } from "@/lib/data";
 import { getAiClient } from "@/lib/ai/client";
+import { isPro } from "@/lib/plan-access";
+import { isBillingEnabled } from "@/lib/billing/config";
 import { thesisCheckSchema } from "@/lib/ai/schemas";
 import {
-  badgePropsForValueSource,
+  badgePropsForPrice,
+  badgePropsForHoldingValue,
   SourceBadge,
 } from "@/components/source-badge";
-import { EmptyState } from "@/components/empty-state";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ThesisStatusChip } from "@/components/theses/thesis-status-chip";
 import { ThesisCheckPanel } from "@/components/theses/thesis-check-panel";
@@ -25,6 +25,7 @@ import {
   fromPrismaFxRate,
   fromPrismaPriceCache,
   fromPrismaTransaction,
+  fxViaHubNote,
 } from "@/lib/portfolio";
 import { formatMoney, formatQuantity } from "@/lib/format";
 
@@ -75,18 +76,7 @@ export default async function ThesisDetailPage({
   });
 
   if (!thesis) {
-    return (
-      <EmptyState
-        icon={BookOpen}
-        heading="Thesis not found"
-        sentence="This thesis doesn't exist or has been removed."
-        action={
-          <Button asChild>
-            <Link href="/theses">Back to Theses</Link>
-          </Button>
-        }
-      />
-    );
+    notFound();
   }
 
   const instrument = thesis.instrument;
@@ -120,7 +110,9 @@ export default async function ThesisDetailPage({
     quantity: number;
     marketValue: number;
     currency: string;
-    badge: ReturnType<typeof badgePropsForValueSource>;
+    badge: ReturnType<typeof badgePropsForHoldingValue>;
+    /** "rate via OMR, as of <date>" when converted through the rial. */
+    fxNote: string | null;
   } | null = null;
   if (portfolio) {
     const [transactionRows, priceRows, fxRows] = await Promise.all([
@@ -142,13 +134,18 @@ export default async function ThesisDetailPage({
         quantity: holding.quantity,
         marketValue: holding.valuation.marketValue,
         currency: portfolio.baseCurrency,
-        badge: badgePropsForValueSource(holding.valuation.source),
+        badge: badgePropsForHoldingValue(holding.valuation, instrument.market),
+        fxNote: fxViaHubNote(holding.valuation),
       };
     }
   }
 
   // --- Latest Check panel data ----------------------------------------------
   const hasAiKey = getAiClient().ok;
+  // AI check-ups are Pro (writing and closing a thesis stay free). The server
+  // action enforces this too; this only picks what the panel shows.
+  const userIsPro = await isPro(userId);
+  const billingEnabled = isBillingEnabled();
   let checkOutput = null;
   if (storedAnalysis) {
     const parsed = thesisCheckSchema.safeParse(storedAnalysis.output);
@@ -176,7 +173,7 @@ export default async function ThesisDetailPage({
       <div>
         <Link
           href="/theses"
-          className="text-sm text-slate-500 hover:underline dark:text-slate-400"
+          className="inline-flex min-h-11 items-center text-sm text-slate-500 hover:underline md:min-h-0 dark:text-slate-400"
         >
           ← All Theses
         </Link>
@@ -210,10 +207,7 @@ export default async function ThesisDetailPage({
             </span>
             <SourceBadge
               size="sm"
-              {...badgePropsForValueSource({
-                kind: quoteResult.data.source,
-                asOf: quoteResult.data.asOf,
-              })}
+              {...badgePropsForPrice(quoteResult.data, instrument.market)}
             />
           </span>
         ) : (
@@ -228,6 +222,11 @@ export default async function ThesisDetailPage({
               {formatMoney(position.marketValue, position.currency)}
             </span>
             ) <SourceBadge size="sm" {...position.badge} />
+            {position.fxNote ? (
+              <span className="text-xs text-slate-500 dark:text-slate-400">
+                ({position.fxNote})
+              </span>
+            ) : null}
           </span>
         ) : null}
         {instrument.sector ? <span>Sector: {instrument.sector}</span> : null}
@@ -241,11 +240,13 @@ export default async function ThesisDetailPage({
       <ThesisCheckPanel
         thesisId={thesis.id}
         hasKey={hasAiKey}
+        proLocked={!userIsPro}
+        billingEnabled={billingEnabled}
         analysis={checkAnalysis}
         output={checkOutput}
       />
 
-      <CheckHistoryTimeline checks={checks} />
+      <CheckHistoryTimeline checks={checks} proLocked={!userIsPro} />
     </div>
   );
 }

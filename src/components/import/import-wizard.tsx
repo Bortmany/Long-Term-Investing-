@@ -1,240 +1,423 @@
 "use client";
 
-// The 4-step CSV import wizard (UI spec §3.3).
+// The import wizard (UI spec: broker-file-presets-ui.md).
 //
-// Step 1 — upload a file or paste CSV text (client-side only, nothing sent).
-// Step 2 — map CSV columns to transaction fields, with a 3-row preview.
-// Step 3 — dry-run validation via the validateImportRows server action:
-//          every problem is reported in plain English, nothing is written.
-// Step 4 — the real import via importTransactions (all-or-nothing on the
-//          server: one failure means nothing lands).
+// Preset path (4 steps):  Broker -> Your file -> Check -> Done.
+// "Other" path (5 steps): Broker -> Your file -> Match columns -> Check -> Done.
 //
-// Parsing uses the existing src/lib/csv.ts parser — never a second parser.
+// Everything about the file is read in the browser: the chosen broker's preset
+// (src/lib/import-presets) turns the file into rows, sorts them into ready /
+// needs fixing / skipped / already imported, and only the ready rows are ever
+// sent to the server. Nothing is saved until the person presses Import. The
+// server re-checks every row itself (client results are never trusted) and the
+// import is all-or-nothing.
+//
+// Golden rule: no figure is invented here. A row that is not understood is
+// listed with its reason; it is never repaired or guessed.
+//
+// Client-component rule: this file and its helpers import only TYPES and pure
+// modules, never prisma or other server code. The server actions are called,
+// not imported for their internals (see the warning in import-transactions.ts).
 
 import * as React from "react";
-import Link from "next/link";
-import {
-  CircleCheck,
-  Download,
-  FileSpreadsheet,
-  LoaderCircle,
-  TriangleAlert,
-  Upload,
-} from "lucide-react";
+import { useRouter } from "next/navigation";
+import { TriangleAlert } from "lucide-react";
 
 import {
+  getKnownImportReferences,
   importTransactions,
   validateImportRows,
 } from "@/app/actions/import-transactions";
-// Types come straight from the pure module, never re-exported through the
-// "use server" file (that re-export was the runtime landmine — see
-// import-transactions.ts).
-import type {
-  ImportValidationReport,
-  MappedImportRow,
-} from "@/lib/import-rows";
+import { assignFingerprintReferences, type ImportValidationReport } from "@/lib/import-rows";
 import { parseCsv, type CsvData } from "@/lib/csv";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Select } from "@/components/ui/select";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Textarea } from "@/components/ui/textarea";
+  getPresetCard,
+  prepareUpload,
+  readBrokerFile,
+  type PresetId,
+  type ReadOk,
+  type TrackedInstrument,
+} from "@/lib/import-presets";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Card, CardContent } from "@/components/ui/card";
+import { BrokerGrid, type BrokerChoice } from "./broker-grid";
+import {
+  MAX_ROWS,
+  modelFromMapped,
+  modelFromPlan,
+  type CheckModel,
+  type MappedEntry,
+} from "./check-model";
+import { CheckStep } from "./check-step";
+import { brokerName, FileStep, type FileNotice, type PickedFile } from "./file-step";
+import { buildMappedRows, guessMapping, MapStep } from "./map-step";
+import { ResultStep, type ImportOutcome } from "./result-step";
 
-// ---------------------------------------------------------------------------
-// Column-mapping targets. The keys match MappedImportRow (what the server
-// actions expect); the labels are what the owner sees in the mapping selects.
-// ---------------------------------------------------------------------------
+type Step = "broker" | "file" | "map" | "check" | "done";
 
-const IGNORE = "ignore";
-
-const MAP_TARGETS: { key: keyof MappedImportRow; label: string }[] = [
-  { key: "ticker", label: "Ticker" },
-  { key: "market", label: "Market" },
-  { key: "type", label: "Type" },
-  { key: "quantity", label: "Quantity" },
-  { key: "pricePerUnit", label: "Price per unit" },
-  { key: "amount", label: "Amount" },
-  { key: "currency", label: "Currency" },
-  { key: "fee", label: "Fee" },
-  { key: "tradeDate", label: "Trade date" },
-  { key: "note", label: "Note" },
+const PRESET_STEPS: { id: Step; label: string }[] = [
+  { id: "broker", label: "Broker" },
+  { id: "file", label: "Your file" },
+  { id: "check", label: "Check" },
+  { id: "done", label: "Done" },
+];
+const OTHER_STEPS: { id: Step; label: string }[] = [
+  { id: "broker", label: "Broker" },
+  { id: "file", label: "Your file" },
+  { id: "map", label: "Match columns" },
+  { id: "check", label: "Check" },
+  { id: "done", label: "Done" },
 ];
 
-const MAPPING_OPTIONS = [
-  ...MAP_TARGETS.map((t) => ({ value: t.key as string, label: t.label })),
-  { value: IGNORE, label: "— Ignore this column —" },
-];
+const CHECK_FAILED = "We couldn't check your file. Please try again.";
 
-// The sample file's exact header names (public/sample-transactions.csv),
-// matched case-insensitively to pre-fill the mapping. Anything unrecognized
-// starts as "ignore" and stays user-editable.
-const HEADER_GUESSES: Record<string, keyof MappedImportRow> = {
-  ticker: "ticker",
-  market: "market",
-  type: "type",
-  trade_date: "tradeDate",
-  quantity: "quantity",
-  price_per_unit: "pricePerUnit",
-  amount: "amount",
-  currency: "currency",
-  fee: "fee",
-  note: "note",
-};
+export function ImportWizard({
+  instruments,
+  brokerLink = null,
+}: {
+  /** "Connect instead" link on the Interactive Brokers screen; null hides it. */
+  brokerLink?: "pro" | "available" | null;
+  /** The stocks and funds InvestIQ already tracks (ticker and market). */
+  instruments: TrackedInstrument[];
+}) {
+  const router = useRouter();
+  const [step, setStep] = React.useState<Step>("broker");
+  const [choice, setChoice] = React.useState<BrokerChoice | null>(null);
 
-function guessMapping(headers: string[]): string[] {
-  return headers.map((header) => HEADER_GUESSES[header.trim().toLowerCase()] ?? IGNORE);
-}
-
-/** Apply the chosen mapping to every data row (raw strings, no conversion). */
-function buildMappedRows(csv: CsvData, mapping: string[]): MappedImportRow[] {
-  return csv.rows.map((cells) => {
-    const row: Record<string, string> = {};
-    mapping.forEach((target, index) => {
-      if (target === IGNORE) return;
-      const value = cells[index];
-      if (value !== undefined) row[target] = value;
-    });
-    return row as MappedImportRow;
-  });
-}
-
-const STEP_NAMES: Record<number, string> = {
-  1: "Upload or paste",
-  2: "Column mapping",
-  3: "Validation",
-  4: "Import",
-};
-
-type ImportOutcome =
-  | { ok: true; imported: number }
-  | { ok: false; message: string };
-
-export function ImportWizard() {
-  const [step, setStep] = React.useState<1 | 2 | 3 | 4>(1);
-
-  // Step 1 state.
+  // Your-file state.
   const [tab, setTab] = React.useState("upload");
-  const [fileName, setFileName] = React.useState<string | null>(null);
-  const [fileText, setFileText] = React.useState<string | null>(null);
+  const [files, setFiles] = React.useState<PickedFile[]>([]);
   const [pasteText, setPasteText] = React.useState("");
-  const [stepOneError, setStepOneError] = React.useState<string | null>(null);
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const [notice, setNotice] = React.useState<FileNotice | null>(null);
 
-  // Steps 2–4 state.
+  // Other-path mapping state.
   const [csv, setCsv] = React.useState<CsvData | null>(null);
   const [mapping, setMapping] = React.useState<string[]>([]);
-  const [mappedRows, setMappedRows] = React.useState<MappedImportRow[]>([]);
-  const [report, setReport] = React.useState<ImportValidationReport | null>(null);
+
+  // Check / result state.
+  const [model, setModel] = React.useState<CheckModel | null>(null);
   const [actionError, setActionError] = React.useState<string | null>(null);
   const [outcome, setOutcome] = React.useState<ImportOutcome | null>(null);
-  const [isValidating, startValidating] = React.useTransition();
+  const [isChecking, startChecking] = React.useTransition();
   const [isImporting, startImporting] = React.useTransition();
+  const [isRefreshing, startRefreshing] = React.useTransition();
 
-  // ----- Step 1: choose a file or paste text --------------------------------
+  const isOther = choice === "other";
+  const steps = isOther ? OTHER_STEPS : PRESET_STEPS;
+  const stepIndex = Math.max(0, steps.findIndex((s) => s.id === step));
 
-  function readFile(file: File) {
-    const looksLikeCsv =
-      file.name.toLowerCase().endsWith(".csv") || file.type.includes("csv");
-    if (!looksLikeCsv) {
-      setStepOneError("That doesn't look like a CSV file — choose a .csv file.");
-      return;
+  // ----- Screen 1: choose a broker -----------------------------------------
+
+  function chooseBroker(id: BrokerChoice) {
+    if (id !== choice) {
+      setNotice(null);
+      setFiles((prev) => prev.map((f) => ({ ...f, problem: undefined })));
     }
-    file.text().then((text) => {
-      setFileName(file.name);
-      setFileText(text);
-      setStepOneError(null);
+    setChoice(id);
+    setActionError(null);
+    setStep("file");
+  }
+
+  // ----- Screen 2: your file -----------------------------------------------
+
+  function addFiles(picked: PickedFile[]) {
+    const multi = choice ? getPresetCard(choice).multiFile : false;
+    setFiles((prev) => {
+      if (!multi) return picked.slice(0, 1);
+      const byId = new Map<string, PickedFile>(
+        prev.map((f) => [f.id, { ...f, problem: undefined }]),
+      );
+      for (const f of picked) byId.set(f.id, f);
+      return [...byId.values()];
     });
   }
 
-  function continueFromStepOne() {
-    const text = tab === "upload" ? (fileText ?? "") : pasteText;
+  function removeFile(id: string) {
+    setFiles((prev) => prev.filter((f) => f.id !== id));
+    setNotice(null);
+  }
+
+  function chooseAnotherFile() {
+    // Take out the file(s) that did not match, then the picker opens.
+    setFiles((prev) => (prev.some((f) => f.problem) ? prev.filter((f) => !f.problem) : []));
+    setNotice(null);
+  }
+
+  /** Read the file(s) with a broker's preset, then check against the portfolio. */
+  function runPresetCheck(presetId: PresetId) {
+    const card = getPresetCard(presetId);
+    const sources: { id?: string; name?: string; text: string }[] =
+      tab === "paste"
+        ? [{ text: pasteText }]
+        : files.map((f) => ({ id: f.id, name: f.name, text: f.text }));
+
+    setActionError(null);
+    setNotice(null);
+
+    const reads: ReadOk[] = [];
+    const refused: { id?: string; name?: string; result: Extract<ReturnType<typeof readBrokerFile>, { ok: false }> }[] = [];
+    for (const source of sources) {
+      const result = readBrokerFile(presetId, source.text, { fileName: source.name });
+      if (result.ok) reads.push(result);
+      else refused.push({ id: source.id, name: source.name, result });
+    }
+
+    if (refused.length > 0) {
+      const refusedIds = new Map(
+        refused.filter((r) => r.id).map((r) => [r.id as string, r.result.reason]),
+      );
+      setFiles((prev) =>
+        prev.map((f) => {
+          const reason = refusedIds.get(f.id);
+          return {
+            ...f,
+            problem: reason
+              ? reason === "wrong_file"
+                ? "Doesn't match"
+                : "Can't be read"
+              : undefined,
+          };
+        }),
+      );
+      const first = refused[0];
+      const r = first.result;
+      if (r.reason === "wrong_file") {
+        const missing = r.missingColumns ?? [];
+        const shown = missing.slice(0, 5).join(", ");
+        const more = missing.length > 5 ? ` and ${missing.length - 5} more` : "";
+        const lines = [
+          missing.length > 0 ? `Your file is missing these columns: ${shown}${more}.` : r.message,
+        ];
+        const suggested = r.suggestedPreset
+          ? { id: r.suggestedPreset, name: brokerName(r.suggestedPreset) }
+          : undefined;
+        if (suggested) lines.push(`This looks like a ${suggested.name} file.`);
+        setNotice({
+          kind: "wrong",
+          title:
+            card.multiFile && first.name
+              ? `'${first.name}' doesn't look like a ${card.name} file`
+              : `This doesn't look like a ${card.name} file`,
+          lines,
+          suggested,
+        });
+      } else if (r.reason === "no_rows") {
+        setNotice({
+          kind: "problem",
+          variant: "destructive",
+          icon: "alert",
+          title: "That file has no transactions",
+          lines: [r.message.replace(/^That file has no transactions\.\s*/, "")],
+        });
+      } else {
+        setNotice({
+          kind: "problem",
+          variant: "destructive",
+          icon: "alert",
+          title: "That CSV couldn't be read",
+          lines: [r.message],
+        });
+      }
+      return;
+    }
+
+    setFiles((prev) => prev.map((f) => ({ ...f, problem: undefined })));
+
+    startChecking(async () => {
+      try {
+        // The server finds the signed-in user's own portfolio; a new account
+        // simply has no references yet.
+        const known = await getKnownImportReferences();
+        if (!known.ok) {
+          setActionError(known.error);
+          return;
+        }
+        const references = known.data.references;
+        const plan = prepareUpload(reads, { instruments, knownReferences: references });
+
+        if (plan.serverRows.length > MAX_ROWS) {
+          setModel(modelFromPlan(plan, new Map(), true));
+          setStep("check");
+          return;
+        }
+
+        // A dry run on the server: it re-checks every row (including selling
+        // more than is held) and writes nothing.
+        const failed = new Map<number, string[]>();
+        if (plan.ready.length > 0) {
+          const dryRun = await validateImportRows(
+            plan.ready.map((r) => ({ ...r.mapped, reference: r.reference, line: r.line })),
+          );
+          if (!dryRun.ok) {
+            setActionError(dryRun.error);
+            return;
+          }
+          for (const result of dryRun.data.results) {
+            if (!result.ok) failed.set(result.row - 1, result.issues);
+          }
+        }
+        setModel(modelFromPlan(plan, failed, false));
+        setStep("check");
+      } catch {
+        setActionError(CHECK_FAILED);
+      }
+    });
+  }
+
+  function switchPreset(id: PresetId) {
+    // Keep the file, change the broker, and check again straight away.
+    setChoice(id);
+    runPresetCheck(id);
+  }
+
+  function continueFromFile() {
+    if (!choice) return;
+    if (choice !== "other") {
+      runPresetCheck(choice);
+      return;
+    }
+    // Other path: parse, then go to the column-matching screen.
+    const text = tab === "upload" ? (files[0]?.text ?? "") : pasteText;
     const parsed = parseCsv(text);
     if (!parsed.ok) {
-      setStepOneError(parsed.error.message);
+      setNotice({
+        kind: "problem",
+        variant: "destructive",
+        icon: "alert",
+        title: "That CSV couldn't be read",
+        lines: [parsed.error.message],
+      });
       return;
     }
     if (parsed.data.rows.length === 0) {
-      setStepOneError(
-        "That CSV only has a header row — there are no data rows to import.",
-      );
+      setNotice({
+        kind: "problem",
+        variant: "destructive",
+        icon: "alert",
+        title: "That file has no transactions",
+        lines: ["It only has a header row, or nothing at all. Check you exported the right dates."],
+      });
       return;
     }
-    setStepOneError(null);
+    setNotice(null);
     setCsv(parsed.data);
     setMapping(guessMapping(parsed.data.headers));
-    setStep(2);
+    setStep("map");
   }
 
   const continueDisabled =
-    tab === "upload" ? fileText === null : pasteText.trim().length === 0;
+    tab === "upload" ? files.length === 0 : pasteText.trim().length === 0;
 
-  // ----- Step 2: column mapping ---------------------------------------------
+  // ----- Other path: validate the mapped rows ------------------------------
 
-  // Two CSV columns mapped to the same field would silently overwrite each
-  // other, so validation is blocked until the duplicate is resolved.
-  const duplicateTargets = React.useMemo(() => {
-    const seen = new Map<string, number>();
-    for (const target of mapping) {
-      if (target === IGNORE) continue;
-      seen.set(target, (seen.get(target) ?? 0) + 1);
-    }
-    return MAP_TARGETS.filter((t) => (seen.get(t.key) ?? 0) > 1).map((t) => t.label);
-  }, [mapping]);
-
-  function validate() {
+  function validateMapped() {
     if (!csv) return;
     const rows = buildMappedRows(csv, mapping);
-    setMappedRows(rows);
+    const references = assignFingerprintReferences(rows);
+    const entries: MappedEntry[] = rows.map((mapped, index) => ({
+      mapped,
+      reference: references[index],
+      line: index + 1,
+      raw: (csv.rows[index] ?? []).join(", "),
+    }));
     setActionError(null);
-    startValidating(async () => {
-      const result = await validateImportRows(rows);
-      if (!result.ok) {
-        setActionError(result.error);
-        return;
+    startChecking(async () => {
+      try {
+        const result = await getKnownImportReferences();
+        if (!result.ok) {
+          setActionError(result.error);
+          return;
+        }
+        const known = new Set(result.data.references);
+        const fresh = entries.filter((e) => !known.has(e.reference));
+        const already = entries.filter((e) => known.has(e.reference));
+        let report: ImportValidationReport = { total: 0, validCount: 0, errorCount: 0, results: [] };
+        if (fresh.length > 0) {
+          const dryRun = await validateImportRows(
+            fresh.map((e) => ({ ...e.mapped, reference: e.reference, line: e.line })),
+          );
+          if (!dryRun.ok) {
+            setActionError(dryRun.error);
+            return;
+          }
+          report = dryRun.data;
+        }
+        setModel(modelFromMapped(report, fresh, already));
+        setStep("check");
+      } catch {
+        setActionError(CHECK_FAILED);
       }
-      setReport(result.data);
-      setStep(3);
     });
   }
 
-  // ----- Step 3 → 4: the real import ----------------------------------------
+  // ----- Screen 3: check -> Screen 4: import -------------------------------
 
   function runImport() {
-    if (!report) return;
-    // Only the rows that passed the dry run are sent — the server would
-    // (rightly) refuse the whole batch if any bad row were included.
-    const okRowNumbers = new Set(
-      report.results.filter((r) => r.ok).map((r) => r.row),
-    );
-    const validRows = mappedRows.filter((_, index) => okRowNumbers.has(index + 1));
+    if (!model || model.sendRows.length === 0) return;
+    const current = model;
     setActionError(null);
     startImporting(async () => {
-      const result = await importTransactions(validRows);
-      setOutcome(
-        result.ok
-          ? { ok: true, imported: result.data.imported }
-          : { ok: false, message: result.error },
-      );
-      setStep(4);
+      try {
+        const result = await importTransactions(current.sendRows);
+        setOutcome(
+          result.ok
+            ? {
+                ok: true,
+                imported: result.data.imported,
+                skipped: current.skipped.length,
+                alreadyImported: current.already.length + result.data.alreadyImportedCount,
+              }
+            : { ok: false, message: result.error },
+        );
+      } catch {
+        setOutcome({ ok: false, message: "The server did not answer. Please try again." });
+      }
+      setStep("done");
     });
   }
 
-  // ----- Render -------------------------------------------------------------
+  // "I added the stocks": reload the tracked list (the page data) without
+  // losing the file, and go back to the file screen. Continue is held until
+  // the fresh list has arrived, so the next check uses it.
+  function recheckAfterTracking() {
+    startRefreshing(() => router.refresh());
+    setStep("file");
+  }
+
+  function startOver() {
+    setStep("broker");
+    setChoice(null);
+    setFiles([]);
+    setPasteText("");
+    setTab("upload");
+    setNotice(null);
+    setCsv(null);
+    setModel(null);
+    setOutcome(null);
+    setActionError(null);
+  }
+
+  // ----- Render ------------------------------------------------------------
 
   return (
-    <div className="max-w-3xl">
-      <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
-        Step {step} of 4 — {STEP_NAMES[step]}
-      </p>
+    <div className="max-w-6xl">
+      <div className="mb-4">
+        <p className="mb-2 text-sm text-slate-500 dark:text-slate-400">
+          Step {stepIndex + 1} of {steps.length} — {steps[stepIndex].label}
+        </p>
+        <div className="flex gap-1" aria-hidden="true">
+          {steps.map((s, index) => (
+            <span
+              key={s.id}
+              className={
+                index <= stepIndex
+                  ? "h-1 flex-1 rounded bg-blue-600 dark:bg-blue-500"
+                  : "h-1 flex-1 rounded bg-slate-200 dark:bg-slate-800"
+              }
+            />
+          ))}
+        </div>
+      </div>
 
       {actionError ? (
         <Alert variant="destructive" className="mb-4">
@@ -248,439 +431,87 @@ export function ImportWizard() {
 
       <Card>
         <CardContent>
-          {step === 1 ? (
-            <StepOne
-              tab={tab}
-              onTabChange={setTab}
-              fileName={fileName}
-              onFileChosen={readFile}
-              fileInputRef={fileInputRef}
-              pasteText={pasteText}
-              onPasteTextChange={setPasteText}
-              error={stepOneError}
-              continueDisabled={continueDisabled}
-              onContinue={continueFromStepOne}
-            />
+          {step === "broker" ? (
+            <div>
+              <h2 className="text-base font-medium">Which broker is your file from?</h2>
+              <p className="mt-1 mb-4 text-sm text-slate-500 dark:text-slate-400">
+                Pick one and we&apos;ll show you how to get the file. Nothing is saved until you
+                check it and press Import.
+              </p>
+              <BrokerGrid selected={choice} onChoose={chooseBroker} />
+            </div>
           ) : null}
 
-          {step === 2 && csv ? (
-            <StepTwo
+          {step === "file" && choice ? (
+            <div>
+              <h2 className="mb-4 text-base font-medium">
+                {choice === "other"
+                  ? "Your file"
+                  : choice === "template"
+                    ? "Your InvestIQ template file"
+                    : `Your ${getPresetCard(choice).name} file`}
+              </h2>
+              <FileStep
+                choice={choice}
+                brokerLink={choice === "ibkr" ? brokerLink : null}
+                tab={tab}
+                onTabChange={setTab}
+                pasteText={pasteText}
+                onPasteChange={setPasteText}
+                files={files}
+                onAddFiles={addFiles}
+                onRemoveFile={removeFile}
+                notice={notice}
+                onNotice={setNotice}
+                isChecking={isChecking}
+                continueDisabled={continueDisabled || isRefreshing}
+                onContinue={continueFromFile}
+                onBack={() => {
+                  setNotice(null);
+                  setStep("broker");
+                }}
+                onSwitchPreset={switchPreset}
+                onChooseAnother={chooseAnotherFile}
+              />
+            </div>
+          ) : null}
+
+          {step === "map" && csv ? (
+            <MapStep
               csv={csv}
               mapping={mapping}
               onMappingChange={setMapping}
-              duplicateTargets={duplicateTargets}
-              isValidating={isValidating}
-              onBack={() => setStep(1)}
-              onValidate={validate}
+              isValidating={isChecking}
+              onBack={() => setStep("file")}
+              onValidate={validateMapped}
             />
           ) : null}
 
-          {step === 3 && csv && report ? (
-            <StepThree
-              csv={csv}
-              report={report}
+          {step === "check" && model ? (
+            <CheckStep
+              model={model}
               isImporting={isImporting}
-              onBack={() => setStep(2)}
+              isRechecking={isRefreshing}
+              onBack={() => setStep(isOther ? "map" : "file")}
               onImport={runImport}
+              onImportAnother={startOver}
+              onRecheck={recheckAfterTracking}
             />
           ) : null}
 
-          {step === 4 && outcome ? (
-            <StepFour
+          {step === "done" && outcome ? (
+            <ResultStep
               outcome={outcome}
               onTryAgain={() => {
-                // Back to the dry-run results without re-uploading anything.
+                // Back to the check results without re-uploading anything.
                 setOutcome(null);
-                setStep(3);
+                setStep("check");
               }}
+              onImportAnother={startOver}
             />
           ) : null}
         </CardContent>
       </Card>
     </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Step 1 — upload or paste
-// ---------------------------------------------------------------------------
-
-function StepOne({
-  tab,
-  onTabChange,
-  fileName,
-  onFileChosen,
-  fileInputRef,
-  pasteText,
-  onPasteTextChange,
-  error,
-  continueDisabled,
-  onContinue,
-}: {
-  tab: string;
-  onTabChange: (tab: string) => void;
-  fileName: string | null;
-  onFileChosen: (file: File) => void;
-  fileInputRef: React.RefObject<HTMLInputElement | null>;
-  pasteText: string;
-  onPasteTextChange: (text: string) => void;
-  error: string | null;
-  continueDisabled: boolean;
-  onContinue: () => void;
-}) {
-  return (
-    <div>
-      {error ? (
-        <Alert variant="destructive" className="mb-4">
-          <TriangleAlert aria-hidden="true" />
-          <AlertTitle>That CSV couldn&apos;t be read</AlertTitle>
-          <AlertDescription>
-            <p>{error}</p>
-          </AlertDescription>
-        </Alert>
-      ) : null}
-
-      <Tabs value={tab} onValueChange={onTabChange}>
-        <TabsList>
-          <TabsTrigger value="upload">Upload file</TabsTrigger>
-          <TabsTrigger value="paste">Paste text</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="upload">
-          {/* Drop zone wrapping a hidden native file input. */}
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            onDragOver={(event) => event.preventDefault()}
-            onDrop={(event) => {
-              event.preventDefault();
-              const file = event.dataTransfer.files[0];
-              if (file) onFileChosen(file);
-            }}
-            className="flex w-full flex-col items-center gap-2 rounded-lg border-2 border-dashed border-slate-300 p-8 text-center outline-none transition-colors hover:border-slate-400 focus-visible:ring-2 focus-visible:ring-ring dark:border-slate-700 dark:hover:border-slate-600"
-          >
-            {fileName ? (
-              <>
-                <FileSpreadsheet
-                  className="size-6 text-slate-400 dark:text-slate-500"
-                  aria-hidden="true"
-                />
-                <span className="text-sm font-medium">{fileName}</span>
-                <span className="text-xs text-slate-500 dark:text-slate-400">
-                  Ready — or drop a different file to replace it.
-                </span>
-              </>
-            ) : (
-              <>
-                <Upload
-                  className="size-6 text-slate-400 dark:text-slate-500"
-                  aria-hidden="true"
-                />
-                <span className="text-sm text-slate-600 dark:text-slate-400">
-                  Drag a CSV file here or click to choose
-                </span>
-              </>
-            )}
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".csv,text/csv"
-            className="sr-only"
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) onFileChosen(file);
-              // Allow re-choosing the same file after a fix.
-              event.target.value = "";
-            }}
-          />
-        </TabsContent>
-
-        <TabsContent value="paste">
-          <Textarea
-            rows={10}
-            value={pasteText}
-            onChange={(event) => onPasteTextChange(event.target.value)}
-            placeholder="ticker,market,type,trade_date,quantity,price_per_unit,amount,currency,fee,note"
-            className="font-mono text-xs"
-            aria-label="Paste CSV text"
-          />
-        </TabsContent>
-      </Tabs>
-
-      <div className="mt-4">
-        <Button variant="link" size="sm" className="px-0" asChild>
-          <a href="/sample-transactions.csv" download>
-            <Download aria-hidden="true" />
-            Download sample CSV
-          </a>
-        </Button>
-      </div>
-
-      <div className="mt-4 flex justify-end">
-        <Button type="button" disabled={continueDisabled} onClick={onContinue}>
-          Continue
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Step 2 — column mapping + preview of the first rows
-// ---------------------------------------------------------------------------
-
-function StepTwo({
-  csv,
-  mapping,
-  onMappingChange,
-  duplicateTargets,
-  isValidating,
-  onBack,
-  onValidate,
-}: {
-  csv: CsvData;
-  mapping: string[];
-  onMappingChange: (mapping: string[]) => void;
-  duplicateTargets: string[];
-  isValidating: boolean;
-  onBack: () => void;
-  onValidate: () => void;
-}) {
-  const previewRows = csv.rows.slice(0, 3);
-
-  return (
-    <div>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>CSV Column</TableHead>
-            <TableHead>Maps to</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {csv.headers.map((header, index) => (
-            <TableRow key={`${header}-${index}`}>
-              <TableCell className="font-mono text-xs">{header || "(unnamed column)"}</TableCell>
-              <TableCell>
-                <Select
-                  value={mapping[index]}
-                  onValueChange={(value) => {
-                    const next = [...mapping];
-                    next[index] = value;
-                    onMappingChange(next);
-                  }}
-                  options={MAPPING_OPTIONS}
-                  className="max-w-56"
-                  aria-label={`Map column ${header || index + 1}`}
-                />
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-
-      {duplicateTargets.length > 0 ? (
-        <p className="mt-3 text-sm text-amber-700 dark:text-amber-400">
-          More than one column is mapped to{" "}
-          {duplicateTargets.join(" and ")} — map one of them to something else
-          or ignore it before validating.
-        </p>
-      ) : null}
-
-      <h3 className="mt-6 mb-2 text-sm font-semibold">
-        Preview — first {previewRows.length} row{previewRows.length === 1 ? "" : "s"}
-      </h3>
-      <div className="overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              {csv.headers.map((header, index) => (
-                <TableHead key={`${header}-${index}`} className="font-mono text-xs">
-                  {header || "(unnamed)"}
-                </TableHead>
-              ))}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {previewRows.map((cells, rowIndex) => (
-              <TableRow key={rowIndex}>
-                {csv.headers.map((_, cellIndex) => (
-                  <TableCell key={cellIndex} className="font-mono text-xs">
-                    {cells[cellIndex] ?? ""}
-                  </TableCell>
-                ))}
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-
-      <div className="mt-6 flex justify-end gap-3">
-        <Button type="button" variant="outline" onClick={onBack} disabled={isValidating}>
-          Back
-        </Button>
-        <Button
-          type="button"
-          onClick={onValidate}
-          disabled={isValidating || duplicateTargets.length > 0}
-        >
-          {isValidating ? (
-            <>
-              <LoaderCircle className="animate-spin" aria-hidden="true" />
-              Validating…
-            </>
-          ) : (
-            "Validate"
-          )}
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Step 3 — dry-run validation results (nothing written yet)
-// ---------------------------------------------------------------------------
-
-function StepThree({
-  csv,
-  report,
-  isImporting,
-  onBack,
-  onImport,
-}: {
-  csv: CsvData;
-  report: ImportValidationReport;
-  isImporting: boolean;
-  onBack: () => void;
-  onImport: () => void;
-}) {
-  const errored = report.results.filter((r) => !r.ok);
-  const importCount = report.validCount;
-  const importLabel = `Import ${importCount} transaction${importCount === 1 ? "" : "s"}`;
-
-  return (
-    <div>
-      <p className="text-sm">
-        <span className="font-semibold">
-          {report.validCount} of {report.total} row{report.total === 1 ? "" : "s"} are
-          ready to import.
-        </span>
-      </p>
-
-      {errored.length > 0 ? (
-        <>
-          <h3 className="mt-4 mb-2 text-sm font-semibold">Rows with errors</h3>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-16">Row #</TableHead>
-                  <TableHead>Issue</TableHead>
-                  <TableHead>Raw row data</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {errored.map((result) =>
-                  result.ok ? null : (
-                    <TableRow key={result.row}>
-                      <TableCell className="tabular-nums">{result.row}</TableCell>
-                      <TableCell>
-                        {result.issues.map((issue, index) => (
-                          <p key={index} className="text-sm">
-                            {issue}
-                          </p>
-                        ))}
-                      </TableCell>
-                      <TableCell>
-                        <p className="max-w-56 truncate font-mono text-xs text-slate-500 dark:text-slate-400">
-                          {csv.rows[result.row - 1]?.join(", ") ?? ""}
-                        </p>
-                      </TableCell>
-                    </TableRow>
-                  ),
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </>
-      ) : null}
-
-      <p className="mt-4 text-sm text-slate-600 dark:text-slate-400">
-        {report.validCount === 0
-          ? "No rows could be imported. Fix the issues above and try again."
-          : errored.length > 0
-            ? `You can still import the ${report.validCount} valid row${report.validCount === 1 ? "" : "s"} now, or go back and fix the ${errored.length} errored row${errored.length === 1 ? "" : "s"} first.`
-            : report.total === 1
-              ? "The 1 row looks good."
-              : `All ${report.total} rows look good.`}
-      </p>
-
-      <div className="mt-6 flex justify-end gap-3">
-        <Button type="button" variant="outline" onClick={onBack} disabled={isImporting}>
-          Back
-        </Button>
-        {report.validCount > 0 ? (
-          <Button type="button" onClick={onImport} disabled={isImporting}>
-            {isImporting ? (
-              <>
-                <LoaderCircle className="animate-spin" aria-hidden="true" />
-                Importing…
-              </>
-            ) : (
-              importLabel
-            )}
-          </Button>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Step 4 — the result of the real import
-// ---------------------------------------------------------------------------
-
-function StepFour({
-  outcome,
-  onTryAgain,
-}: {
-  outcome: ImportOutcome;
-  onTryAgain: () => void;
-}) {
-  if (outcome.ok) {
-    return (
-      <Alert variant="success">
-        <CircleCheck aria-hidden="true" />
-        <AlertTitle>Import complete</AlertTitle>
-        <AlertDescription>
-          <p>
-            {outcome.imported} transaction{outcome.imported === 1 ? " was" : "s were"}{" "}
-            added to your portfolio.
-          </p>
-          <Button className="mt-2" asChild>
-            <Link href="/portfolio">Go to Portfolio</Link>
-          </Button>
-        </AlertDescription>
-      </Alert>
-    );
-  }
-
-  return (
-    <Alert variant="destructive">
-      <TriangleAlert aria-hidden="true" />
-      <AlertTitle>Import failed</AlertTitle>
-      <AlertDescription>
-        <p>
-          Something went wrong saving these transactions. Nothing was imported —
-          you can try again.
-        </p>
-        <p>{outcome.message}</p>
-        <Button type="button" variant="outline" className="mt-2" onClick={onTryAgain}>
-          Try again
-        </Button>
-      </AlertDescription>
-    </Alert>
   );
 }

@@ -1,7 +1,8 @@
 import { expect, test } from "@playwright/test";
+import { E2E_USER_PASSWORD } from "./test-user";
 
-// The demo login's password is never hardcoded — it comes from the same
-// SEED_DEMO_PASSWORD the seed script used. Load .env so the test sees it
+// The e2e test login (tests/e2e/test-user.ts) is never hardcoded here — its
+// password comes from E2E_TEST_PASSWORD. Load .env so the test sees it
 // (same idiom as smoke.spec.ts).
 try {
   process.loadEnvFile();
@@ -9,17 +10,17 @@ try {
   // no .env file — rely on the environment
 }
 
-const DEMO_PASSWORD = process.env.SEED_DEMO_PASSWORD;
+const DEMO_PASSWORD = E2E_USER_PASSWORD;
 
 test("adding a Buy transaction changes the dashboard's Total Portfolio Value", async ({
   page,
 }) => {
   test.skip(
     !DEMO_PASSWORD,
-    "Set SEED_DEMO_PASSWORD in .env (the one used when seeding) to run this test",
+    "Set E2E_TEST_PASSWORD in .env to run this test",
   );
 
-  // Every test starts already signed in as the demo user — see
+  // Every test starts already signed in as the e2e test user — see
   // tests/e2e/global-setup.ts.
   await page.goto("/dashboard");
 
@@ -66,4 +67,57 @@ test("adding a Buy transaction changes the dashboard's Total Portfolio Value", a
     .innerText();
 
   expect(totalAfter).not.toBe(totalBefore);
+});
+
+// ---------------------------------------------------------------------------
+// Phone viewport (390 x 844): the holdings are readable cards, not a table
+// that hides the money. Core-guarantee check: a quantity must never be cut
+// ("3,0" for 3,000 shares was a wrong number on screen). The long sweep of
+// every screen lives in phone-layout.spec.ts; this is the portfolio's own
+// "done when" from phone-tables-as-cards.md.
+// ---------------------------------------------------------------------------
+test.describe("phone viewport", () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+
+  test("holdings show value and gain with no sideways scroll, and the quantity is whole", async ({
+    page,
+  }) => {
+    test.skip(
+      !DEMO_PASSWORD,
+      "Set E2E_TEST_PASSWORD in .env to run this test",
+    );
+
+    await page.goto("/portfolio");
+    const cards = page.getByRole("list", { name: "Holdings", exact: true }).locator(":scope > li");
+    await expect(cards.first()).toBeVisible();
+
+    // The page itself does not scroll sideways.
+    const pageWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+    expect(pageWidth).toBeLessThanOrEqual(390);
+
+    // The 3,000-share holding (Bank Muscat) reads "3,000" in full.
+    const bkmb = cards.filter({ hasText: "BKMB" });
+    const quantity = bkmb.locator('[data-figure][title="3,000 shares"]');
+    await expect(quantity).toHaveText("3,000");
+    const fits = await quantity.evaluate((node) => ({
+      scrollWidth: node.scrollWidth,
+      clientWidth: node.clientWidth,
+      right: node.getBoundingClientRect().right,
+    }));
+    expect(fits.scrollWidth).toBeLessThanOrEqual(fits.clientWidth + 1);
+    expect(fits.right).toBeLessThanOrEqual(390);
+
+    // Market value and gain/loss are on screen for this holding, no scrolling.
+    const figures = bkmb.locator("[data-figure]");
+    expect(await figures.count()).toBeGreaterThanOrEqual(3);
+    for (const figure of await figures.all()) {
+      await expect(figure).toBeVisible();
+      const box = await figure.boundingBox();
+      expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(390);
+      expect(box?.x ?? -1).toBeGreaterThanOrEqual(0);
+    }
+
+    // The table version is not on screen at the same time.
+    await expect(page.getByRole("table").first()).toBeHidden();
+  });
 });

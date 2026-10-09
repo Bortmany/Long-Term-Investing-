@@ -1,0 +1,17 @@
+
+
+Run Date,Account,Account Number,Action,Symbol,Security Description,Security Type,Exchange Quantity,Exchange Currency,Quantity,Currency,Price,Exchange Rate,Commission,Fees,Accrued Interest,Amount,Settlement Date
+05/20/2026,Fidelity Account,X00000000, STOCK SPLIT NVIDIA CORP (NVDA),NVDA,NVIDIA CORP,Cash,0,,90,USD,,,,,,,05/20/2026
+04/10/2026,Fidelity Account,X00000000, ELECTRONIC FUNDS TRANSFER PAID (Cash),,No Description,Cash,0,,0,USD,,,,,,-500.00,04/10/2026
+03/25/2026,Fidelity Account,X00000000, YOU BOUGHT BARRICK GOLD CORP (ABX) (Cash),ABX,BARRICK GOLD CORP,Cash,0,,100,CAD,20.00,,0,0,,-2000.00,03/26/2026
+03/20/2026,Fidelity Account,X00000000, REINVESTMENT MICROSOFT CORP (MSFT) (Cash),MSFT,MICROSOFT CORP,Cash,0,,0.012,USD,415.00,,0,0,,-4.98,03/20/2026
+03/15/2026,Fidelity Account,X00000000, NON-RESIDENT TAX COCA COLA CO (KO) (Cash),KO,COCA COLA CO,Cash,0,,0,USD,,,,,,-0.77,03/15/2026
+03/15/2026,Fidelity Account,X00000000, DIVIDEND RECEIVED COCA COLA CO (KO) (Cash),KO,COCA COLA CO,Cash,0,,0,USD,,,,,,5.10,03/15/2026
+03/02/2026,Fidelity Account,X00000000, YOU SOLD APPLE INC (AAPL) (Cash),AAPL,APPLE INC,Cash,0,,-4,USD,214.00,,0,0.05,,855.95,03/03/2026
+02/20/2026,Fidelity Account,X00000000, YOU BOUGHT COCA COLA CO (KO) (Cash),KO,COCA COLA CO,Cash,0,,10,USD,60.00,,0,0,,-600.00,02/23/2026
+02/03/2026,Fidelity Account,X00000000, YOU BOUGHT MICROSOFT CORP (MSFT) (Cash),MSFT,MICROSOFT CORP,Cash,0,,5,USD,410.10,,0,0,,-2050.50,02/04/2026
+01/12/2026,Fidelity Account,X00000000, YOU BOUGHT APPLE INC (AAPL) (Cash),AAPL,APPLE INC,Cash,0,,10,USD,205.40,,0,0,,-2054.00,01/13/2026
+01/05/2026,Fidelity Account,X00000000, ELECTRONIC FUNDS TRANSFER RECEIVED (Cash),,No Description,Cash,0,,0,USD,,,,,,5000.00,01/05/2026
+
+"The data and information in this spreadsheet is provided to you solely for your use and is not to be distributed or shared. Fake fixture text for testing."
+"Date downloaded 06/30/2026 12:00 pm"

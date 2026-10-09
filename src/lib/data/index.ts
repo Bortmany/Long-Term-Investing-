@@ -58,3 +58,21 @@ export {
   NEWS_TTL_MS,
   QUOTE_TTL_MS,
 } from "./cache";
+// Twelve Data facts (market table, settings, badge wording, licence check).
+// Pure functions — no network. Client components import these straight from
+// "@/lib/data/provider-info" so they never pull in the database client.
+export {
+  DEFAULT_TWELVE_DATA_MARKETS,
+  TWELVE_DATA_MARKET_TABLE,
+  describePriceProvider,
+  getTwelveDataMarketEntry,
+  isPublicDisplayAllowed,
+  isTwelveDataConfigured,
+  parseTwelveDataMarkets,
+  twelveDataRoutingFromEnv,
+  vendorSymbolFor,
+  type ProviderBadgeDetail,
+  type TwelveDataDelay,
+  type TwelveDataMarketEntry,
+  type TwelveDataRouting,
+} from "./provider-info";

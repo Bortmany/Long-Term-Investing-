@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
+import { E2E_USER_PASSWORD } from "./test-user";
 
-// The demo login's password and the cron bearer secret are never hardcoded —
+// The e2e test login's password and the cron bearer secret are never hardcoded —
 // they come from .env, same env-loading idiom as smoke.spec.ts.
 try {
   process.loadEnvFile();
@@ -8,10 +9,10 @@ try {
   // no .env file — rely on the environment
 }
 
-const DEMO_PASSWORD = process.env.SEED_DEMO_PASSWORD;
+const DEMO_PASSWORD = E2E_USER_PASSWORD;
 const CRON_SECRET = process.env.CRON_SECRET;
 
-// Every test starts already signed in as the demo user — see
+// Every test starts already signed in as the e2e test user — see
 // tests/e2e/global-setup.ts. No per-file sign-in helper anymore.
 
 /**
@@ -56,7 +57,7 @@ test("a PRICE_ABOVE alert fires once crossed with a manual price, checked via th
 }) => {
   test.skip(
     !DEMO_PASSWORD || !CRON_SECRET,
-    "Set SEED_DEMO_PASSWORD and CRON_SECRET in .env to run this test",
+    "Set E2E_TEST_PASSWORD and CRON_SECRET in .env to run this test",
   );
 
   // Defensive pre-cleanup (see the two helpers above): start this run from a

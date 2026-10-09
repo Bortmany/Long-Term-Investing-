@@ -1,7 +1,8 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import dynamic from "next/dynamic";
-import { Coins, Inbox, TriangleAlert } from "lucide-react";
+import Link from "next/link";
+import { Coins, Inbox } from "lucide-react";
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -11,27 +12,50 @@ import {
   computeMonthlyDividends,
   computeReturns,
   computeTrailingDividendIncome,
+  collectUnvaluedItems,
+  decideDividendCard,
+  describeUnvalued,
+  fxViaHubNote,
   type AllocatableHolding,
   type Allocation,
   type ReturnFigure,
+  type UnvaluedHolding,
 } from "@/lib/portfolio";
 import { loadPortfolioComputation } from "@/lib/portfolio-market-data";
 import { getUpcomingDividends, type UpcomingDividend } from "@/lib/data";
-import { formatMoney, formatPercent, formatQuantity, formatShortDate } from "@/lib/format";
+import {
+  formatMoney,
+  formatPercent,
+  formatQuantity,
+  formatQuantityCompact,
+  formatShortDate,
+} from "@/lib/format";
 import {
   SourceBadge,
+  badgePropsForHoldingValue,
   badgePropsForValueSource,
   badgePropsForValueSources,
   type SourceBadgeProps,
 } from "@/components/source-badge";
+import { FxViaHubHint } from "@/components/portfolio/fx-via-hub-hint";
 import { EmptyState } from "@/components/empty-state";
+import { Button } from "@/components/ui/button";
+import { EmailConfirmedNotice } from "@/components/auth/email-confirmed-notice";
 import { ExplainerTip } from "@/components/explainer-tip";
 import { LatestReviewCard } from "@/components/latest-review-card";
 import {
   HealthScorePanel,
   parseHealthScoreAnalysis,
 } from "@/components/health/health-score-panel";
+import { UnvaluedBanner } from "@/components/portfolio/unvalued-banner";
+import { UnvaluedLegendRow } from "@/components/dashboard/unvalued-legend-row";
+import {
+  DividendWarningAlert,
+  DividendWarningLine,
+} from "@/components/dashboard/dividend-warning";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ResponsiveRows } from "@/components/ui/responsive-rows";
+import { RowCard } from "@/components/ui/row-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -98,8 +122,14 @@ function gainLossColor(amount: number): string {
 // Everything is loaded server-side, scoped to the signed-in user, and run
 // through the pure portfolio math library. Golden rule: every figure carries
 // a source badge, and anything that couldn't be valued is SAID, not padded.
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const session = await auth.api.getSession({ headers: await headers() });
+  // Arrived from a confirmation link (via /verify-email): say so once.
+  const justVerified = (await searchParams).verified === "1";
   if (!session) {
     redirect("/sign-in");
   }
@@ -113,11 +143,22 @@ export default async function DashboardPage() {
   if (!computation) {
     return (
       <>
+        {justVerified ? <EmailConfirmedNotice /> : null}
         <h1 className="mb-6 text-2xl font-semibold">Dashboard</h1>
         <EmptyState
           icon={Inbox}
           heading="No portfolio yet"
           sentence="Your portfolio will appear here once it's set up."
+          action={
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <Button asChild size="lg">
+                <Link href="/portfolio?add=1">Add your first transaction</Link>
+              </Button>
+              <Button asChild size="lg" variant="outline">
+                <Link href="/portfolio/import">Import from your broker</Link>
+              </Button>
+            </div>
+          }
         />
       </>
     );
@@ -143,7 +184,6 @@ export default async function DashboardPage() {
   const totalBadge = badgePropsForValueSources(portfolioValue.sources);
   // Cash and dividend income are derived purely from the (seeded) transactions.
   const cashBadge = badgePropsForValueSources([{ kind: "derived" }]);
-  const dividendBadge = badgePropsForValueSources([{ kind: "derived" }]);
 
   const holdings = [...portfolioValue.holdings].sort((a, b) => {
     const av = a.valuation.ok ? a.valuation.marketValue : -1;
@@ -186,9 +226,20 @@ export default async function DashboardPage() {
       market: instrument.market,
     });
   }
-  const sectorAllocation = computeAllocation(allocatable, "sector");
-  const countryAllocation = computeAllocation(allocatable, "country");
-  const marketAllocation = computeAllocation(allocatable, "market");
+  // Holdings that could not be valued have no honest size, so they are handed
+  // to the allocation separately and shown as a "Couldn't be valued" row.
+  const unvaluedHoldings: UnvaluedHolding[] = [];
+  for (const holding of holdings) {
+    if (holding.valuation.ok) continue;
+    unvaluedHoldings.push({
+      instrumentId: holding.instrumentId,
+      label: instrumentById.get(holding.instrumentId)?.ticker ?? "Unknown instrument",
+      reason: holding.valuation.reason,
+    });
+  }
+  const sectorAllocation = computeAllocation(allocatable, "sector", unvaluedHoldings);
+  const countryAllocation = computeAllocation(allocatable, "country", unvaluedHoldings);
+  const marketAllocation = computeAllocation(allocatable, "market", unvaluedHoldings);
 
   // --- Dividend module -------------------------------------------------------
   const hasDividendHistory = transactions.some((t) => t.type === "DIVIDEND");
@@ -240,13 +291,28 @@ export default async function DashboardPage() {
 
   // Golden rule: any figure that had to leave something out (missing price
   // or FX rate) makes the whole page say so — covers the original totals
-  // plus the return/dividend figures this phase adds.
-  const incomplete =
-    !portfolioValue.complete ||
-    !dividendIncome.complete ||
-    !returns.complete ||
-    !monthlyDividends.complete ||
-    !dividendsByHolding.complete;
+  // plus the return/dividend figures. The dividend badge is swapped for an
+  // amber warning whenever a dividend figure is incomplete.
+  const tickerFor = (id: string) => instrumentById.get(id)?.ticker ?? "Unknown instrument";
+  const dividendCard = decideDividendCard({
+    baseCurrency: base,
+    income: dividendIncome,
+    monthly: monthlyDividends,
+    byHolding: dividendsByHolding,
+    labelFor: tickerFor,
+  });
+  const unvaluedSummary = describeUnvalued(
+    collectUnvaluedItems({
+      portfolioMissing: portfolioValue.missing,
+      dividendMissing: [
+        ...dividendIncome.missing,
+        ...monthlyDividends.missing,
+        ...dividendsByHolding.missing,
+      ],
+      returnsMissing: returns.missing,
+      labelFor: tickerFor,
+    }),
+  );
 
   // Health Score: read whatever is already stored — this page never
   // generates one itself (THE AI RULE, docs/CONVENTIONS.md). The key itself
@@ -265,19 +331,12 @@ export default async function DashboardPage() {
 
   return (
     <>
+      {justVerified ? <EmailConfirmedNotice /> : null}
       <h1 className="mb-6 text-2xl font-semibold">Dashboard</h1>
 
-      {incomplete ? (
-        // Golden rule: totals below exclude anything that couldn't be valued,
-        // and we say so instead of padding the numbers.
-        <div className="mb-4 flex items-start gap-2 rounded-lg border border-amber-600/30 bg-amber-50 px-4 py-3 text-sm text-amber-700 dark:border-amber-400/30 dark:bg-amber-950 dark:text-amber-400">
-          <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-          <p>
-            Some positions couldn&apos;t be valued (missing price or exchange rate).
-            The totals below include only what could be valued.
-          </p>
-        </div>
-      ) : null}
+      {/* Golden rule: totals below exclude anything that couldn't be valued,
+          and we say so instead of padding the numbers. */}
+      <UnvaluedBanner summary={unvaluedSummary} priceHref="/portfolio" className="mb-4" />
 
       {/* Summary row */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -285,6 +344,11 @@ export default async function DashboardPage() {
           label="Total Portfolio Value"
           value={formatMoney(portfolioValue.totalValue, base)}
           badge={<SourceBadge {...totalBadge} />}
+          caption={
+            totalBadge.variant === "sample"
+              ? "Your own holdings, priced with sample prices until a market-data key is connected."
+              : undefined
+          }
         />
         <SummaryCard
           label={
@@ -302,7 +366,13 @@ export default async function DashboardPage() {
             </span>
           }
           value={formatMoney(dividendIncome.total, base)}
-          badge={<SourceBadge {...dividendBadge} />}
+          badge={
+            dividendCard.kind === "badge" ? (
+              <SourceBadge {...dividendCard.badge} />
+            ) : (
+              <DividendWarningLine warning={dividendCard} />
+            )
+          }
         />
       </div>
 
@@ -401,6 +471,53 @@ export default async function DashboardPage() {
               className="min-h-48"
             />
           ) : (
+            <ResponsiveRows
+              listLabel="Holdings"
+              cards={holdings.map((holding) => {
+                const instrument = instrumentById.get(holding.instrumentId);
+                const fullQuantity = formatQuantity(holding.quantity);
+                return (
+                  <RowCard
+                    key={holding.instrumentId}
+                    density="compact"
+                    identity={
+                      <span className="font-mono font-semibold">{instrument?.ticker ?? "—"}</span>
+                    }
+                    headline={
+                      holding.valuation.ok ? (
+                        <>
+                          <span className="inline-flex flex-wrap items-center justify-end gap-1.5">
+                            <span data-figure className="text-base font-semibold tabular-nums">
+                              {formatMoney(holding.valuation.marketValue, base)}
+                            </span>
+                            <SourceBadge
+                              size="sm"
+                              {...(instrument
+                                ? badgePropsForHoldingValue(holding.valuation, instrument.market)
+                                : badgePropsForValueSource(holding.valuation.source))}
+                            />
+                          </span>
+                          <FxViaHubHint note={fxViaHubNote(holding.valuation)} />
+                        </>
+                      ) : (
+                        // Never a fake number: say why it couldn't be valued.
+                        <span className="text-sm text-amber-700 dark:text-amber-400">
+                          {holding.valuation.reason === "missing_price"
+                            ? "Unavailable — no price"
+                            : "Unavailable — no exchange rate"}
+                        </span>
+                      )
+                    }
+                    name={instrument?.name ?? "Unknown instrument"}
+                    meta={
+                      <span data-figure title={fullQuantity} aria-label={`${fullQuantity} shares`}>
+                        {formatQuantityCompact(holding.quantity)} shares
+                      </span>
+                    }
+                  />
+                );
+              })}
+              table={
             <Table>
               <TableHeader>
                 <TableRow>
@@ -418,23 +535,32 @@ export default async function DashboardPage() {
                       <TableCell className="font-mono font-medium">
                         {instrument?.ticker ?? "—"}
                       </TableCell>
-                      <TableCell className="text-slate-600 dark:text-slate-400">
+                      <TableCell className="whitespace-normal break-words text-slate-600 dark:text-slate-400">
                         {instrument?.name ?? "Unknown instrument"}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
                         {formatQuantity(holding.quantity)}
                       </TableCell>
-                      <TableCell className="text-right">
+                      {/* Extra room on the right so the source badge's hover
+                          hint never reaches past the table edge. */}
+                      <TableCell className="pr-10 text-right">
                         {holding.valuation.ok ? (
-                          <span className="inline-flex items-center gap-1.5">
-                            <span className="font-medium tabular-nums">
-                              {formatMoney(holding.valuation.marketValue, base)}
+                          <>
+                            <span className="inline-flex items-center gap-1.5">
+                              <span className="font-medium tabular-nums">
+                                {formatMoney(holding.valuation.marketValue, base)}
+                              </span>
+                              {/* Per-holding badge matches the price's real
+                                  origin (end of day is never called Live). */}
+                              <SourceBadge
+                                size="sm"
+                                {...(instrument
+                                  ? badgePropsForHoldingValue(holding.valuation, instrument.market)
+                                  : badgePropsForValueSource(holding.valuation.source))}
+                              />
                             </span>
-                            <SourceBadge
-                              size="sm"
-                              {...badgePropsForValueSource(holding.valuation.source)}
-                            />
-                          </span>
+                            <FxViaHubHint note={fxViaHubNote(holding.valuation)} />
+                          </>
                         ) : (
                           // Never a fake number: say why it couldn't be valued.
                           <span className="text-sm text-amber-700 dark:text-amber-400">
@@ -449,6 +575,8 @@ export default async function DashboardPage() {
                 })}
               </TableBody>
             </Table>
+              }
+            />
           )}
         </CardContent>
       </Card>
@@ -457,7 +585,9 @@ export default async function DashboardPage() {
       <Card className="mt-6 gap-4">
         <CardHeader className="flex-row items-center gap-3">
           <CardTitle>Dividend Income</CardTitle>
-          <SourceBadge variant="derived" />
+          {/* The clean badge only when nothing was left out; otherwise the
+              warning below takes its place. */}
+          {dividendCard.kind === "badge" ? <SourceBadge {...dividendCard.badge} /> : null}
         </CardHeader>
         <CardContent>
           {!hasDividendHistory ? (
@@ -469,13 +599,18 @@ export default async function DashboardPage() {
             />
           ) : (
             <>
+              {dividendCard.kind === "warning" ? (
+                <DividendWarningAlert warning={dividendCard} />
+              ) : null}
               <DividendBarChart buckets={monthlyDividends.buckets} baseCurrency={base} />
 
               <div className="mt-4">
                 <h3 className="mb-2 text-sm font-semibold">Income by Holding</h3>
                 {dividendsByHolding.rows.length === 0 ? (
                   <p className="text-sm text-slate-500 dark:text-slate-400">
-                    No dividend income in the trailing 12 months.
+                    {dividendCard.kind === "warning"
+                      ? "Nothing to show yet: every dividend is waiting for an exchange rate."
+                      : "No dividend income in the trailing 12 months."}
                   </p>
                 ) : (
                   <ul className="flex flex-col divide-y divide-slate-100 dark:divide-slate-800">
@@ -558,11 +693,14 @@ function SummaryCard({
   label,
   value,
   badge,
+  caption,
   valueClassName,
 }: {
   label: React.ReactNode;
   value: React.ReactNode;
   badge: React.ReactNode;
+  /** Optional small note under the badge (e.g. the sample-prices line). */
+  caption?: string;
   /** Optional override (e.g. green/red for a signed return figure). */
   valueClassName?: string;
 }) {
@@ -584,6 +722,9 @@ function SummaryCard({
           {value}
         </div>
         <div className="mt-2">{badge}</div>
+        {caption ? (
+          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{caption}</p>
+        ) : null}
       </CardContent>
     </Card>
   );
@@ -609,11 +750,14 @@ function AllocationCard({
       <CardContent>
         {allocation.slices.length === 0 ? (
           <p className="py-10 text-center text-sm text-slate-500 dark:text-slate-400">
-            No holdings to allocate yet.
+            {allocation.unvalued.length > 0
+              ? "Nothing could be valued yet. See the note at the top of the page."
+              : "No holdings to allocate yet."}
           </p>
         ) : (
           <AllocationDonut slices={allocation.slices} baseCurrency={baseCurrency} />
         )}
+        <UnvaluedLegendRow unvalued={allocation.unvalued} />
       </CardContent>
     </Card>
   );

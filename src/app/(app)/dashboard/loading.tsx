@@ -17,7 +17,7 @@ export default function DashboardLoading() {
             <CardContent className="p-5">
               <Skeleton className="h-4 w-32" />
               <Skeleton className="mt-2 h-8 w-40" />
-              <Skeleton className="mt-3 h-5 w-24" />
+              <Skeleton className="mt-3 h-6 w-[180px] max-w-full rounded-full" />
             </CardContent>
           </Card>
         ))}
@@ -47,7 +47,7 @@ export default function DashboardLoading() {
             <CardContent className="p-5">
               <Skeleton className="h-4 w-48" />
               <Skeleton className="mt-2 h-8 w-40" />
-              <Skeleton className="mt-3 h-5 w-24" />
+              <Skeleton className="mt-3 h-6 w-[180px] max-w-full rounded-full" />
             </CardContent>
           </Card>
         ))}

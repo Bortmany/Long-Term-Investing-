@@ -72,3 +72,38 @@ describe("computeAllocation", () => {
     expect(Number.isNaN(allocation.slices[0].sharePercent)).toBe(false);
   });
 });
+
+describe("computeAllocation with holdings that could not be valued", () => {
+  const valued: AllocatableHolding[] = [
+    holding({ instrumentId: "bkmb", marketValue: 300, sector: "Banks", country: "Oman", market: "MSX" }),
+  ];
+  const unvalued = [
+    { instrumentId: "armco", label: "ARMCO", reason: "missing_fx_rate" as const },
+  ];
+
+  it("returns the unvalued holdings beside the slices, in every breakdown", () => {
+    for (const key of ["sector", "country", "market"] as const) {
+      const allocation = computeAllocation(valued, key, unvalued);
+      expect(allocation.unvalued).toEqual(unvalued);
+    }
+  });
+
+  it("never turns them into a slice or changes the valued total or percentages", () => {
+    const allocation = computeAllocation(valued, "sector", unvalued);
+    expect(allocation.total).toBe(300);
+    expect(allocation.slices).toHaveLength(1);
+    expect(allocation.slices[0].sharePercent).toBeCloseTo(100);
+    expect(allocation.slices.some((s) => s.label === "ARMCO")).toBe(false);
+  });
+
+  it("reports them even when nothing at all could be valued", () => {
+    const allocation = computeAllocation([], "market", unvalued);
+    expect(allocation.slices).toEqual([]);
+    expect(allocation.total).toBe(0);
+    expect(allocation.unvalued).toHaveLength(1);
+  });
+
+  it("defaults to an empty unvalued list", () => {
+    expect(computeAllocation(valued, "sector").unvalued).toEqual([]);
+  });
+});

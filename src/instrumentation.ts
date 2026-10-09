@@ -59,8 +59,23 @@ function checkStartupSecrets(): void {
   }
 }
 
+/**
+ * ALLOW_SIGNUPS is retired: sign-ups are now open by default and
+ * SIGNUPS_PAUSED="true" is the off-switch (src/lib/auth.ts). If an old
+ * environment still sets ALLOW_SIGNUPS, say so once at startup so nobody
+ * thinks it still does anything. Runs in every environment.
+ */
+function warnAboutRetiredSettings(env: Record<string, string | undefined> = process.env): void {
+  // Next may call register() once per runtime; warn from the Node one only.
+  if (env.NEXT_RUNTIME === "edge") return;
+  if (env.ALLOW_SIGNUPS !== undefined) {
+    logger.warn("ALLOW_SIGNUPS is no longer used; use SIGNUPS_PAUSED.");
+  }
+}
+
 export async function register(): Promise<void> {
   checkStartupSecrets();
+  warnAboutRetiredSettings();
 
   // Node.js-only: see instrumentation-node.ts for why this is a dynamic
   // import guarded by NEXT_RUNTIME rather than a top-level import here.
@@ -98,7 +113,7 @@ export const onRequestError: Instrumentation.onRequestError = async (
     path: request.path,
     method: request.method,
     routeType: context.routeType,
-  });
+  }, { alert: false }); // Sentry gets this one below, with the full request.
 
   if (!process.env.SENTRY_DSN) return;
   try {

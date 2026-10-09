@@ -145,7 +145,7 @@ Where InvestIQ AI is different:
 | # | Claim (short) | Evidence type | Confidence | Source title | Host | URL / file:line | Date |
 |---|---|---|---|---|---|---|---|
 | 1 | Never show a fabricated number; every figure carries a source badge | repo-doc | High | CONVENTIONS.md | (repo) | docs/CONVENTIONS.md:8 | n/a |
-| 4 | Invitation-only production; ALLOW_SIGNUPS never set live | repo-doc | High | CONVENTIONS.md | (repo) | docs/CONVENTIONS.md:25 | n/a |
+| 4 | Open sign-ups with email confirmation; SIGNUPS_PAUSED is the off-switch (was: invitation-only) | repo-doc | High | CONVENTIONS.md | (repo) | docs/CONVENTIONS.md:25 | n/a |
 | 5 | Only US instruments get live FMP pricing; MSX/Tadawul/DFM/other always manual | repo-doc | High | CONVENTIONS.md | (repo) | docs/CONVENTIONS.md:37 | n/a |
 | 9 | 25 new AI analyses/day cap; reuse by hash doesn't count | repo-doc | High | CONVENTIONS.md | (repo) | docs/CONVENTIONS.md:63-68 | n/a |
 | 12 | Data export ("download everything") + password-confirmed deletion | repo-doc | High | CONVENTIONS.md | (repo) | docs/CONVENTIONS.md:99-112 | n/a |

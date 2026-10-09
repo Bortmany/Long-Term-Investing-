@@ -1,61 +1,68 @@
 import { request as playwrightRequest } from "@playwright/test";
+import { spawnSync } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 
-// Sign in ONCE for the whole e2e run and save the resulting session cookie to
-// disk, so every spec file starts already authenticated instead of repeating
-// its own UI sign-in. This is Playwright's own recommended pattern for a
-// suite with many auth-gated tests (https://playwright.dev/docs/auth) — and
-// it fixes the actual failure this session was asked to diagnose: every spec
-// file used to call its own `signIn(page)` helper, and with 8 files doing a
-// REAL POST to /api/auth/sign-in/email, the suite easily exceeds
-// AUTH_RATE_LIMIT (10 attempts/60s per IP — src/lib/rate-limit.ts) once
-// Playwright runs them across parallel workers, because every request comes
-// from the same IP (127.0.0.1). The limiter itself is correct and untouched
-// — a real attacker still gets the same 10/60s — this only changes how the
-// TEST SUITE authenticates, from ~11 real sign-ins per run down to 1 (plus
-// the one test that deliberately exercises the sign-in form itself, which
-// still needs a real sign-in — see smoke.spec.ts).
-//
-// SEED_DEMO_PASSWORD unset: every signed-in test already self-skips
-// (`test.skip(!DEMO_PASSWORD, ...)`), so we skip signing in too and just
-// write an empty (logged-out) storage state — Playwright still needs SOME
-// file at the `storageState` path configured in playwright.config.ts.
+import {
+  E2E_BASE_URL,
+  E2E_USER_EMAIL,
+  E2E_USER_PASSWORD,
+  assertLocalTestDatabase,
+} from "./test-user";
+
+// Set up the e2e run ONCE:
+//   1. Safety guard — refuse unless the database is on this machine and
+//      NODE_ENV isn't production (the next step creates a login with a known
+//      password).
+//   2. Create the test's own login (e2e-test@investiq.test, see test-user.ts)
+//      with its email already confirmed, through Better Auth's own internals
+//      on the server side — so it never goes through the public sign-up
+//      endpoint, can't trip the sign-up rate limit across repeated runs,
+//      and doesn't depend on SIGNUPS_PAUSED or email being set up.
+//   3. Give it the same sample portfolio the demo login gets
+//      (seedDemoDataForUser in prisma/seed-demo.ts).
+//   4. Sign in once over HTTP and save the session cookie to disk, so every
+//      spec starts signed in instead of repeating its own sign-in (8 files
+//      doing real sign-ins would exceed AUTH_RATE_LIMIT's 10 a minute — see
+//      https://playwright.dev/docs/auth for the pattern).
 //
 // Path note: this file is plain CommonJS-mode TypeScript (package.json has
-// no "type": "module", and Playwright's own TS loader compiles .ts files to
-// CommonJS unless told otherwise) so it deliberately avoids `import.meta`,
-// which only parses inside a real ES module and throws
-// "Cannot use 'import.meta' outside a module" once compiled to CommonJS.
-// `process.cwd()` is a safe stand-in here because `npm run test:e2e` /
-// `playwright test` always run from the repo root (where this config and
-// package.json live).
+// no "type": "module"), so it avoids `import.meta`. `process.cwd()` is safe
+// because `npm run test:e2e` always runs from the repo root.
+const CREATE_USER_SCRIPT = path.join(process.cwd(), "tests", "e2e", "create-test-user.ts");
 export const AUTH_STATE_PATH = path.join(process.cwd(), "tests", "e2e", ".auth", "user.json");
-
-try {
-  process.loadEnvFile();
-} catch {
-  // no .env file — rely on the environment
-}
 
 export default async function globalSetup(): Promise<void> {
   mkdirSync(path.dirname(AUTH_STATE_PATH), { recursive: true });
 
-  const demoPassword = process.env.SEED_DEMO_PASSWORD;
-  const context = await playwrightRequest.newContext({
-    baseURL: "http://localhost:3000",
-  });
+  assertLocalTestDatabase(process.env);
 
-  if (demoPassword) {
-    const response = await context.post("/api/auth/sign-in/email", {
-      data: { email: "owner@example.com", password: demoPassword },
-    });
-    if (!response.ok()) {
-      throw new Error(
-        `E2E auth setup: sign-in failed with status ${response.status()}. Check that ` +
-          "SEED_DEMO_PASSWORD in .env matches the password the seed script used.",
-      );
-    }
+  // Run the user-creation step in its own process under tsx: it needs Better
+  // Auth, which Playwright's TypeScript loader can't load. The password goes
+  // through the environment, never the command line.
+  const result = spawnSync(
+    process.execPath,
+    [path.join(process.cwd(), "node_modules", "tsx", "dist", "cli.mjs"), CREATE_USER_SCRIPT],
+    {
+      cwd: process.cwd(),
+      env: { ...process.env, E2E_TEST_PASSWORD: E2E_USER_PASSWORD },
+      encoding: "utf8",
+    },
+  );
+  if (result.error || result.status !== 0) {
+    const detail =
+      (result.stderr || "").trim() || (result.stdout || "").trim() || result.error?.message || "";
+    throw new Error(`E2E setup: creating the test user failed. ${detail}`);
+  }
+
+  const context = await playwrightRequest.newContext({ baseURL: E2E_BASE_URL });
+  const response = await context.post("/api/auth/sign-in/email", {
+    data: { email: E2E_USER_EMAIL, password: E2E_USER_PASSWORD },
+  });
+  if (!response.ok()) {
+    throw new Error(
+      `E2E auth setup: sign-in as ${E2E_USER_EMAIL} failed with status ${response.status()}.`,
+    );
   }
 
   await context.storageState({ path: AUTH_STATE_PATH });

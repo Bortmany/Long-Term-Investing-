@@ -26,6 +26,7 @@ import type {
 
 export function PortfolioView({
   baseCurrency,
+  banner,
   holdings,
   holdingsBadge,
   weightsNote,
@@ -35,8 +36,12 @@ export function PortfolioView({
   markets,
   instrumentTypes,
   transactionTypes,
+  brokerConnected = false,
+  openAddOnLoad = false,
 }: {
   baseCurrency: Currency;
+  /** Amber "couldn't be valued" banner, built on the server; null/absent when nothing is missing. */
+  banner?: React.ReactNode;
   holdings: HoldingRowData[];
   holdingsBadge: Pick<SourceBadgeProps, "variant" | "date">;
   /** Honest caption for the Weight column when it can exceed 100% (negative cash). */
@@ -48,13 +53,17 @@ export function PortfolioView({
   markets: Market[];
   instrumentTypes: InstrumentType[];
   transactionTypes: TransactionType[];
+  /** The user has a saved broker connection (chooses the "From broker" wording). */
+  brokerConnected?: boolean;
+  /** Open the Add Transaction dialog straight away (the dashboard's "Add your first transaction" link). */
+  openAddOnLoad?: boolean;
 }) {
   // Which dialogs are open. The transaction dialog is one component for both
   // Add (editing = null) and Edit (editing = the row).
   const [txDialog, setTxDialog] = React.useState<{
     open: boolean;
     editing: TransactionRowData | null;
-  }>({ open: false, editing: null });
+  }>({ open: openAddOnLoad, editing: null });
   const [priceTarget, setPriceTarget] = React.useState<HoldingRowData | null>(null);
   const [deleteTarget, setDeleteTarget] = React.useState<TransactionRowData | null>(null);
 
@@ -89,6 +98,7 @@ export function PortfolioView({
       {deleteTarget ? (
         <DeleteTransactionDialog
           transaction={deleteTarget}
+          brokerConnected={brokerConnected}
           onClose={() => setDeleteTarget(null)}
         />
       ) : null}
@@ -129,17 +139,23 @@ export function PortfolioView({
         </div>
       </div>
 
-      <HoldingsTable
-        rows={holdings}
-        baseCurrency={baseCurrency}
-        badge={holdingsBadge}
-        weightsNote={weightsNote}
-        onUpdatePrice={setPriceTarget}
-      />
+      {banner}
+
+      {/* id lets the banner's "Update price" link jump to the holdings. */}
+      <div id="holdings" className="scroll-mt-4">
+        <HoldingsTable
+          rows={holdings}
+          baseCurrency={baseCurrency}
+          badge={holdingsBadge}
+          weightsNote={weightsNote}
+          onUpdatePrice={setPriceTarget}
+        />
+      </div>
 
       <TransactionsTable
         rows={transactions}
         transactionTypes={transactionTypes}
+        brokerConnected={brokerConnected}
         onAdd={openAdd}
         onEdit={(row) => setTxDialog({ open: true, editing: row })}
         onDelete={setDeleteTarget}

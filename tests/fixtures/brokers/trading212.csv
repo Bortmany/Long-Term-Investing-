@@ -1,0 +1,13 @@
+Action,Time,ISIN,Ticker,Name,No. of shares,Price / share,Currency (Price / share),Exchange rate,Result,Currency (Result),Total,Currency (Total),Withholding tax,Currency (Withholding tax),Notes,ID,Currency conversion fee,Currency (Currency conversion fee),Finra fee,Currency (Finra fee)
+Deposit,2026-01-05 09:12:44,,,,,,,,,,2000.00,USD,,,,T0000001,,,,
+Market buy,2026-01-12 15:31:07,US0378331005,AAPL,Apple,5,205.40,USD,,,,1027.00,USD,,,,T0000002,,,,
+Limit buy,2026-02-03 15:45:12,US5949181045,MSFT,Microsoft,2,410.10,USD,,,,820.20,USD,,,,T0000003,,,,
+Market buy,2026-02-20 15:30:00,US1912161007,KO,Coca-Cola,10,60.00,USD,,,,600.00,USD,,,,T0000004,,,,
+Market sell,2026-03-02 16:01:33,US0378331005,AAPL,Apple,2,214.00,USD,,17.20,USD,427.98,USD,,,,T0000005,,,0.02,USD
+Dividend (Ordinary),2026-03-14 00:00:00,US1912161007,KO,Coca-Cola,10,0.51,USD,,,,4.33,USD,0.77,USD,,T0000006,,,,
+Market buy,2026-03-20 08:05:00,GB00BH4HKS39,VOD,Vodafone,100,72.10,GBX,,,,92.63,USD,,,,T0000007,0.14,USD,,
+Interest on cash,2026-03-31 23:59:59,,,,,,,,,,0.85,USD,,,,T0000008,,,,
+Currency conversion,2026-04-01 10:00:00,,,,,,,,,,100.00,USD,,,,T0000009,,,,
+Market buy,2026-04-15 14:20:00,US0378331005,AAPL,Apple,1,209.00,USD,,,,209.00,USD,,,,T0000010,0.30,EUR,,
+Withdrawal,2026-04-20 11:00:00,,,,,,,,,,-300.00,USD,,,,T0000011,,,,
+Market buy,2026-05-04 14:30:03.613,US5949181045,MSFT,Microsoft,1,415.00,USD,,,,415.00,USD,,,,T0000012,,,,

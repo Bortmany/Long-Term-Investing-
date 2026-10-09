@@ -16,10 +16,54 @@ export function formatMoney(amount: number, currency: string): string {
 
 /** Format a share quantity: whole numbers stay whole, fractions keep up to 4 decimals. */
 export function formatQuantity(quantity: number): string {
-  return new Intl.NumberFormat("en-US", {
+  // Not a real number: a dash, never "NaN" or "Infinity".
+  if (!Number.isFinite(quantity)) return "—";
+  // A true zero (including negative zero) is just "0".
+  if (quantity === 0) return "0";
+  const normal = new Intl.NumberFormat("en-US", {
     minimumFractionDigits: 0,
     maximumFractionDigits: 4,
   }).format(quantity);
+  if (normal !== "0" && normal !== "-0") return normal;
+  // A real holding is never shown as a fake zero: show up to 8 decimals, and
+  // below that say "less than".
+  if (Math.abs(quantity) < 0.00000001) {
+    return quantity < 0 ? ">-0.00000001" : "<0.00000001";
+  }
+  return new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 8,
+  }).format(quantity);
+}
+
+/** The widest a quantity may be on a card before it is shortened (fits a 150px column at 14px). */
+export const QUANTITY_CARD_MAX_CHARS = 14;
+
+/**
+ * Quantity for phone cards only: the full number when it fits (14 characters
+ * or fewer), otherwise a short form like "123.46B". Cards show the exact
+ * `formatQuantity` value in the element's title and accessible label.
+ */
+export function formatQuantityCompact(quantity: number): string {
+  const full = formatQuantity(quantity);
+  if (full.length <= QUANTITY_CARD_MAX_CHARS || !Number.isFinite(quantity)) return full;
+  const abs = Math.abs(quantity);
+  const units: [number, string][] = [
+    [1e12, "T"],
+    [1e9, "B"],
+    [1e6, "M"],
+    [1e3, "K"],
+  ];
+  for (const [size, letter] of units) {
+    if (abs >= size) {
+      const short = new Intl.NumberFormat("en-US", {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2,
+      }).format(quantity / size);
+      return `${short}${letter}`;
+    }
+  }
+  return full;
 }
 
 /** Short human date, e.g. "Jul 10, 2026" — used by the manual source badge. */

@@ -7,7 +7,8 @@
 
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
-import { actionError, actionOk, type ActionResult } from "@/lib/action-result";
+import { actionError, actionOk, aiRunError, type ActionResult } from "@/lib/action-result";
+import { isPro, PRO_FEATURE_LABELS, requirePro } from "@/lib/plan-access";
 import { AI_GENERATION_RATE_LIMIT, rateLimit, rateLimitMessage, userKey } from "@/lib/rate-limit";
 import { ANALYSIS_MODEL } from "@/lib/ai/client";
 import { isEmailConfigured, sendEmail } from "@/lib/email/send";
@@ -66,6 +67,12 @@ export async function runWeeklyReviewForUser(
   const limited = rateLimit(userKey("ai-weekly-review", userId), AI_GENERATION_RATE_LIMIT);
   if (!limited.ok) return actionError(rateLimitMessage(limited.retryAfterSeconds));
 
+  // Pro gate for BOTH callers (the button and the scheduled sweep) — enforced
+  // here on the server, never only by hiding the button. Past reviews stay
+  // readable on every plan.
+  const pro = await requirePro(userId, PRO_FEATURE_LABELS.weeklyReview);
+  if (!pro.ok) return pro;
+
   const portfolio = await prisma.portfolio.findFirst({
     where: { userId },
     orderBy: { createdAt: "asc" },
@@ -94,7 +101,9 @@ export async function runWeeklyReviewForUser(
     buildInput: () => buildWeeklyReviewInput({ portfolio, now, previousSnapshot }),
   });
 
-  if (!result.ok) return actionError(result.message);
+  // Keeps the limit code (if a spend limit refused it) so the button can show
+  // the calm limit notice rather than a red error.
+  if (!result.ok) return aiRunError(result);
 
   // Fire-and-forget: this single hook covers BOTH callers of
   // runWeeklyReviewForUser (the "Run weekly review" button and the
@@ -116,28 +125,49 @@ export type ScheduledWeeklyReviewSummary = {
   usersProcessed: number;
   succeeded: number;
   failed: number;
+  /** Free-plan users: the weekly review is Pro, so they get no run and no email. */
+  skipped: number;
+};
+
+export type ScheduledWeeklyReviewDeps = {
+  listUserIds?: () => Promise<string[]>;
+  isProFn?: (userId: string, now: Date) => Promise<boolean>;
+  runForUser?: (userId: string, now: Date) => Promise<ActionResult<{ id: string }>>;
 };
 
 /**
- * Run the weekly review for EVERY user who has a portfolio (the scheduled
- * cron route's job) — one user's failure never stops the loop, and nothing
- * about any individual user (id, email, portfolio contents) is returned or
- * logged, only aggregate counts.
+ * Run the weekly review for EVERY Pro user who has a portfolio (the scheduled
+ * cron route's job) — Free users are skipped (counted, never run, never
+ * emailed); one user's failure never stops the loop, and nothing about any
+ * individual user (id, email, portfolio contents) is returned or logged,
+ * only aggregate counts.
  */
 export async function runWeeklyReviewsForAllUsers(
   now: Date = new Date(),
+  deps: ScheduledWeeklyReviewDeps = {},
 ): Promise<ScheduledWeeklyReviewSummary> {
-  const portfolios = await prisma.portfolio.findMany({
-    select: { userId: true },
-    distinct: ["userId"],
-  });
+  const listUserIds =
+    deps.listUserIds ??
+    (async () =>
+      (
+        await prisma.portfolio.findMany({ select: { userId: true }, distinct: ["userId"] })
+      ).map((p) => p.userId));
+  const checkPro = deps.isProFn ?? isPro;
+  const runForUser = deps.runForUser ?? runWeeklyReviewForUser;
+
+  const userIds = await listUserIds();
 
   let succeeded = 0;
   let failed = 0;
+  let skipped = 0;
 
-  for (const { userId } of portfolios) {
+  for (const userId of userIds) {
     try {
-      const result = await runWeeklyReviewForUser(userId, now);
+      if (!(await checkPro(userId, now))) {
+        skipped += 1;
+        continue;
+      }
+      const result = await runForUser(userId, now);
       if (result.ok) {
         succeeded += 1;
       } else {
@@ -154,5 +184,5 @@ export async function runWeeklyReviewsForAllUsers(
     }
   }
 
-  return { usersProcessed: portfolios.length, succeeded, failed };
+  return { usersProcessed: userIds.length, succeeded, failed, skipped };
 }

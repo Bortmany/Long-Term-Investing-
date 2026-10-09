@@ -1,11 +1,12 @@
+import { SamplePriceCaption } from "@/components/stocks/sample-price-caption";
 import { headers } from "next/headers";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { ChartLine } from "lucide-react";
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getVisibleInstrument } from "@/lib/stocks/visible-instruments";
 import {
   getDividendHistory,
   getFinancialStatements,
@@ -17,11 +18,14 @@ import {
 import { getAiClient } from "@/lib/ai/client";
 import { newsSummarySchema, stockScoreSchema } from "@/lib/ai/schemas";
 import {
+  badgePropsForPrice,
   badgePropsForValueSource,
   SourceBadge,
 } from "@/components/source-badge";
-import { EmptyState } from "@/components/empty-state";
 import { Badge } from "@/components/ui/badge";
+import { ReceivedDividendsCard } from "@/components/stocks/received-dividends-card";
+import { ShariaBadge } from "@/components/sharia/sharia-badge";
+import { getShariaBadgeData } from "@/lib/sharia/badge-data";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -46,6 +50,9 @@ import type {
   StatementBlock,
   UpcomingDividendRow,
 } from "@/components/stocks/types";
+import { fromPrismaTransaction } from "@/lib/portfolio/types";
+import { computeStockDividends, type StockDividends } from "@/lib/portfolio/dividends";
+import { loadUserMarketData } from "@/lib/portfolio-market-data";
 import { buildStatementTable } from "@/lib/stocks/statement-table";
 import {
   computeChangePercent,
@@ -76,7 +83,11 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const instrument = await prisma.instrument.findUnique({ where: { id } });
+  // Only name a stock in the tab title if this person may see it.
+  const session = await auth.api.getSession({ headers: await headers() });
+  const instrument = session
+    ? await getVisibleInstrument(session.user.id, id)
+    : null;
   return {
     title: instrument
       ? `${instrument.ticker} — InvestIQ AI`
@@ -143,23 +154,12 @@ export default async function StockDetailPage({
   const userId = session.user.id;
   const { id } = await params;
 
-  const instrument = await prisma.instrument.findUnique({ where: { id } });
-
-  // Never a fabricated page for a stock that doesn't exist — an honest
-  // message with a way back, still inside the app shell.
+  // A stock outside this person's view (not on the public list and not
+  // referenced by them) is "not found" — same answer as a stock that doesn't
+  // exist, so another person's private ticker is never revealed.
+  const instrument = await getVisibleInstrument(userId, id);
   if (!instrument) {
-    return (
-      <EmptyState
-        icon={ChartLine}
-        heading="Stock not found"
-        sentence="This stock doesn't exist or has been removed."
-        action={
-          <Button asChild>
-            <Link href="/stocks">Back to Stocks</Link>
-          </Button>
-        }
-      />
-    );
+    notFound();
   }
 
   const ref = {
@@ -354,6 +354,47 @@ export default async function StockDetailPage({
         }))
     : [];
 
+  // "Dividends you've received": only THIS user's own DIVIDEND transactions
+  // for this stock, in the portfolio they own (the oldest one, the same
+  // portfolio the dashboard uses) — so it matches Income by Holding exactly.
+  let receivedDividends: StockDividends | null = null;
+  let receivedDividendsFailed = false;
+  try {
+    const portfolio = await prisma.portfolio.findFirst({
+      where: { userId },
+      orderBy: { createdAt: "asc" },
+    });
+    if (portfolio) {
+      const [rows, market] = await Promise.all([
+        prisma.transaction.findMany({
+          where: {
+            portfolioId: portfolio.id,
+            portfolio: { userId },
+            instrumentId: instrument.id,
+            type: "DIVIDEND",
+          },
+          orderBy: [{ tradeDate: "desc" }, { createdAt: "desc" }, { id: "desc" }],
+        }),
+        loadUserMarketData(userId, []),
+      ]);
+      receivedDividends = computeStockDividends(rows.map(fromPrismaTransaction), {
+        instrumentId: instrument.id,
+        baseCurrency: portfolio.baseCurrency,
+        fxRates: market.fxRates,
+        now,
+      });
+    }
+  } catch {
+    receivedDividendsFailed = true;
+  }
+
+  // Sharia screen badge: null (nothing rendered) unless this person has the
+  // switch on AND is on Pro. Database reads only; never an outside call.
+  const shariaData = await getShariaBadgeData(userId, [
+    { id: instrument.id, ticker: instrument.ticker, name: instrument.name, market: instrument.market },
+  ]);
+  const shariaBadge = shariaData?.[instrument.id] ?? null;
+
   return (
     <div className="space-y-6">
       {/* Jump links — the page is long, so the sections are reachable in one tap. */}
@@ -379,12 +420,13 @@ export default async function StockDetailPage({
             {instrument.country ? (
               <Badge variant="secondary">{instrument.country}</Badge>
             ) : null}
+            {shariaBadge ? <ShariaBadge data={shariaBadge} /> : null}
           </div>
         </div>
         <div className="sm:text-right">
           {quoteResult.ok ? (
             <div className="flex items-baseline gap-2 sm:justify-end">
-              <span className="text-2xl font-semibold tabular-nums">
+              <span data-figure className="text-2xl font-semibold tabular-nums">
                 {formatMoney(quoteResult.data.price, quoteResult.data.currency)}
               </span>
               {changeResult.ok ? (
@@ -403,13 +445,15 @@ export default async function StockDetailPage({
           <div className="mt-1 sm:flex sm:justify-end">
             {quoteResult.ok ? (
               <SourceBadge
-                {...badgePropsForValueSource({
-                  kind: quoteResult.data.source,
-                  asOf: quoteResult.data.asOf,
-                })}
+                {...badgePropsForPrice(quoteResult.data, instrument.market)}
               />
             ) : null}
           </div>
+          {quoteResult.ok ? (
+            <SamplePriceCaption
+              variant={badgePropsForPrice(quoteResult.data, instrument.market).variant}
+            />
+          ) : null}
         </div>
       </section>
 
@@ -443,11 +487,20 @@ export default async function StockDetailPage({
         <CardHeader className="flex-row items-center gap-3">
           <CardTitle>Price History</CardTitle>
           {historyResult.ok && latestPoint ? (
+            // A Tadawul (Twelve Data) stored price is end of day, not Live:
+            // borrow the quote's true origin so the wording matches the price.
             <SourceBadge
-              {...badgePropsForValueSource({
-                kind: latestPoint.source,
-                asOf: latestPoint.date,
-              })}
+              {...badgePropsForPrice(
+                {
+                  source: latestPoint.source,
+                  asOf: latestPoint.date,
+                  priceSource:
+                    latestPoint.source === "live" && quoteResult.ok
+                      ? quoteResult.data.priceSource
+                      : undefined,
+                },
+                instrument.market,
+              )}
             />
           ) : null}
         </CardHeader>
@@ -485,6 +538,14 @@ export default async function StockDetailPage({
           <CardTitle>Dividends</CardTitle>
         </CardHeader>
         <CardContent>
+          {/* Your own payments first; they never depend on market data. */}
+          <ReceivedDividendsCard
+            ticker={instrument.ticker}
+            dividends={receivedDividends}
+            loadError={receivedDividendsFailed}
+          />
+          <hr className="my-6 border-slate-200 dark:border-slate-800" />
+          <h3 className="mb-2 text-base font-semibold">Market dividend history</h3>
           {!dividendResult.ok ? (
             <p className="text-sm text-slate-500 dark:text-slate-400">
               {dividendUnavailableMessage(dividendResult)}
@@ -507,7 +568,7 @@ export default async function StockDetailPage({
                     <TableCell>{formatShortDate(row.exDate)}</TableCell>
                     <TableCell className="text-right">
                       <span className="inline-flex items-center justify-end gap-1.5">
-                        <span className="tabular-nums">
+                        <span data-figure className="tabular-nums">
                           {formatMoney(row.amountPerShare, row.currency)}
                         </span>
                         <SourceBadge size="sm" {...row.badge} />
@@ -519,8 +580,8 @@ export default async function StockDetailPage({
             </Table>
           )}
 
-          <div className="mt-4">
-            <h3 className="mb-2 text-sm font-semibold">Upcoming</h3>
+          <div className="mt-6">
+            <h3 className="mb-2 text-base font-semibold">Upcoming</h3>
             {!upcomingResult.ok ? (
               <p className="text-sm text-slate-500 dark:text-slate-400">
                 {upcomingUnavailableMessage(upcomingResult)}
@@ -539,7 +600,7 @@ export default async function StockDetailPage({
                     <span className="text-slate-500 dark:text-slate-400">
                       {formatShortDate(row.exDate)}
                     </span>
-                    <span className="inline-flex items-center gap-1.5 tabular-nums">
+                    <span data-figure className="inline-flex items-center gap-1.5 tabular-nums">
                       {row.amountPerShare === null ? (
                         <span className="text-slate-500 dark:text-slate-400">
                           Amount not yet announced

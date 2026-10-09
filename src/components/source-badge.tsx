@@ -6,11 +6,22 @@
 //   derived — computed purely from the user's own recorded transactions
 // Two sizes: "default" is the full pill; "sm" is a compact icon-only glyph
 // with a tooltip revealing the same label, for dense table cells.
+//
+// A "live" badge can also carry `detail` (see describePriceProvider in
+// src/lib/data/provider-info.ts): it names the provider and says how late the
+// price is ("Twelve Data · end of day, Sep 28, 2026"). The detail replaces the
+// word "Live" — an end-of-day or unconfirmed-delay price is never called live —
+// and when the provider was not answering it turns amber and says so.
 import { Calculator, Clock, FlaskConical } from "lucide-react";
+import type { Market, PriceSource } from "@prisma/client";
 
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatShortDate } from "@/lib/format";
+import {
+  describePriceProvider,
+  type ProviderBadgeDetail,
+} from "@/lib/data/provider-info";
 import type { ValueSource } from "@/lib/portfolio";
 import { cn } from "@/lib/utils";
 
@@ -20,11 +31,14 @@ export type SourceBadgeProps = {
   variant: SourceBadgeVariant;
   /** Pre-formatted as-of date, e.g. "Jul 10, 2026". Used by the manual variant. */
   date?: string;
+  /** Provider and delay wording for a live price. Replaces the word "Live". */
+  detail?: ProviderBadgeDetail;
   size?: "default" | "sm";
   className?: string;
 };
 
-function labelFor(variant: SourceBadgeVariant, date?: string): string {
+function labelFor(variant: SourceBadgeVariant, date?: string, detail?: ProviderBadgeDetail): string {
+  if (detail && variant === "live") return detail.text;
   switch (variant) {
     case "live":
       return "Live";
@@ -47,7 +61,20 @@ function LiveDot({ className }: { className?: string }) {
   );
 }
 
-function IconFor({ variant, className }: { variant: SourceBadgeVariant; className?: string }) {
+function IconFor({
+  variant,
+  detail,
+  className,
+}: {
+  variant: SourceBadgeVariant;
+  detail?: ProviderBadgeDetail;
+  className?: string;
+}) {
+  // A provider price gets a green dot ONLY when it says "Live" (a confirmed
+  // short delay); end-of-day and unconfirmed-delay prices get a clock.
+  if (detail && variant === "live" && detail.icon === "clock") {
+    return <Clock className={cn("size-3 shrink-0", className)} aria-hidden="true" />;
+  }
   switch (variant) {
     case "live":
       return <LiveDot className={className} />;
@@ -76,6 +103,10 @@ const glyphColors: Record<SourceBadgeVariant, string> = {
   derived: "text-slate-600 dark:text-slate-400",
 };
 
+// The provider-not-answering look: the same amber treatment as sample data.
+const fallbackPill = pillColors.sample;
+const fallbackGlyph = glyphColors.sample;
+
 /**
  * Map one ValueSource from the portfolio math library to badge props.
  * "derived" means the figure comes purely from the user's own recorded
@@ -94,6 +125,53 @@ export function badgePropsForValueSource(
     return { variant: "manual", date: formatShortDate(source.asOf) };
   }
   return { variant: source.kind };
+}
+
+/**
+ * Badge props for a price: the usual badge, plus the provider/delay wording
+ * when the price came from Twelve Data. `priceSource` is the true origin
+ * (Quote.priceSource, or a stored price's source); when it is unset the price
+ * is treated exactly as before.
+ */
+export function badgePropsForPrice(
+  price: {
+    source: "live" | "manual" | "sample";
+    asOf: Date;
+    priceSource?: PriceSource;
+    fallback?: boolean;
+  },
+  market: Market,
+): Pick<SourceBadgeProps, "variant" | "date" | "detail"> {
+  const base = badgePropsForValueSource({ kind: price.source, asOf: price.asOf });
+  const detail = describePriceProvider({
+    priceSource: price.priceSource,
+    market,
+    asOf: price.asOf,
+    fallback: price.fallback,
+  });
+  return detail ? { ...base, detail } : base;
+}
+
+/**
+ * Badge props for ONE holding's market value. The value wears the same
+ * badge as the price it was worked out from, so an end-of-day Tadawul price
+ * says "Twelve Data · end of day, <date>" (clock icon) and never "Live".
+ * Aggregate figures (totals, cash) keep using badgePropsForValueSources.
+ */
+export function badgePropsForHoldingValue(
+  valuation: { source: ValueSource; priceSource?: PriceSource },
+  market: Market,
+): Pick<SourceBadgeProps, "variant" | "date" | "detail"> {
+  const { source } = valuation;
+  if (source.kind === "derived") return badgePropsForValueSource(source);
+  return badgePropsForPrice(
+    {
+      source: source.kind,
+      asOf: source.asOf,
+      priceSource: valuation.priceSource,
+    },
+    market,
+  );
 }
 
 /**
@@ -123,28 +201,75 @@ export function badgePropsForValueSources(
   return { variant: "derived" };
 }
 
-export function SourceBadge({ variant, date, size = "default", className }: SourceBadgeProps) {
-  const label = labelFor(variant, date);
+export function SourceBadge({ variant, date, detail, size = "default", className }: SourceBadgeProps) {
+  const label = labelFor(variant, date, detail);
+  const providerDetail = variant === "live" ? detail : undefined;
+  const isFallback = Boolean(providerDetail?.fallbackNote);
 
   if (size === "sm") {
     // Compact: icon only, full label in a tooltip (hover or focus/tap).
+    // The invisible ::before widens the tap area to 44 x 44px while the
+    // glyph itself stays small.
+    const hintLines = providerDetail
+      ? [
+          providerDetail.text,
+          providerDetail.meaning,
+          providerDetail.timeZoneNote,
+          providerDetail.fallbackNote,
+        ].filter((line): line is string => Boolean(line))
+      : [label];
     return (
       <Tooltip className={className}>
         <TooltipTrigger
-          aria-label={label}
-          className={cn("items-center justify-center p-0.5", glyphColors[variant])}
+          aria-label={hintLines.join(" ")}
+          className={cn(
+            "relative items-center justify-center p-0.5 before:absolute before:left-1/2 before:top-1/2 before:size-11 before:-translate-x-1/2 before:-translate-y-1/2 before:content-['']",
+            isFallback ? fallbackGlyph : glyphColors[variant],
+          )}
         >
-          <IconFor variant={variant} className="size-3" />
+          <IconFor variant={variant} detail={providerDetail} className="size-3" />
         </TooltipTrigger>
-        <TooltipContent>{label}</TooltipContent>
+        <TooltipContent
+          className={providerDetail ? "w-max max-w-64 whitespace-normal text-left" : undefined}
+        >
+          {hintLines.map((line, index) => (
+            <span key={index} className="block">
+              {line}
+            </span>
+          ))}
+        </TooltipContent>
       </Tooltip>
     );
   }
 
-  return (
-    <Badge variant="outline" className={cn("gap-1.5 font-normal", pillColors[variant], className)}>
-      <IconFor variant={variant} className="size-3" />
+  const pill = (
+    <Badge
+      variant="outline"
+      className={cn(
+        "gap-1.5 font-normal",
+        isFallback ? fallbackPill : pillColors[variant],
+        // Provider wording can be long: let it wrap instead of being cut off.
+        providerDetail && "h-auto max-w-full whitespace-normal py-1 text-left",
+        !isFallback && className,
+      )}
+      title={
+        providerDetail
+          ? [providerDetail.meaning, providerDetail.timeZoneNote].filter(Boolean).join(" ")
+          : undefined
+      }
+    >
+      <IconFor variant={variant} detail={providerDetail} className="size-3" />
       {label}
     </Badge>
+  );
+
+  if (!providerDetail?.fallbackNote) return pill;
+
+  // Provider not answering: the amber pill plus one line saying why.
+  return (
+    <span className={cn("inline-flex max-w-full flex-col items-start gap-1", className)}>
+      {pill}
+      <span className="text-xs text-amber-700 dark:text-amber-400">{providerDetail.fallbackNote}</span>
+    </span>
   );
 }

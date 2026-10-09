@@ -1,14 +1,15 @@
 import { expect, test } from "@playwright/test";
+import { E2E_USER_EMAIL, E2E_USER_PASSWORD } from "./test-user";
 
-// The demo login's password is never hardcoded — it comes from the same
-// SEED_DEMO_PASSWORD the seed script used. Load .env so the test sees it.
+// The e2e test login (tests/e2e/test-user.ts) is never hardcoded here — its
+// password comes from E2E_TEST_PASSWORD. Load .env so the test sees it.
 try {
   process.loadEnvFile();
 } catch {
   // no .env file — rely on the environment
 }
 
-const DEMO_PASSWORD = process.env.SEED_DEMO_PASSWORD;
+const DEMO_PASSWORD = E2E_USER_PASSWORD;
 
 test("health endpoint answers ok with a live database", async ({ request }) => {
   const response = await request.get("/api/health");
@@ -21,7 +22,7 @@ test("health endpoint answers ok with a live database", async ({ request }) => {
 // These tests specifically need to start signed OUT — they check the public
 // welcome page, the logged-out redirect, and the real sign-in/sign-out flow —
 // so they override the project's default (signed-in) storage state. Every
-// other test in this file starts already authenticated as the demo user —
+// other test in this file starts already authenticated as the e2e test user —
 // see tests/e2e/global-setup.ts.
 test.describe("no session", () => {
   test.use({ storageState: { cookies: [], origins: [] } });
@@ -44,17 +45,18 @@ test.describe("no session", () => {
   test("demo user can sign in and sign out", async ({ page }) => {
     test.skip(
       !DEMO_PASSWORD,
-      "Set SEED_DEMO_PASSWORD in .env (the one used when seeding) to run the signed-in smoke test",
+      "Set E2E_TEST_PASSWORD in .env to run the signed-in smoke test",
     );
     await page.goto("/sign-in");
-    await page.getByLabel("Email").fill("owner@example.com");
-    await page.getByLabel("Password").fill(DEMO_PASSWORD!);
+    await page.getByLabel("Email").fill(E2E_USER_EMAIL);
+    // exact: the box also has a "Show password" eye button.
+    await page.getByLabel("Password", { exact: true }).fill(DEMO_PASSWORD!);
     await page.getByRole("button", { name: /^sign in$/i }).click();
 
     // Signing in lands on the dashboard; the sidebar shows the user's email.
     await expect(page).toHaveURL(/\/dashboard/);
     await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
-    await expect(page.getByText("owner@example.com")).toBeVisible();
+    await expect(page.getByText(E2E_USER_EMAIL)).toBeVisible();
 
     // The shell renders a sign-out button per breakpoint; click the visible one.
     await page
@@ -70,7 +72,7 @@ test("the explainer tip next to Cash Balance opens a glossary dialog and Escape 
 }) => {
   test.skip(
     !DEMO_PASSWORD,
-    "Set SEED_DEMO_PASSWORD in .env (the one used when seeding) to run the signed-in smoke test",
+    "Set E2E_TEST_PASSWORD in .env to run the signed-in smoke test",
   );
   await page.goto("/dashboard");
 

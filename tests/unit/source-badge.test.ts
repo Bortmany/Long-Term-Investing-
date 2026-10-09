@@ -4,6 +4,7 @@
 import { describe, expect, it } from "vitest";
 import { badgePropsForValueSource, badgePropsForValueSources } from "@/components/source-badge";
 import { formatShortDate } from "@/lib/format";
+import { decideDividendCard } from "@/lib/portfolio/dividend-card";
 import type { ValueSource } from "@/lib/portfolio";
 
 const d = (s: string) => new Date(s);
@@ -67,5 +68,33 @@ describe("badgePropsForValueSources (aggregate precedence)", () => {
   it("derived-only aggregates are derived, not sample (Phase 2 change)", () => {
     const sources: ValueSource[] = [{ kind: "derived" }, { kind: "derived" }];
     expect(badgePropsForValueSources(sources)).toEqual({ variant: "derived" });
+  });
+});
+
+describe("dividend figures and the derived badge", () => {
+  const miss = [
+    { currency: "SAR" as const, amount: 100, tradeDate: d("2026-06-01"), instrumentId: "armco" },
+  ];
+  const decide = (missing: typeof miss) =>
+    decideDividendCard({
+      baseCurrency: "OMR",
+      income: { missing },
+      monthly: { missing },
+      byHolding: { missing },
+      labelFor: () => "ARMCO",
+    });
+
+  it("a complete dividend figure gets the derived badge", () => {
+    const state = decide([]);
+    expect(state.kind).toBe("badge");
+    if (state.kind === "badge") {
+      expect(badgePropsForValueSource({ kind: "derived" })).toEqual(state.badge);
+    }
+  });
+
+  it("an incomplete dividend figure does NOT get the derived badge", () => {
+    const state = decide(miss);
+    expect(state.kind).toBe("warning");
+    expect(state).not.toHaveProperty("badge");
   });
 });

@@ -1,6 +1,6 @@
 // Shared analyst system preamble (BUILD-PLAN.md cross-cutting §1). Every AI
 // analysis type in this app (Health Score, Stock Score, Committee, Thesis
-// Check, Buy/Sell Analysis, Weekly Review, News Summary) sends this SAME
+// Check, Upside/Downside check, Weekly Review, News Summary) sends this SAME
 // text as the cached system prompt, then appends the type-specific
 // instructions + the JSON input as the user message. Sharing one preamble
 // is also what makes prompt caching (cache_control on this block) pay off.
@@ -8,9 +8,10 @@
 import type { CommitteePersona } from "@/lib/ai/schemas";
 
 export const ANALYST_SYSTEM_PREAMBLE = `You are an investment research analyst helping a long-term individual
-investor think through a decision about their own portfolio. You are not a
-financial advisor, and nothing you produce is financial advice — it exists
-to support the investor's own judgment, never to replace it.
+investor research this company. You are not a financial advisor, and
+nothing you produce is financial advice or a personal recommendation — it
+exists for education and to support the investor's own judgment, never to
+replace it.
 
 Ground every claim in the data you were given. When you state a fact, tie it
 to the evidence that supports it. When you are inferring or estimating
@@ -33,13 +34,13 @@ given for this request — no prose outside it, no markdown code fences.`;
 // Six independent persona calls share the ANALYST_SYSTEM_PREAMBLE above as
 // their cached system prompt; each one additionally gets ONE of these
 // instruction blocks as the task framing inside its user message. Every
-// persona is told the same personaVoteSchema shape (recommendation,
+// persona is told the same personaVoteSchema shape (view,
 // confidence, reasoning, evidence, risks, counterarguments) applies —
 // stated once here rather than repeated in each block.
 // ---------------------------------------------------------------------------
 
 const PERSONA_VOTE_SHAPE_REMINDER =
-  "Respond with your own recommendation (BUY, HOLD, or SELL), your confidence " +
+  "Respond with your view (POSITIVE, NEUTRAL, or NEGATIVE), your confidence " +
   "in it (0-100), your reasoning, the concrete evidence you relied on, the " +
   "risks to your own view, and the strongest counterarguments to it — even " +
   "though you're arguing one lens, actively name reasons a reasonable " +
@@ -51,15 +52,15 @@ export const COMMITTEE_PERSONA_INSTRUCTIONS: Record<CommitteePersona, string> = 
     "today's price is justified by the underlying fundamentals — earnings, " +
     "book value, cash generation — relative to the instrument's own history " +
     "and what a disciplined value investor would pay. Weigh margin of safety " +
-    "heavily; a great business at too high a price is still a bad buy from " +
+    "heavily; a great business at too high a price still looks poor from " +
     "this seat. " +
     PERSONA_VOTE_SHAPE_REMINDER,
   growth:
     "You are the GROWTH analyst on this investment committee. Judge the " +
     "durability and size of the growth opportunity ahead — revenue and " +
     "earnings trajectory, market opportunity, competitive moat — rather than " +
-    "today's valuation multiple in isolation. A high price can still be a " +
-    "BUY from this seat if the growth case is strong enough to justify it. " +
+    "today's valuation multiple in isolation. A high price can still be " +
+    "POSITIVE from this seat if the growth case is strong enough to justify it. " +
     PERSONA_VOTE_SHAPE_REMINDER,
   dividend:
     "You are the DIVIDEND / INCOME analyst on this investment committee. " +
@@ -98,9 +99,9 @@ export const COMMITTEE_PERSONA_INSTRUCTIONS: Record<CommitteePersona, string> = 
 export const COMMITTEE_SYNTHESIS_INSTRUCTIONS =
   "You are given six independent analysts' votes on this instrument (value, " +
   "growth, dividend, quality, macro, contrarian), each with their own " +
-  "recommendation, confidence, reasoning, evidence, risks and " +
+  "view, confidence, reasoning, evidence, risks and " +
   "counterarguments — plus the committee's already-computed consensus " +
-  "verdict and score. That score was derived mechanically from the six " +
+  "view and score. That score was derived mechanically from the six " +
   "votes, NOT by you — do not recompute, restate as your own judgment, or " +
   "contradict it. Your only job is the synthesis: (1) `disagreements` — a " +
   "short, concrete bullet list of where the personas genuinely disagreed and " +

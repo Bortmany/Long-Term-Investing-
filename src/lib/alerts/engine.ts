@@ -14,6 +14,7 @@ import type { AlertKind, Currency, PriceSource, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { rateLimit, userKey } from "@/lib/rate-limit";
+import { isPro } from "@/lib/plan-access";
 import { getQuote, type DataResult, type InstrumentRef, type Quote, type SourceBadge } from "@/lib/data";
 import {
   evaluatePriceAlert,
@@ -255,13 +256,26 @@ export type SweepAlertsDeps = {
   store?: AlertStore;
   getQuoteFn?: typeof getQuote;
   now?: Date;
+  /** Whether a user is on Pro ("time to review" alerts are Pro-only). */
+  isProFn?: (userId: string, now: Date) => Promise<boolean>;
 };
+
+/**
+ * The honest outcome recorded on a Free user's "time to review" alert. The
+ * alert itself is never deleted on a downgrade; it just isn't checked.
+ */
+export const THESIS_ALERT_NEEDS_PRO_OUTCOME = "Not checked, this needs the Pro plan";
 
 function isPriceKind(kind: AlertKind): kind is PriceAlertKind {
   return kind !== "THESIS_REVIEW_DUE";
 }
 
-/** The reverse of src/lib/data's badgeForPriceSource — only ever called with "live"/"manual" (see the guarantee in ./evaluate.ts). */
+/**
+ * The reverse of src/lib/data's badgeForPriceSource — only ever called with
+ * "live"/"manual" (see the guarantee in ./evaluate.ts). This is the OLD
+ * mapping, kept only for a quote that does not say where it came from: it
+ * can only guess "live" means FMP, which is wrong for any other provider.
+ */
 function priceSourceFromBadge(source: SourceBadge): PriceSource {
   switch (source) {
     case "live":
@@ -271,6 +285,16 @@ function priceSourceFromBadge(source: SourceBadge): PriceSource {
     case "sample":
       return "SEED";
   }
+}
+
+/**
+ * The true provider behind a quote, for the notification's price snapshot.
+ * A quote carries its real origin (FMP, TWELVE_DATA, …); only an old-style
+ * quote without one falls back to the badge mapping above. This is what
+ * stops a Twelve Data price being recorded as "FMP".
+ */
+function priceSourceForQuote(quote: Quote): PriceSource {
+  return quote.priceSource ?? priceSourceFromBadge(quote.source);
 }
 
 /**
@@ -364,7 +388,7 @@ export async function sweepAlerts(
         price: {
           amount: quoteResult.data.price,
           currency: quoteResult.data.currency,
-          source: priceSourceFromBadge(quoteResult.data.source),
+          source: priceSourceForQuote(quoteResult.data),
           asOf: quoteResult.data.asOf,
         },
       });
@@ -373,7 +397,18 @@ export async function sweepAlerts(
     }
   }
 
+  // "Time to review" alerts are Pro. Looked up once per user per sweep.
+  const checkPro = deps.isProFn ?? isPro;
+  const proByUser = new Map<string, boolean>();
+
   for (const alert of thesisAlerts) {
+    if (!proByUser.has(alert.userId)) {
+      proByUser.set(alert.userId, await checkPro(alert.userId, now));
+    }
+    if (!proByUser.get(alert.userId)) {
+      await store.recordNoFire(alert.id, now, THESIS_ALERT_NEEDS_PRO_OUTCOME);
+      continue;
+    }
     evaluated += 1;
     const lastCheckedAt = await store.latestThesisCheckAt(alert.thesisId);
     const result = evaluateThesisAlert(

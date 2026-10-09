@@ -31,7 +31,6 @@ export type GlossaryKey =
   | "margin-of-safety"
   | "fair-value"
   | "upside-downside"
-  | "suggested-allocation"
   | "health-score"
   | "health-subscores"
   | "integrity-score"
@@ -57,15 +56,15 @@ export const GLOSSARY: Record<GlossaryKey, GlossaryEntry> = {
   "pe-ratio": {
     term: "P/E ratio (Price to Earnings)",
     short:
-      "How many years of current profit it would take to earn back the share price. Lower can mean cheaper.",
+      "How many years of current profit it would take to earn back the share price. A lower number means a lower price relative to profits.",
     detail:
-      "The price-to-earnings ratio divides the current share price by the company's earnings per share. A lower number can mean the stock is cheaper relative to its profits, while a higher number can mean investors expect faster growth. When a company has negative earnings (a loss), the ratio would be meaningless, so this app shows 'Unavailable' instead of a misleading number.",
+      "The price-to-earnings ratio divides the current share price by the company's earnings per share. A lower number means the price is low relative to the company's profits, while a higher number can mean investors expect faster growth. Neither is good or bad on its own; it helps to compare companies in the same industry. When a company has negative earnings (a loss), the ratio would be meaningless, so this app shows 'Unavailable' instead of a misleading number.",
     example: "A P/E of 15 means the stock trades at 15 times its yearly earnings per share.",
   },
   "pb-ratio": {
     term: "P/B ratio (Price to Book)",
     short:
-      "Compares the share price to the company's net worth per share on its books. Below 1 can mean it's cheap.",
+      "Compares the share price to the company's net worth per share on its books. Below 1 means the price is under the book value.",
     detail:
       "The price-to-book ratio divides the current share price by the company's book value per share (its assets minus its liabilities, divided by shares outstanding). A ratio below 1 can suggest the market values the company at less than its recorded net worth, while a high ratio can mean investors expect strong future growth. This app shows 'Unavailable' when the book value can't be calculated, rather than guessing.",
   },
@@ -187,15 +186,15 @@ export const GLOSSARY: Record<GlossaryKey, GlossaryEntry> = {
   "margin-of-safety": {
     term: "Margin of safety",
     short:
-      "How much cheaper a stock is trading than its estimated fair value, as a percentage cushion.",
+      "How far a stock's price sits below an AI's estimated fair value, as a percentage cushion.",
     detail:
       "Margin of safety compares the current price to an AI-estimated fair value, showing the gap as a percentage. A positive margin means the stock is trading below its estimated worth, giving some cushion if the estimate turns out to be a bit optimistic. This number comes from an AI judgment, not a fetched market figure, so it always appears alongside the date that judgment was made.",
   },
   "fair-value": {
-    term: "Fair value",
+    term: "AI fair-value estimate",
     short: "An AI's estimate of what a stock is really worth, based on its financials and stated assumptions.",
     detail:
-      "Fair value is the AI's estimate of a stock's true worth, worked out from its financial statements and reasoning shown alongside the number. It's a judgment call, not a fact — different analysts (human or AI) can reach different fair value estimates from the same numbers. Because it's an AI opinion rather than fetched market data, it never carries a source badge; instead it shows when the analysis was run.",
+      "The AI fair-value estimate is the AI's estimate of a stock's true worth, worked out from its financial statements and reasoning shown alongside the number. It's a judgment call, not a fact — different analysts (human or AI) can reach different fair value estimates from the same numbers. Because it's an AI opinion rather than fetched market data, it never carries a source badge; instead it shows when the analysis was run.",
   },
   "upside-downside": {
     term: "Upside / downside case",
@@ -203,13 +202,6 @@ export const GLOSSARY: Record<GlossaryKey, GlossaryEntry> = {
       "The AI's estimate of how much a stock could gain in a best case, and how much it could lose in a worst case.",
     detail:
       "Upside case and downside case are the AI's estimated best-case and worst-case percentage outcomes for a stock, based on its analysis. They give you a sense of the range of plausible outcomes, not a guarantee of what will happen. Both are AI judgments generated at a point in time, not live market forecasts.",
-  },
-  "suggested-allocation": {
-    term: "Suggested allocation",
-    short:
-      "The AI's suggestion for what percentage of your portfolio a new position might reasonably make up.",
-    detail:
-      "Suggested allocation is the AI's opinion on how large a position in this stock might reasonably be, expressed as a percentage of your total portfolio. It's meant as a starting point for your own thinking about position sizing and risk, not an instruction. This app never places trades for you — it's your decision alone.",
   },
   "health-score": {
     term: "Health score",
@@ -240,16 +232,16 @@ export const GLOSSARY: Record<GlossaryKey, GlossaryEntry> = {
       "The Investment Committee asks several AI 'personas' (value, growth, dividend, quality, macro, and contrarian) to each judge a stock independently. The consensus score reflects how closely those independent judgments line up — a high score means the personas broadly agree, a low score means they see the stock very differently. Where they disagree is always shown explicitly, never hidden, because genuine disagreement is often the most useful part of the analysis.",
   },
   "buy-score": {
-    term: "Buy score",
-    short: "An AI's 0-100 rating of how attractive a stock looks as a new purchase right now.",
+    term: "Opportunity score",
+    short: "An AI's 0-100 rating of how strong the upside case for a stock looks right now.",
     detail:
-      "The buy score is the AI's overall judgment on how compelling a stock looks as a potential purchase, considering its estimated fair value, margin of safety, and other factors it weighs. A higher score suggests the case for buying looks stronger; a lower score suggests more caution is warranted. It's an AI opinion meant to support your own research, not a recommendation to act on automatically.",
+      "The opportunity score is the AI's overall judgment on how strong the upside case looks, considering its estimated fair value, margin of safety, and other factors it weighs. A higher score suggests the upside case looks stronger; a lower score suggests more caution is warranted. It's an AI opinion for education and research, not a personal recommendation.",
   },
   "sell-score": {
-    term: "Sell score",
-    short: "An AI's 0-100 rating of how strong the case looks for selling a stock you currently hold.",
+    term: "Warning-signs score",
+    short: "An AI's 0-100 rating of how many warning signs the AI sees for a stock.",
     detail:
-      "The sell score is the AI's overall judgment on how strong the reasons look for selling a position, based on the reasons to sell and counterarguments it lays out alongside the number. A higher score suggests the case for selling looks stronger; a lower score suggests the case looks weaker. As with every AI score in this app, it's meant to inform your own decision, not replace it.",
+      "The warning-signs score is the AI's overall judgment on how serious the reasons for concern look, based on the reasons and counterarguments it lays out alongside the number. A higher score means more or stronger warning signs; a lower score means fewer. As with every AI score in this app, it's meant to inform your own decision, not replace it.",
   },
   "price-alert": {
     term: "Price alert",

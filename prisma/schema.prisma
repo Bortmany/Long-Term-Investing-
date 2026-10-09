@@ -24,17 +24,29 @@ model User {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  sessions       Session[]
-  accounts       Account[]
-  portfolios     Portfolio[]
-  watchlistItems WatchlistItem[]
-  theses         Thesis[]
-  aiAnalyses     AiAnalysis[]
-  weeklyReviews  WeeklyReview[]
-  alerts         Alert[]
-  notifications  Notification[]
-  manualPrices   ManualPrice[]
-  manualFxRates  ManualFxRate[]
+  sessions          Session[]
+  accounts          Account[]
+  portfolios        Portfolio[]
+  watchlistItems    WatchlistItem[]
+  theses            Thesis[]
+  aiAnalyses        AiAnalysis[]
+  weeklyReviews     WeeklyReview[]
+  alerts            Alert[]
+  notifications     Notification[]
+  manualPrices      ManualPrice[]
+  manualFxRates     ManualFxRate[]
+  brokerConnections BrokerConnection[]
+  brokerSyncRuns    BrokerSyncRun[]
+
+  // Free or Pro (Step 2). Free by default. Changed only by the billing
+  // webhook or the owner's `npm run plan:set` command — never by the user.
+  plan         Plan          @default(FREE)
+  subscription Subscription?
+
+  // Sharia screen (Step 5): a plain yes/no preference, off for everyone by
+  // default. Personal data (it hints at beliefs): in the data download and
+  // on /privacy; deleted with the account.
+  shariaScreenEnabled Boolean @default(false)
 
   @@unique([email])
   @@map("user")
@@ -97,6 +109,7 @@ enum Currency {
   USD
   SAR
   AED
+  QAR
 }
 
 enum Market {
@@ -105,6 +118,8 @@ enum Market {
   TADAWUL
   DFM
   OTHER
+  ADX
+  QSE
 }
 
 enum InstrumentType {
@@ -126,6 +141,7 @@ enum PriceSource {
   FMP
   MANUAL
   SEED
+  TWELVE_DATA
 }
 
 enum ThesisStatus {
@@ -206,36 +222,50 @@ model Instrument {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  transactions       Transaction[]
-  priceCache         PriceCache[]
-  fundamentalsCache  FundamentalsCache[]
-  theses             Thesis[]
-  watchlistItems     WatchlistItem[]
-  alerts             Alert[]
-  manualPrices       ManualPrice[]
+  transactions      Transaction[]
+  priceCache        PriceCache[]
+  fundamentalsCache FundamentalsCache[]
+  theses            Thesis[]
+  watchlistItems    WatchlistItem[]
+  alerts            Alert[]
+  manualPrices      ManualPrice[]
+  shariaScreens     ShariaScreen[]
 
   @@unique([ticker, market])
 }
 
 model Transaction {
-  id           String          @id @default(cuid())
-  portfolioId  String
-  portfolio    Portfolio       @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  id              String          @id @default(cuid())
+  portfolioId     String
+  portfolio       Portfolio       @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
   // Nullable: cash-only rows (DEPOSIT / WITHDRAWAL / standalone FEE) have no instrument.
-  instrumentId String?
-  instrument   Instrument?     @relation(fields: [instrumentId], references: [id])
-  type         TransactionType
-  quantity     Decimal?        @db.Decimal(20, 8)
-  pricePerUnit Decimal?        @db.Decimal(20, 8)
-  amount       Decimal         @db.Decimal(20, 8)
-  currency     Currency
-  fee          Decimal         @default(0) @db.Decimal(20, 8)
-  tradeDate    DateTime
-  note         String?
-  createdAt    DateTime        @default(now())
+  instrumentId    String?
+  instrument      Instrument?     @relation(fields: [instrumentId], references: [id])
+  type            TransactionType
+  quantity        Decimal?        @db.Decimal(20, 8)
+  pricePerUnit    Decimal?        @db.Decimal(20, 8)
+  amount          Decimal         @db.Decimal(20, 8)
+  currency        Currency
+  fee             Decimal         @default(0) @db.Decimal(20, 8)
+  tradeDate       DateTime
+  note            String?
+  // Where an imported row came from: "<preset>:<broker id>" or a fingerprint.
+  // Used only to stop the same line being imported twice. NOT unique (older
+  // and hand-typed rows have none). Deleted with the portfolio (cascade).
+  importReference String?
+  // Broker sync (Step 4b): which broker sync brought this row in ("ibkr_flex")
+  // and which sync run. Both empty for typed and file-imported rows. The run
+  // link becomes empty if the history row is pruned; "syncedFrom" stays so
+  // the "From broker" tag never disappears.
+  syncedFrom      String?
+  syncRunId       String?
+  syncRun         BrokerSyncRun?  @relation(fields: [syncRunId], references: [id], onDelete: SetNull)
+  createdAt       DateTime        @default(now())
 
   @@index([portfolioId, tradeDate])
   @@index([instrumentId])
+  @@index([portfolioId, importReference])
+  @@index([syncRunId])
 }
 
 // ---------------------------------------------------------------------------
@@ -382,6 +412,9 @@ model AiAnalysis {
   @@index([type, subjectType, subjectId, createdAt(sort: Desc)])
   @@index([inputHash])
   @@index([userId, createdAt(sort: Desc)])
+  // The app-wide daily AI limit counts every user's rows since midnight UTC —
+  // a range scan the per-user index above can't serve.
+  @@index([createdAt])
 }
 
 model WatchlistItem {
@@ -413,9 +446,9 @@ model WeeklyReview {
 // ---------------------------------------------------------------------------
 
 model Alert {
-  id     String      @id @default(cuid())
+  id     String    @id @default(cuid())
   userId String
-  user   User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   kind   AlertKind
 
   // PRICE_ABOVE / PRICE_BELOW / DAY_DROP only.
@@ -427,7 +460,7 @@ model Alert {
 
   // Price in the instrument's own currency for PRICE_ABOVE/PRICE_BELOW; a
   // positive percent for DAY_DROP. Null for THESIS_REVIEW_DUE.
-  threshold Decimal? @db.Decimal(20, 8)
+  threshold    Decimal? @db.Decimal(20, 8)
   // THESIS_REVIEW_DUE only: how many days between reviews.
   intervalDays Int?
 
@@ -447,9 +480,9 @@ model Alert {
 }
 
 model Notification {
-  id      String @id @default(cuid())
+  id      String  @id @default(cuid())
   userId  String
-  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   alertId String?
   alert   Alert?  @relation(fields: [alertId], references: [id], onDelete: SetNull)
 
@@ -478,4 +511,153 @@ model Notification {
 
   @@index([userId, readAt])
   @@index([userId, createdAt(sort: Desc)])
+}
+
+// ---------------------------------------------------------------------------
+// Plans and billing (Step 2 "go public"). Billing is built but OFF until the
+// owner turns it on; while it is off these two tables stay empty.
+// ---------------------------------------------------------------------------
+
+enum Plan {
+  FREE
+  PRO
+}
+
+// One per paying user. Only the billing code writes it (checkout start and
+// the verified Stripe webhook). No card details are ever stored — Stripe
+// keeps those. Deleted with the account.
+model Subscription {
+  id                     String    @id @default(cuid())
+  userId                 String    @unique
+  user                   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider               String    @default("stripe")
+  providerCustomerId     String
+  providerSubscriptionId String?   @unique
+  // Stripe's own status word ("active", "past_due", "canceled", ...). Plain
+  // text on purpose, so a new Stripe status never needs a migration.
+  status                 String
+  // "month" or "year".
+  interval               String
+  currentPeriodEnd       DateTime?
+  cancelAtPeriodEnd      Boolean   @default(false)
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  @@index([providerCustomerId])
+}
+
+// Every Stripe event id we have handled, so a repeat delivery is ignored.
+// No personal data: just the event id and its type.
+model BillingEvent {
+  id         String   @id
+  type       String
+  receivedAt DateTime @default(now())
+}
+
+// ---------------------------------------------------------------------------
+// Read-only broker connection (Step 4b). Interactive Brokers Flex only. The
+// feature is dormant unless BROKER_TOKEN_KEY is set. Nothing here can trade.
+// ---------------------------------------------------------------------------
+
+enum BrokerConnectionStatus {
+  ACTIVE
+  NEEDS_RECONNECT
+}
+
+enum BrokerSyncStatus {
+  RUNNING
+  SUCCEEDED
+  FAILED
+  NEEDS_RECONNECT
+}
+
+// One saved connection per user per broker. The token is stored ONLY as
+// encrypted text (AES-256-GCM, see src/lib/broker/crypto.ts) and is never
+// read by a screen or exported. Deleted with the user; deleted on disconnect.
+model BrokerConnection {
+  id                   String                 @id @default(cuid())
+  userId               String
+  user                 User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Short text id ("ibkr_flex"), text not enum so another broker needs no migration.
+  provider             String
+  encryptedToken       String
+  queryId              String
+  accountId            String?
+  // The date the user typed, never fact from the broker.
+  tokenExpiresOn       DateTime?
+  expiryReminderSentAt DateTime?
+  status               BrokerConnectionStatus @default(ACTIVE)
+  lastAttemptAt        DateTime?
+  lastSuccessAt        DateTime?
+  lastFailureCode      String?
+  lastFailureMessage   String?
+  // The "only one sync at a time" marker.
+  syncingSince         DateTime?
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+
+  runs BrokerSyncRun[]
+
+  @@unique([userId, provider])
+}
+
+// One row per sync attempt (newest 30 per connection are kept). Counts and a
+// short plain message only: never the broker's report, codes or addresses.
+model BrokerSyncRun {
+  id           String           @id @default(cuid())
+  connectionId String
+  connection   BrokerConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  startedAt    DateTime         @default(now())
+  finishedAt   DateTime?
+  // "manual" now; "scheduled" is reserved for a later spec.
+  trigger      String           @default("manual")
+  status       BrokerSyncStatus @default(RUNNING)
+  rowsSeen     Int              @default(0)
+  rowsAdded    Int              @default(0)
+  rowsAlready  Int              @default(0)
+  rowsSkipped  Int              @default(0)
+  rowsRejected Int              @default(0)
+  accountCount Int              @default(0)
+  // [{ "reason": "...", "count": 2 }] plain-English skip reasons.
+  skipReasons  Json?
+  message      String?
+
+  transactions Transaction[]
+
+  @@index([connectionId, startedAt])
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// Sharia screen (Step 5). A verdict is BOUGHT from a data supplier, never
+// computed here. Shared reference data: nothing in these rows is about a
+// person. "Not screened" is never stored; it is what shows when no usable row
+// exists. One row per stock per supplier, replaced on each refresh.
+// ---------------------------------------------------------------------------
+
+enum ShariaVerdict {
+  COMPLIANT
+  NOT_COMPLIANT
+}
+
+model ShariaScreen {
+  id            String        @id @default(cuid())
+  instrumentId  String
+  instrument    Instrument    @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+  verdict       ShariaVerdict
+  // Supplier id as plain text ("musaffa"), so another supplier needs no enum migration.
+  source        String
+  methodName    String
+  // May be empty; the panel prints a version only when there is one.
+  methodVersion String        @default("")
+  // The supplier's own numbers, kept as received, never computed or shown.
+  ratios        Json?
+  // The date the verdict's data is as of.
+  asOf          DateTime
+  fetchedAt     DateTime
+
+  @@unique([instrumentId, source])
+  @@index([fetchedAt])
 }

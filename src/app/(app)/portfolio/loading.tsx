@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { CardSkeletonList, LAPTOP_ONLY_XL } from "@/components/ui/card-skeletons";
 
 // Loading state shaped like the real portfolio page (header row, holdings
 // card, transactions card with the same row counts) so nothing jumps when
@@ -23,7 +24,8 @@ export default function PortfolioLoading() {
           <Skeleton className="h-5 w-24" />
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
+          <CardSkeletonList hideFrom="xl" />
+          <div className={`${LAPTOP_ONLY_XL} space-y-3`}>
             {Array.from({ length: 5 }).map((_, i) => (
               <div key={i} className="grid grid-cols-8 gap-4">
                 <Skeleton className="h-4 w-14" />
@@ -51,7 +53,8 @@ export default function PortfolioLoading() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
+          <CardSkeletonList density="compact" hideFrom="xl" />
+          <div className={`${LAPTOP_ONLY_XL} space-y-3`}>
             {Array.from({ length: 5 }).map((_, i) => (
               <div key={i} className="grid grid-cols-6 gap-4">
                 <Skeleton className="h-4 w-24" />

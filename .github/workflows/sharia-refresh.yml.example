@@ -1,0 +1,35 @@
+# DISABLED — this file ends in ".yml.example", not ".yml"/".yaml", so GitHub
+# Actions ignores it. To turn the daily Sharia refresh on (ONLY after you have
+# Musaffa's written permission and have set MUSAFFA_API_KEY — see GO-LIVE.md):
+#
+#   1. Set CRON_SECRET and MUSAFFA_API_KEY in your deployed app's environment.
+#   2. In this GitHub repo, go to Settings -> Secrets and variables ->
+#      Actions, and make sure these repository secrets exist (the same ones
+#      the other schedules use):
+#        APP_URL      e.g. https://your-app.example.com (no trailing slash)
+#        CRON_SECRET  the SAME value you set in step 1
+#   3. Rename this file to sharia-refresh.yml and commit it.
+#
+# Once enabled, this calls POST /api/cron/sharia-refresh once a day. It asks
+# the screening supplier about at most 500 stocks, only for people who switched
+# the badge on, and returns counts only. Until MUSAFFA_API_KEY is set the
+# endpoint answers "dormant" (503) and nothing is sent to the supplier.
+
+name: Refresh Sharia screens
+
+on:
+  schedule:
+    # Every day at 03:00 UTC.
+    - cron: "0 3 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  run-sharia-refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger the Sharia refresh
+        run: |
+          curl --fail --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${{ secrets.APP_URL }}/api/cron/sharia-refresh"

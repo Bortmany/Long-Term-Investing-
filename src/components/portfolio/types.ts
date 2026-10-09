@@ -4,6 +4,8 @@
 
 import type { Currency, Market, TransactionType } from "@prisma/client";
 import type { ValueSource } from "@/lib/portfolio";
+import type { ProviderBadgeDetail } from "@/lib/data/provider-info";
+import type { ShariaBadgeData } from "@/lib/sharia/types";
 
 /** One row of the Holdings table, fully valued (or honestly not) server-side. */
 export type HoldingRowData = {
@@ -17,11 +19,26 @@ export type HoldingRowData = {
   avgCost: number | null;
   /** Latest known price for the instrument, in its own currency. */
   price:
-    | { ok: true; value: number; currency: Currency; source: ValueSource }
+    | {
+        ok: true;
+        value: number;
+        currency: Currency;
+        source: ValueSource;
+        /** Provider + delay wording for a Twelve Data price (badge text). */
+        detail?: ProviderBadgeDetail;
+      }
     | { ok: false };
   /** Market value in the portfolio base currency. */
   valuation:
-    | { ok: true; marketValue: number; source: ValueSource }
+    | {
+        ok: true;
+        marketValue: number;
+        source: ValueSource;
+        /** Provider + delay wording when the price came from Twelve Data. */
+        detail?: ProviderBadgeDetail;
+        /** "rate via OMR, as of <date>" when the conversion went through the rial. */
+        fxNote?: string;
+      }
     | { ok: false; reason: "missing_price" | "missing_fx_rate" };
   /** Unrealized gain/loss in the base currency (+ percent of cost basis). */
   gainLoss:
@@ -32,6 +49,8 @@ export type HoldingRowData = {
   /** True when this instrument routes to the manual price provider
       (non-US market, or US without FMP_API_KEY) — decided server-side. */
   manualPricing: boolean;
+  /** Sharia screen badge data; absent when the person has the switch off (or is not on Pro). */
+  sharia?: ShariaBadgeData | null;
 };
 
 /** One row of the Transactions table. */
@@ -47,6 +66,10 @@ export type TransactionRowData = {
   fee: number;
   tradeDate: Date;
   note: string | null;
+  /** Set (e.g. "ibkr_flex") only for trades the broker sync brought in; drives the "From broker" tag. */
+  syncedFrom?: string | null;
+  /** When that sync ran; null once old run history is pruned. */
+  syncedOn?: Date | null;
 };
 
 /** An instrument option for the pickers in the Add Transaction dialog. */
