@@ -18,7 +18,7 @@ const MIN_CRON_SECRET_LENGTH = 16;
  * and length are ever examined. Local/dev/test runs are unaffected so
  * `npm run dev` and the test suite keep working without a real secret.
  */
-function checkStartupSecrets(): void {
+export function checkStartupSecrets(): void {
   if (process.env.NODE_ENV !== "production") return;
 
   const authSecret = process.env.BETTER_AUTH_SECRET;
@@ -31,18 +31,18 @@ function checkStartupSecrets(): void {
     );
   }
 
-  // Rate-limit IP source: when the proxy headers aren't trusted, anonymous
-  // callers are limited by a signed per-browser cookie instead of a real IP
-  // (see src/lib/rate-limit.ts). That's the SAFE default, but if this app runs
-  // behind a proxy you control (Railway, a load balancer) you probably want
-  // TRUST_PROXY_HEADERS="true" so limits key on the real client IP. Say so
-  // loudly once at startup so it's a deliberate choice, not an oversight.
+  // Rate-limit IP source: without TRUST_PROXY_HEADERS="true" the app cannot
+  // see the real visitor address behind Railway's proxy, so the Stripe webhook
+  // and the cron endpoints would share ONE rate-limit bucket with everyone —
+  // junk requests could then block Stripe's real retries or the scheduler.
+  // Refuse to start so this is a deliberate choice, never an oversight.
   if (process.env.TRUST_PROXY_HEADERS !== "true") {
-    logger.warn(
-      "TRUST_PROXY_HEADERS is not \"true\": anonymous rate limiting keys on a " +
-        "signed per-browser cookie, not the real client IP. This is the safe " +
-        "default. If this app runs behind a proxy you control that sets " +
-        "X-Forwarded-For, set TRUST_PROXY_HEADERS=\"true\" to limit by real IP.",
+    throw new Error(
+      "TRUST_PROXY_HEADERS is not set to \"true\". In production the app sits " +
+        "behind a proxy, and without this setting every visitor (including " +
+        "Stripe's webhook and the cron scheduler) shares one rate limit, so junk " +
+        "requests could block the real ones. Set TRUST_PROXY_HEADERS=\"true\" " +
+        "in the production environment before starting the app.",
     );
   }
 
