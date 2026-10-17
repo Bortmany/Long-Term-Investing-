@@ -1,12 +1,17 @@
 // Display formatting helpers (pages stay thin; formatting lives here).
 
+/** Decimal places a currency is shown to: OMR and KWD have 3 (1/1000 minor unit), the rest 2. */
+export function moneyDecimals(currency: string): number {
+  return currency === "OMR" || currency === "KWD" ? 3 : 2;
+}
+
 /**
  * Format a money amount for display, e.g. formatMoney(24850, "OMR")
- * → "OMR 24,850.000". OMR is conventionally shown to 3 decimals (its minor
+ * → "OMR 24,850.000". OMR and KWD are conventionally shown to 3 decimals (its minor
  * unit, the baisa, is 1/1000); other currencies use 2 decimals.
  */
 export function formatMoney(amount: number, currency: string): string {
-  const decimals = currency === "OMR" ? 3 : 2;
+  const decimals = moneyDecimals(currency);
   const formatted = new Intl.NumberFormat("en-US", {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,

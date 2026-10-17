@@ -110,6 +110,7 @@ enum Currency {
   SAR
   AED
   QAR
+  KWD
 }
 
 enum Market {
@@ -120,6 +121,7 @@ enum Market {
   OTHER
   ADX
   QSE
+  BOURSA
 }
 
 enum InstrumentType {

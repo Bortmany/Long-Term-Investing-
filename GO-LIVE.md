@@ -45,7 +45,7 @@ Muscat (MSX) has no data vendor anywhere, so it stays typed-in whatever you do. 
 1. [ ] Get Twelve Data's written quote and licence. Confirm it covers **signed-in users of a public app**, plus which markets and delays each plan gives.
 2. [ ] Make one real call per market, replace the made-up fixtures with the real recorded replies, and **correct the market table** in `src/lib/data/provider-info.ts` (every row says "UNVERIFIED until first real call"). Re-run the tests.
 3. [ ] Set `TWELVE_DATA_API_KEY`. **Never put the free (non-commercial) key on the live site**, and never a paid key before the written licence. `/api/health` should then show `twelveData: "configured"`.
-4. [ ] `TWELVE_DATA_MARKETS` — default `TADAWUL,ADX,QSE`; add `DFM` only once you've bought the dearer plan.
+4. [ ] `TWELVE_DATA_MARKETS` — default `TADAWUL,ADX,QSE`; add `DFM` (Dubai) and/or `BOURSA` (Boursa Kuwait, end of day, KWD) only once you've bought the dearer plan.
 5. [ ] **Licence flags — leave both UNSET** until a written licence explicitly allows showing prices to signed-out visitors: `TWELVE_DATA_PUBLIC_DISPLAY_LICENSED` and `FMP_PUBLIC_DISPLAY_LICENSED`. While unset every public page says "Sign in to see prices".
 6. [ ] Check the plan's allowance: each tracked Gulf stock costs at most about 96 calls a day, shared by everyone.
 7. [ ] `TWELVE_DATA_BASE_URL` is developer-only; the app ignores it in production. Never set it live.

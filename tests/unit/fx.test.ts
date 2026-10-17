@@ -138,6 +138,21 @@ describe("convertAmount through the rial", () => {
     }
   });
 
+  it("converts KWD→OMR with a direct row and KWD→USD via OMR", () => {
+    const kwdOmr: FxRateInput = { base: "KWD", quote: "OMR", rate: 1.25, asOf: new Date("2026-07-04") };
+    const direct = convertAmount(10, "KWD", "OMR", [kwdOmr]);
+    expect(direct.ok).toBe(true);
+    if (direct.ok) expect(direct.value).toBeCloseTo(12.5, 10);
+    const viaHub = convertAmount(10, "KWD", "USD", [kwdOmr, usdOmr]);
+    expect(viaHub.ok).toBe(true);
+    if (viaHub.ok) {
+      expect(viaHub.value).toBeCloseTo(31.25, 10);
+      expect(viaHub.viaHub?.via).toBe("OMR");
+    }
+    // No row at all: the typed missing-rate result, never a silent 1.0.
+    expect(convertAmount(10, "KWD", "USD", [usdOmr]).ok).toBe(false);
+  });
+
   it("converts QAR→USD via OMR", () => {
     const result = convertAmount(100, "QAR", "USD", [qarOmr, usdOmr]);
     expect(result.ok).toBe(true);

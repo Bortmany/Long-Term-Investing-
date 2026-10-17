@@ -28,7 +28,8 @@ const MARKET_INFO: Record<Market, MarketInfo> = {
   DFM: { rank: 4, label: "DFM (Dubai)", defaultCurrency: "AED" },
   ADX: { rank: 5, label: "ADX (Abu Dhabi)", defaultCurrency: "AED" },
   QSE: { rank: 6, label: "QSE (Qatar)", defaultCurrency: "QAR" },
-  OTHER: { rank: 7, label: "Other", defaultCurrency: "USD" },
+  BOURSA: { rank: 7, label: "Boursa Kuwait", defaultCurrency: "KWD" },
+  OTHER: { rank: 8, label: "Other", defaultCurrency: "USD" },
 };
 
 const CURRENCY_RANK: Record<Currency, number> = {
@@ -37,14 +38,15 @@ const CURRENCY_RANK: Record<Currency, number> = {
   SAR: 3,
   AED: 4,
   QAR: 5,
+  KWD: 6,
 };
 
-/** Every market, in display order: US, MSX, TADAWUL, DFM, ADX, QSE, OTHER. */
+/** Every market, in display order: US, MSX, TADAWUL, DFM, ADX, QSE, BOURSA, OTHER. */
 export const MARKET_VALUES: readonly Market[] = (
   Object.keys(MARKET_INFO) as Market[]
 ).sort((a, b) => MARKET_INFO[a].rank - MARKET_INFO[b].rank);
 
-/** Every currency, in display order: OMR, USD, SAR, AED, QAR. */
+/** Every currency, in display order: OMR, USD, SAR, AED, QAR, KWD. */
 export const CURRENCY_VALUES: readonly Currency[] = (
   Object.keys(CURRENCY_RANK) as Currency[]
 ).sort((a, b) => CURRENCY_RANK[a] - CURRENCY_RANK[b]);
@@ -84,17 +86,17 @@ function joinWithOr(items: readonly string[]): string {
   return `${items.slice(0, -1).join(", ")} or ${items[items.length - 1]}`;
 }
 
-/** "Pick a valid currency (OMR, USD, SAR, AED or QAR)." */
+/** "Pick a valid currency (OMR, USD, SAR, AED, QAR or KWD)." */
 export function currencyListSentence(): string {
   return `Pick a valid currency (${joinWithOr(CURRENCY_VALUES)}).`;
 }
 
-/** "Pick a market (US, MSX, TADAWUL, DFM, ADX, QSE or OTHER)." */
+/** "Pick a market (US, MSX, TADAWUL, DFM, ADX, QSE, BOURSA or OTHER)." */
 export function marketListSentence(): string {
   return `Pick a market (${joinWithOr(MARKET_VALUES)}).`;
 }
 
-/** "OMR, USD, SAR, AED or QAR" — for use inside other sentences. */
+/** "OMR, USD, SAR, AED, QAR or KWD" — for use inside other sentences. */
 export function currencyListText(): string {
   return joinWithOr(CURRENCY_VALUES);
 }

@@ -155,7 +155,7 @@ describe("validateMappedRow — error cases", () => {
     const badCurrency = validateMappedRow({ ...base, currency: "EUR" }, 1, instruments);
     expect(badCurrency.ok).toBe(false);
     if (badCurrency.ok) return;
-    expect(badCurrency.issues[0]).toMatch(/OMR, USD, SAR, AED or QAR/);
+    expect(badCurrency.issues[0]).toMatch(/OMR, USD, SAR, AED, QAR or KWD/);
   });
 
   it("flags a negative quantity", () => {

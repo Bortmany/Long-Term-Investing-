@@ -30,6 +30,14 @@ const fxRates: FxRateInput[] = [
   { base: "USD", quote: "OMR", rate: 0.385, asOf: d("2026-07-01") },
 ];
 
+describe("KWD precision", () => {
+  it("rounds KWD to 3 decimals like OMR, other currencies to 2", () => {
+    expect(roundMoney(1.23456, "KWD")).toBe(1.235);
+    expect(roundMoney(1.23456, "OMR")).toBe(1.235);
+    expect(roundMoney(1.23456, "AED")).toBe(1.23);
+  });
+});
+
 describe("computeTrailingDividendIncome", () => {
   const now = d("2026-07-12");
 

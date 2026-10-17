@@ -1,6 +1,6 @@
 // The ONE list of exchanges the screening supplier covers, by market name.
 // Musaffa's plan covers the US, Saudi and the UAE (Dubai and Abu Dhabi).
-// Muscat (MSX) and Qatar (QSE) have no coverage, so they show "Not screened".
+// Muscat (MSX) Qatar (QSE) and Kuwait (BOURSA) have no coverage, so they show "Not screened".
 // UNVERIFIED AGAINST THE REAL PLAN: the owner confirms the covered list in
 // writing before the key is set (see GO-LIVE.md); fix it here if it differs.
 //
@@ -20,6 +20,7 @@ const EXCHANGE_NAMES: Record<string, string> = {
   DFM: "Dubai",
   ADX: "Abu Dhabi",
   QSE: "Qatar",
+  BOURSA: "Kuwait",
   OTHER: "other-market",
 };
 
