@@ -17,7 +17,7 @@
 //      not responding". Clear the key: back to the typed-in badge.
 //
 // The sample stocks it knows (symbol on exchange): 2222 on XSAU (Aramco, end
-// of day), FAB on XADS, QNBK on DSMD, EMAAR on XDFM. Anything else gets the
+// of day), FAB on XADS, QNBK on DSMD, EMAAR on XDFM, NBK on XKUW. Anything else gets the
 // vendor-style "symbol not found" error inside a normal reply.
 //
 // The dates in the made-up files are moved to today (same time of day) so the
@@ -37,6 +37,7 @@ const SAMPLES = {
   "XADS:FAB": "adx-fab.json",
   "DSMD:QNBK": "qse-qnbk.json",
   "XDFM:EMAAR": "dfm-emaar.json",
+  "XKUW:NBK": "boursa-nbk.json",
 };
 
 function loadFixture(name) {

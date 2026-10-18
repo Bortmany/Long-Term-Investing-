@@ -32,6 +32,8 @@ export type TwelveDataMarketEntry = {
   /** Trailing ticker suffixes to remove before asking the vendor (upper case). */
   stripSuffixes: readonly string[];
   delay: TwelveDataDelay;
+  /** Where the market sits on the clock. Leave out for Gulf time (UTC+4, Asia/Dubai). */
+  timeZone?: { name: string; label: string };
 };
 
 // EVERY ROW BELOW IS "UNVERIFIED until first real call": the values come from
@@ -74,6 +76,17 @@ export const TWELVE_DATA_MARKET_TABLE: Partial<Record<Market, TwelveDataMarketEn
     stripSuffixes: [".AE", ".DU"],
     delay: { kind: "unconfirmed" },
   },
+  // UNVERIFIED until first real call. Boursa Kuwait (MIC XKUW), listed by
+  // Twelve Data as end of day on the same dearer plan as DFM, so it is OFF
+  // unless named in TWELVE_DATA_MARKETS. Kuwait time is UTC+3, not Gulf time.
+  BOURSA: {
+    market: "BOURSA",
+    exchange: "XKUW",
+    currency: "KWD",
+    stripSuffixes: [".KW"],
+    delay: { kind: "end_of_day" },
+    timeZone: { name: "Asia/Kuwait", label: "Kuwait time (UTC+3)" },
+  },
 };
 // MSX, US and OTHER are deliberately NOT in the table: MSX has no data vendor
 // anywhere (typed-in prices only), US uses FMP, OTHER is always typed-in.
@@ -105,7 +118,7 @@ export function vendorSymbolFor(market: Market, ticker: string): string | null {
 // 2. Settings read from the environment
 // ---------------------------------------------------------------------------
 
-/** Markets sent to Twelve Data when TWELVE_DATA_MARKETS is not set. DFM is left out on purpose. */
+/** Markets sent to Twelve Data when TWELVE_DATA_MARKETS is not set. DFM and BOURSA (Kuwait) are left out on purpose. */
 export const DEFAULT_TWELVE_DATA_MARKETS: readonly Market[] = ["TADAWUL", "ADX", "QSE"];
 
 /**
@@ -180,18 +193,18 @@ export type ProviderBadgeDetail = {
 // gives the right day and clock time for every Gulf market.
 const GULF_TIME_ZONE = "Asia/Dubai";
 
-function gulfDate(date: Date): string {
+function gulfDate(date: Date, zone: string = GULF_TIME_ZONE): string {
   return new Intl.DateTimeFormat("en-US", {
-    timeZone: GULF_TIME_ZONE,
+    timeZone: zone,
     month: "short",
     day: "numeric",
     year: "numeric",
   }).format(date);
 }
 
-function gulfTime(date: Date): string {
+function gulfTime(date: Date, zone: string = GULF_TIME_ZONE): string {
   return new Intl.DateTimeFormat("en-GB", {
-    timeZone: GULF_TIME_ZONE,
+    timeZone: zone,
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
@@ -213,9 +226,11 @@ export function describePriceProvider(input: {
 }): ProviderBadgeDetail | null {
   if (input.priceSource !== "TWELVE_DATA") return null;
 
-  const delay: TwelveDataDelay =
-    getTwelveDataMarketEntry(input.market)?.delay ?? { kind: "unconfirmed" };
-  const date = gulfDate(input.asOf);
+  const entry = getTwelveDataMarketEntry(input.market);
+  const delay: TwelveDataDelay = entry?.delay ?? { kind: "unconfirmed" };
+  const zone = entry?.timeZone?.name ?? GULF_TIME_ZONE;
+  const zoneLabel = entry?.timeZone?.label ?? "Gulf time (UTC+4)";
+  const date = gulfDate(input.asOf, zone);
 
   let text: string;
   let meaning: string;
@@ -232,10 +247,10 @@ export function describePriceProvider(input: {
   } else {
     // Delay not confirmed: say "delayed", give the price's own date and time,
     // and NEVER a number of minutes we do not know.
-    text = `Twelve Data · delayed, as of ${date}, ${gulfTime(input.asOf)}`;
+    text = `Twelve Data · delayed, as of ${date}, ${gulfTime(input.asOf, zone)}`;
     meaning =
       "This price may be behind the market. The provider hasn't told us by how much.";
-    timeZoneNote = "Times are in Gulf time (UTC+4).";
+    timeZoneNote = `Times are in ${zoneLabel}.`;
   }
 
   return {

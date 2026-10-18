@@ -44,6 +44,9 @@ const EXCHANGE_WORDS: Record<string, string> = {
   DSMD: "QSE",
   XDSM: "QSE",
   QSE: "QSE",
+  // Kuwait
+  XKUW: "BOURSA",
+  BOURSA: "BOURSA",
 };
 
 /**

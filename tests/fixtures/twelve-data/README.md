@@ -16,6 +16,7 @@ replies (one per market) and correct the market table in
 | `adx-fab.json` | First Abu Dhabi Bank, AED |
 | `qse-qnbk.json` | Qatar National Bank, QAR |
 | `dfm-emaar.json` | Emaar, AED (Dubai, only when switched on) |
+| `boursa-nbk.json` | National Bank of Kuwait, KWD with 3 decimals (Boursa Kuwait, only when switched on) |
 | `error-bad-symbol.json` | The vendor's error sent inside a normal-looking reply |
 | `error-rate-limited.json` | The vendor's "out of credits" answer |
 

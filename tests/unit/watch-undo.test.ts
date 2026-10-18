@@ -33,7 +33,8 @@ vi.mock("@/lib/prisma", () => ({
         return { id: "new-id", ticker: args.data.ticker };
       },
       // The stored row carries a name typed by SOMEONE ELSE; it must never come back.
-      findUnique: async () => ({ id: "existing-id", name: "Typed By Another User" }),
+      findUnique: async () =>
+        state.duplicateTicker ? { id: "existing-id", name: "Typed By Another User" } : null,
     },
     watchlistItem: {
       count: async (args: { where: { userId: string; instrumentId: string } }) =>

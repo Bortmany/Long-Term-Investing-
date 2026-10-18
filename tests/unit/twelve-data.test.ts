@@ -21,6 +21,7 @@ import {
 import { createManualProvider } from "@/lib/data/manual";
 import { resolveProviderName, type InstrumentRef, type Quote } from "@/lib/data/provider";
 import {
+  DEFAULT_TWELVE_DATA_MARKETS,
   TWELVE_DATA_MARKET_TABLE,
   describePriceProvider,
   isPublicDisplayAllowed,
@@ -61,6 +62,7 @@ function fakeNetwork(body: unknown, status = 200) {
 const aramco: InstrumentRef = { id: "i-aramco", ticker: "2222.SR", market: "TADAWUL", currency: "SAR" };
 const fab: InstrumentRef = { id: "i-fab", ticker: "FAB", market: "ADX", currency: "AED" };
 const qnbk: InstrumentRef = { id: "i-qnbk", ticker: "QNBK", market: "QSE", currency: "QAR" };
+const nbk: InstrumentRef = { id: "i-nbk", ticker: "NBK", market: "BOURSA", currency: "KWD" };
 const emaar: InstrumentRef = { id: "i-emaar", ticker: "EMAAR", market: "DFM", currency: "AED" };
 const bankMuscat: InstrumentRef = { id: "i-bkmb", ticker: "BKMB", market: "MSX", currency: "OMR" };
 const otherStock: InstrumentRef = { id: "i-oth", ticker: "XYZ", market: "OTHER", currency: "USD" };
@@ -124,6 +126,13 @@ describe("routing", () => {
     expect(resolveProviderName("TADAWUL", null, { apiKey: KEY, markets: ["QSE"] })).toBe("manual");
   });
 
+  it("Boursa Kuwait routes only when it is named, like DFM", () => {
+    expect(resolveProviderName("BOURSA", null, { apiKey: KEY })).toBe("manual");
+    expect(resolveProviderName("BOURSA", null, { apiKey: KEY, markets: ["TADAWUL", "ADX", "QSE"] })).toBe("manual");
+    expect(resolveProviderName("BOURSA", null, { apiKey: KEY, markets: ["BOURSA"] })).toBe("twelve-data");
+    expect(resolveProviderName("BOURSA", null, { apiKey: null, markets: ["BOURSA"] })).toBe("manual");
+  });
+
   it("MSX and Other never route to any provider, even with every key and every market named", () => {
     const everything = { apiKey: KEY, markets: Object.values(Market) };
     expect(resolveProviderName("MSX", "fmp-key", everything)).toBe("manual");
@@ -140,10 +149,13 @@ describe("routing", () => {
     expect(parseTwelveDataMarkets("")).toEqual(["TADAWUL", "ADX", "QSE"]);
     expect(parseTwelveDataMarkets("tadawul, dfm")).toEqual(["TADAWUL", "DFM"]);
     expect(parseTwelveDataMarkets("MSX,OTHER,US")).toEqual([]);
+    expect(parseTwelveDataMarkets("boursa")).toEqual(["BOURSA"]);
   });
 
-  it("the market table has exactly Tadawul, ADX, QSE and DFM", () => {
-    expect(Object.keys(TWELVE_DATA_MARKET_TABLE).sort()).toEqual(["ADX", "DFM", "QSE", "TADAWUL"]);
+  it("the market table has exactly Tadawul, ADX, QSE, DFM and Boursa Kuwait", () => {
+    expect(Object.keys(TWELVE_DATA_MARKET_TABLE).sort()).toEqual(["ADX", "BOURSA", "DFM", "QSE", "TADAWUL"]);
+    expect(TWELVE_DATA_MARKET_TABLE.BOURSA).toMatchObject({ exchange: "XKUW", currency: "KWD", delay: { kind: "end_of_day" } });
+    expect(DEFAULT_TWELVE_DATA_MARKETS).not.toContain("BOURSA");
   });
 
   it("with no key, getQuote reads stored prices and makes no network call at all", async () => {
@@ -198,6 +210,7 @@ describe("quotes, one per market (made-up sample replies)", () => {
     { name: "Tadawul (strips .SR)", instrument: aramco, file: "tadawul-2222.json", symbol: "2222", exchange: "XSAU", price: 27.45, currency: "SAR", asOfSeconds: 1790596800 },
     { name: "ADX", instrument: fab, file: "adx-fab.json", symbol: "FAB", exchange: "XADS", price: 14.32, currency: "AED", asOfSeconds: 1790590800 },
     { name: "QSE", instrument: qnbk, file: "qse-qnbk.json", symbol: "QNBK", exchange: "DSMD", price: 17.85, currency: "QAR", asOfSeconds: 1790587800 },
+    { name: "Boursa Kuwait (KWD keeps 3 decimals)", instrument: nbk, file: "boursa-nbk.json", symbol: "NBK", exchange: "XKUW", price: 0.918, currency: "KWD", asOfSeconds: 1790587800 },
     { name: "DFM", instrument: emaar, file: "dfm-emaar.json", symbol: "EMAAR", exchange: "XDFM", price: 13.1, currency: "AED", asOfSeconds: 1790593200 },
   ];
 
@@ -745,6 +758,14 @@ describe("badge wording", () => {
       expect(detail?.icon).toBe("clock");
       expect(detail?.timeZoneNote).toBe("Times are in Gulf time (UTC+4).");
     }
+  });
+
+  it("Boursa Kuwait says end of day with the Kuwait date and never the word Live", () => {
+    // 22:30 UTC is already the next morning in Kuwait (UTC+3), so the date moves on.
+    const late = new Date("2026-09-28T22:30:00Z");
+    const detail = describePriceProvider({ priceSource: "TWELVE_DATA", market: "BOURSA", asOf: late });
+    expect(detail?.text).toBe("Twelve Data · end of day, Sep 29, 2026");
+    expect(detail?.text).not.toMatch(/live/i);
   });
 
   it("a market with a confirmed delay in minutes says Live with the minutes and a green dot", () => {

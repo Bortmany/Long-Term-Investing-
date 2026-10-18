@@ -8,6 +8,7 @@
 // rows beneath it, to the last decimal.
 
 import type { Currency } from "@prisma/client";
+import { moneyDecimals } from "@/lib/format";
 import { convertAmount } from "./fx";
 import type { FxRateInput, TxnInput } from "./types";
 
@@ -35,11 +36,11 @@ export type DividendIncome = {
 };
 
 /**
- * Round to the money's own precision — OMR to 3 decimals (the baisa), every
+ * Round to the money's own precision — OMR and KWD to 3 decimals, every
  * other currency to 2 — the same precision the screen shows.
  */
 export function roundMoney(amount: number, currency: Currency): number {
-  const factor = currency === "OMR" ? 1000 : 100;
+  const factor = moneyDecimals(currency) === 3 ? 1000 : 100;
   // (toPrecision(12) keeps 12 significant digits, plenty for realistic dividend amounts.)
   // toPrecision first so a value like 1.0005 (really 1.000499999…) rounds
   // the way a person expects.

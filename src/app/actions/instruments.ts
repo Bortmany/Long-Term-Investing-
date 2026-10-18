@@ -38,7 +38,11 @@ const createInstrumentSchema = z.object({
     .string({ error: "Enter a ticker symbol." })
     .trim()
     .min(1, "Enter a ticker symbol.")
-    .max(20, "Ticker symbols are at most 20 characters."),
+    .max(20, "Ticker symbols are at most 20 characters.")
+    .regex(
+      /^[A-Za-z0-9][A-Za-z0-9.\-^=]*$/,
+      "Ticker symbols use only letters, numbers and . - ^ = (no spaces).",
+    ),
   name: z
     .string({ error: "Enter the company or fund name." })
     .trim()
@@ -50,6 +54,29 @@ const createInstrumentSchema = z.object({
   sector: z.string().trim().max(100).optional(),
   country: z.string().trim().max(100).optional(),
 });
+
+/**
+ * The data source's own profile for a ticker, or null when it can't vouch for
+ * it (no key, not a US-market ticker, unknown ticker, or the source is down).
+ * Nothing is written to any cache.
+ */
+async function verifiedProfile(
+  ticker: string,
+  market: Market,
+): Promise<{ name?: string; currency?: Currency } | null> {
+  const apiKey = process.env.FMP_API_KEY || null;
+  if (resolveProviderName(market, apiKey) !== "fmp") return null;
+  try {
+    const result = await getProfile(
+      { id: `verify-${ticker}`, ticker, market, currency: "USD" },
+      { store: transientStore() },
+    );
+    if (!result.ok) return null;
+    return { name: result.data.name, currency: result.data.currency };
+  } catch {
+    return null;
+  }
+}
 
 export type CreateInstrumentInput = z.input<typeof createInstrumentSchema>;
 
@@ -86,6 +113,29 @@ export async function createInstrument(
     sector: parsed.data.sector || null,
     country: parsed.data.country || null,
   };
+
+  // Instruments are shared by everyone, so a wrong currency or name typed by
+  // one person would show up for all. Where the market-data source can vouch
+  // for the ticker (US market with the data key set), its currency must match
+  // and its name wins over what was typed. Where it can't (other markets, no
+  // key, source down) we can't check — see the report: that needs an owner
+  // decision — so the typed details are kept as before.
+  const alreadyThere = await prisma.instrument.findUnique({
+    where: { ticker_market: { ticker: data.ticker, market: data.market } },
+    select: { id: true },
+  });
+  if (alreadyThere) {
+    return actionOk({ id: alreadyThere.id, ticker: data.ticker, alreadyExisted: true });
+  }
+  const verified = await verifiedProfile(data.ticker, data.market);
+  if (verified) {
+    if (verified.currency && verified.currency !== data.currency) {
+      return actionError(
+        `${data.ticker} trades in ${verified.currency}, not ${data.currency}. Please pick ${verified.currency}.`,
+      );
+    }
+    if (verified.name) data.name = verified.name.slice(0, 200);
+  }
 
   try {
     const created = await prisma.instrument.create({ data });

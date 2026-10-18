@@ -31,7 +31,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { formatQuantity, formatQuantityCompact, formatShortDate } from "@/lib/format";
+import { formatQuantity, formatQuantityCompact, formatShortDate, moneyDecimals } from "@/lib/format";
 import { FromBrokerTag, FromBrokerTagToggle } from "./from-broker-tag";
 import { isCashInflow, transactionTypeLabel, type TransactionRowData } from "./types";
 
@@ -42,7 +42,7 @@ const ALL = "ALL";
     just the number (decimals matching formatMoney's OMR-3dp rule) without
     repeating the currency code a second time. */
 function decimalsFor(currency: string): number {
-  return currency === "OMR" ? 3 : 2;
+  return moneyDecimals(currency);
 }
 
 function formatPlainAmount(amount: number, currency: string): string {

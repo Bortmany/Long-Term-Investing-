@@ -1,4 +1,4 @@
-// Twelve Data provider — Gulf share prices (Tadawul, ADX, QSE, optionally DFM).
+// Twelve Data provider — Gulf share prices (Tadawul, ADX, QSE, optionally DFM and Kuwait).
 //
 // DORMANT BY DEFAULT: the router (resolveProviderName in ./provider) only
 // picks this provider when TWELVE_DATA_API_KEY is set. With no key nothing in

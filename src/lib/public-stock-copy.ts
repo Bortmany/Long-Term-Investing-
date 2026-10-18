@@ -80,6 +80,7 @@ const CURRENCY_NAME: Record<string, string> = {
   SAR: "Saudi riyal",
   AED: "UAE dirham",
   QAR: "Qatari riyal",
+  KWD: "Kuwaiti dinar",
 };
 
 export function currencyLabel(code: string): string {
@@ -95,6 +96,7 @@ const MARKET_PARAGRAPH: Record<Market, string> = {
   DFM: "The Dubai Financial Market (DFM) is a stock exchange in Dubai, in the United Arab Emirates. Companies listed there are quoted in UAE dirhams.",
   ADX: "The Abu Dhabi Securities Exchange (ADX) is the stock exchange of Abu Dhabi, in the United Arab Emirates. Companies listed there are quoted in UAE dirhams.",
   QSE: "The Qatar Stock Exchange (QSE) is the stock exchange of Qatar, based in Doha. Companies listed there are quoted in Qatari riyals.",
+  BOURSA: "Boursa Kuwait is the stock exchange of Kuwait, based in Kuwait City. Companies listed there are quoted in Kuwaiti dinars.",
   OTHER: "This stock is listed on an exchange outside InvestIQ's main markets.",
 };
 

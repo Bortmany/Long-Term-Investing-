@@ -21,6 +21,7 @@ import {
 } from "@/lib/transaction-schema";
 import { currencyMismatchMessage } from "@/lib/instrument-currency";
 import { computeHoldings, fromPrismaTransaction } from "@/lib/portfolio";
+import { findUncoveredSell, uncoveredSellMessage } from "@/lib/position-check";
 import { lockPortfolioForWrite } from "@/lib/portfolio-lock";
 import { getOrCreatePortfolio, getSessionUserId } from "@/lib/user-portfolio";
 import {
@@ -111,6 +112,41 @@ async function sellExceedsPositionError(
     );
   }
   return null;
+}
+
+/**
+ * Deleting a BUY, shrinking it, or moving it to another stock can leave later
+ * SELLs with nothing behind them — the portfolio would then show cash the
+ * account never earned. Re-check every position that would remain once the row
+ * is removed (or replaced by `replacement`). Must run inside the locked
+ * transaction. Returns an action error, or null when all sells are still covered.
+ */
+async function buyChangeBreaksSellsError(
+  db: Prisma.TransactionClient,
+  portfolioId: string,
+  existing: { id: string; instrumentId: string | null },
+  action: "delete" | "change",
+  replacement?: TransactionInput,
+): Promise<{ ok: false; error: string } | null> {
+  const rows = await db.transaction.findMany({
+    where: { portfolioId, id: { not: existing.id } },
+  });
+  const remaining = rows.map(fromPrismaTransaction);
+  if (replacement) {
+    remaining.push({
+      type: replacement.type,
+      instrumentId:
+        "instrumentId" in replacement ? (replacement.instrumentId ?? null) : null,
+      quantity: "quantity" in replacement ? (replacement.quantity ?? null) : null,
+    } as (typeof remaining)[number]);
+  }
+  const broken = findUncoveredSell(
+    remaining,
+    existing.instrumentId ? [existing.instrumentId] : undefined,
+  );
+  return broken
+    ? actionError(uncoveredSellMessage(action, broken.bought, broken.sold))
+    : null;
 }
 
 /**
@@ -207,6 +243,16 @@ export async function updateTransaction(
       existing.id,
     );
     if (oversell) return oversell;
+    if (existing.type === "BUY") {
+      const broken = await buyChangeBreaksSellsError(
+        tx,
+        existing.portfolioId,
+        existing,
+        "change",
+        parsed.data,
+      );
+      if (broken) return broken;
+    }
     await tx.transaction.update({ where: { id: existing.id }, data: record });
     return actionOk({ id: existing.id });
   });
@@ -240,6 +286,23 @@ export async function deleteTransaction(
   }
 
   try {
+    if (existing.type === "BUY") {
+      // Lock, re-check that no sell loses its buy, then delete — all in one go.
+      const outcome = await prisma.$transaction(async (tx) => {
+        await lockPortfolioForWrite(tx, existing.portfolioId);
+        const broken = await buyChangeBreaksSellsError(
+          tx,
+          existing.portfolioId,
+          existing,
+          "delete",
+        );
+        if (broken) return broken;
+        await tx.transaction.delete({ where: { id: existing.id } });
+        return actionOk({ id: existing.id });
+      });
+      if (outcome.ok) revalidatePortfolioPages();
+      return outcome;
+    }
     await prisma.transaction.delete({ where: { id: existing.id } });
   } catch (error) {
     // P2025 = "record to delete does not exist". This happens when the SAME
